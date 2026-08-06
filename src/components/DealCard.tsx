@@ -96,6 +96,17 @@ export const DealCard: React.FC<DealCardProps> = ({
 
             {/* Watchlist & Share Buttons */}
             <div className="flex items-center gap-1.5">
+              <a
+                href={deal.dealUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="p-1.5 rounded-full bg-orange-600 hover:bg-orange-700 text-white backdrop-blur-md transition-colors"
+                title="Open Deal directly in new tab"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();

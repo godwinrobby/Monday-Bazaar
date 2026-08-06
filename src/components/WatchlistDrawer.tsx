@@ -82,16 +82,29 @@ export const WatchlistDrawer: React.FC<WatchlistDrawerProps> = ({
                   </div>
                 </div>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveSave(deal.id);
-                  }}
-                  className="p-1.5 text-slate-400 hover:text-red-600 self-start hover:bg-red-50 rounded-lg transition-colors"
-                  title="Remove"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex flex-col gap-1.5 shrink-0 self-center">
+                  <a
+                    href={deal.dealUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-1.5 text-orange-600 bg-orange-100 hover:bg-orange-200 rounded-lg transition-colors flex items-center justify-center"
+                    title="Open Deal in New Tab"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveSave(deal.id);
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                    title="Remove"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))
           )}

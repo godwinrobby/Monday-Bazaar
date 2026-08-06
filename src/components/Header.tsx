@@ -10,6 +10,7 @@ interface HeaderProps {
   onOpenPostDeal: () => void;
   onOpenAiInspector: () => void;
   totalDealsCount: number;
+  onLogoClick?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPostDeal,
   onOpenAiInspector,
   totalDealsCount,
+  onLogoClick,
 }) => {
   return (
     <header id="main-header-navbar" className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
@@ -27,7 +29,10 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between gap-3 md:gap-6">
           
           {/* Logo */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div 
+            onClick={onLogoClick} 
+            className="flex items-center gap-3 shrink-0 cursor-pointer group"
+          >
             <a href="#" className="flex items-center gap-2 group">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-orange-500 to-red-600 flex items-center justify-center text-white shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
                 <Flame className="w-6 h-6 fill-amber-200 text-white" />

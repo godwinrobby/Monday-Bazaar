@@ -7,6 +7,7 @@ import { Header } from './components/Header';
 import { StoreFilterBar } from './components/StoreFilterBar';
 import { CategoryNav } from './components/CategoryNav';
 import { DealCard } from './components/DealCard';
+import { DealDetailPage } from './components/DealDetailPage';
 import { DealModal } from './components/DealModal';
 import { AiLinkAnalyzerModal } from './components/AiLinkAnalyzerModal';
 import { PostDealModal } from './components/PostDealModal';
@@ -262,91 +263,71 @@ export default function App() {
         onOpenPostDeal={() => setIsPostDealOpen(true)}
         onOpenAiInspector={() => setIsAiInspectorOpen(true)}
         totalDealsCount={deals.length}
+        onLogoClick={() => setSelectedDeal(null)}
       />
 
-      {/* E-Commerce Store Selector */}
-      <StoreFilterBar
-        selectedStore={filters.store}
-        onSelectStore={(store) => setFilters(prev => ({ ...prev, store }))}
-        dealsCountByStore={storeCounts}
-      />
+      {selectedDeal ? (
+        /* Dedicated Full-Page View for Selected Deal */
+        <main className="flex-1">
+          <DealDetailPage
+            deal={selectedDeal}
+            onBack={() => setSelectedDeal(null)}
+            onVote={handleVote}
+            onAddComment={handleAddComment}
+            onOpenPriceAlert={(d) => setDealForAlert(d)}
+            isSaved={savedDealIds.includes(selectedDeal.id)}
+            onToggleSave={handleToggleSave}
+            allDeals={deals}
+            onSelectDeal={(d) => {
+              setSelectedDeal(d);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        </main>
+      ) : (
+        /* Main Catalog Feed View */
+        <>
+          {/* E-Commerce Store Selector */}
+          <StoreFilterBar
+            selectedStore={filters.store}
+            onSelectStore={(store) => setFilters(prev => ({ ...prev, store }))}
+            dealsCountByStore={storeCounts}
+          />
 
-      {/* Categories & Sorting Toolbar */}
-      <CategoryNav
-        filters={filters}
-        setFilters={setFilters}
-        categoryCounts={categoryCounts}
-      />
+          {/* Categories & Sorting Toolbar */}
+          <CategoryNav
+            filters={filters}
+            setFilters={setFilters}
+            categoryCounts={categoryCounts}
+          />
 
-      {/* Main Container Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        
-        {/* Active Filter Indicators Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <span className="text-slate-500">Showing</span>
-            <span className="px-2 py-0.5 bg-orange-100 text-orange-800 font-extrabold rounded-md">
-              {filteredDeals.length} Deals
-            </span>
-            {filters.store !== 'All' && (
-              <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md">
-                Store: {filters.store}
-              </span>
-            )}
-            {filters.category !== 'All' && (
-              <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md">
-                Category: {filters.category}
-              </span>
-            )}
-            {filters.searchQuery && (
-              <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md">
-                Search: "{filters.searchQuery}"
-              </span>
-            )}
-          </div>
+          {/* Main Container Content */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+            
+            {/* Active Filter Indicators Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                <span className="text-slate-500">Showing</span>
+                <span className="px-2 py-0.5 bg-orange-100 text-orange-800 font-extrabold rounded-md">
+                  {filteredDeals.length} Deals
+                </span>
+                {filters.store !== 'All' && (
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md">
+                    Store: {filters.store}
+                  </span>
+                )}
+                {filters.category !== 'All' && (
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md">
+                    Category: {filters.category}
+                  </span>
+                )}
+                {filters.searchQuery && (
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md">
+                    Search: "{filters.searchQuery}"
+                  </span>
+                )}
+              </div>
 
-          <button
-            onClick={() => setFilters({
-              category: 'All',
-              store: 'All',
-              searchQuery: '',
-              sortBy: 'hot',
-              onlyLootDeals: false,
-              onlyCoupons: false,
-            })}
-            className="text-xs text-orange-600 font-bold hover:underline flex items-center gap-1"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Reset Filters
-          </button>
-        </div>
-
-        {/* Deals Cards Grid */}
-        {filteredDeals.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filteredDeals.map((deal) => (
-              <DealCard
-                key={deal.id}
-                deal={deal}
-                onSelectDeal={(d) => setSelectedDeal(d)}
-                onVote={handleVote}
-                isSaved={savedDealIds.includes(deal.id)}
-                onToggleSave={handleToggleSave}
-                onOpenPriceAlert={(d) => setDealForAlert(d)}
-              />
-            ))}
-          </div>
-        ) : (
-          /* Empty State */
-          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
-            <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto">
-              <ShoppingBag className="w-8 h-8" />
-            </div>
-            <h3 className="font-bold text-slate-900 text-lg">No Deals Match Your Filters</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Try adjusting your search terms or store filters, or paste a deal link directly into our AI Inspector!
-            </p>
-            <div className="flex justify-center gap-3 pt-2">
               <button
                 onClick={() => setFilters({
                   category: 'All',
@@ -356,23 +337,70 @@ export default function App() {
                   onlyLootDeals: false,
                   onlyCoupons: false,
                 })}
-                className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors"
+                className="text-xs text-orange-600 font-bold hover:underline flex items-center gap-1"
               >
-                Clear All Filters
-              </button>
-
-              <button
-                onClick={() => setIsAiInspectorOpen(true)}
-                className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors flex items-center gap-1.5"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                Inspect Any Link with AI
+                <RefreshCw className="w-3 h-3" />
+                Reset Filters
               </button>
             </div>
-          </div>
-        )}
 
-      </main>
+            {/* Deals Cards Grid */}
+            {filteredDeals.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {filteredDeals.map((deal) => (
+                  <DealCard
+                    key={deal.id}
+                    deal={deal}
+                    onSelectDeal={(d) => {
+                      setSelectedDeal(d);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    onVote={handleVote}
+                    isSaved={savedDealIds.includes(deal.id)}
+                    onToggleSave={handleToggleSave}
+                    onOpenPriceAlert={(d) => setDealForAlert(d)}
+                  />
+                ))}
+              </div>
+            ) : (
+              /* Empty State */
+              <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
+                <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto">
+                  <ShoppingBag className="w-8 h-8" />
+                </div>
+                <h3 className="font-bold text-slate-900 text-lg">No Deals Match Your Filters</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Try adjusting your search terms or store filters, or paste a deal link directly into our AI Inspector!
+                </p>
+                <div className="flex justify-center gap-3 pt-2">
+                  <button
+                    onClick={() => setFilters({
+                      category: 'All',
+                      store: 'All',
+                      searchQuery: '',
+                      sortBy: 'hot',
+                      onlyLootDeals: false,
+                      onlyCoupons: false,
+                    })}
+                    className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors"
+                  >
+                    Clear All Filters
+                  </button>
+
+                  <button
+                    onClick={() => setIsAiInspectorOpen(true)}
+                    className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                    Inspect Any Link with AI
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </main>
+        </>
+      )}
 
       {/* Footer */}
       <footer className="bg-slate-950 text-slate-400 border-t border-slate-800 py-10 mt-12 text-xs">
@@ -406,14 +434,6 @@ export default function App() {
       </footer>
 
       {/* Modals & Drawers */}
-      <DealModal
-        deal={selectedDeal}
-        onClose={() => setSelectedDeal(null)}
-        onVote={handleVote}
-        onAddComment={handleAddComment}
-        onOpenPriceAlert={(d) => setDealForAlert(d)}
-      />
-
       <AiLinkAnalyzerModal
         isOpen={isAiInspectorOpen}
         onClose={() => setIsAiInspectorOpen(false)}
