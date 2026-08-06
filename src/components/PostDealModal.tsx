@@ -56,7 +56,7 @@ export const PostDealModal: React.FC<PostDealModalProps> = ({
       couponCode: couponCode.trim() || undefined,
       dealUrl,
       imageUrl: imageUrl.trim() || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80',
-      description: description.trim() || 'Verified bargain deal found by Dealsified user community.',
+      description: description.trim() || 'Verified bargain deal found by Monday Bazaar user community.',
       isLootDeal: discountPct >= 40,
       isVerified: true,
       postedAt: 'Just now',

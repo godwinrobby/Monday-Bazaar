@@ -34,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div className="flex flex-col">
                 <span className="text-xl font-black tracking-tight text-slate-900 leading-none">
-                  Deals<span className="text-orange-600">ified</span>
+                  Monday <span className="text-orange-600">Bazaar</span>
                 </span>
                 <span className="text-[10px] font-medium text-slate-500 tracking-wide uppercase mt-0.5">
                   Amazon • Flipkart • Multi-Store

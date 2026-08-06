@@ -18,7 +18,7 @@ export default function App() {
   // Deals State with LocalStorage Persistence
   const [deals, setDeals] = useState<Deal[]>(() => {
     try {
-      const saved = localStorage.getItem('dealsified_user_deals');
+      const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
       if (saved) {
         const userDeals = JSON.parse(saved);
         return [...userDeals, ...INITIAL_DEALS];
@@ -32,7 +32,7 @@ export default function App() {
   // Watchlist State
   const [savedDealIds, setSavedDealIds] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem('dealsified_saved_ids');
+      const saved = localStorage.getItem('monday_bazaar_saved_ids') || localStorage.getItem('dealsified_saved_ids');
       return saved ? JSON.parse(saved) : ['deal-1', 'deal-3'];
     } catch {
       return ['deal-1', 'deal-3'];
@@ -40,7 +40,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('dealsified_saved_ids', JSON.stringify(savedDealIds));
+    localStorage.setItem('monday_bazaar_saved_ids', JSON.stringify(savedDealIds));
   }, [savedDealIds]);
 
   // Filters State
@@ -383,7 +383,7 @@ export default function App() {
                 <Flame className="w-5 h-5 fill-white" />
               </div>
               <span className="text-lg font-black text-white tracking-tight">
-                Deals<span className="text-orange-500">ified</span>
+                Monday <span className="text-orange-500">Bazaar</span>
               </span>
             </div>
 
@@ -393,7 +393,7 @@ export default function App() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-500">
-            <p>© {new Date().getFullYear()} Dealsified. All rights reserved. E-Commerce deals & coupons aggregator.</p>
+            <p>© {new Date().getFullYear()} Monday Bazaar. All rights reserved. E-Commerce deals & coupons aggregator.</p>
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1 text-slate-400">
                 <ShieldCheck className="w-4 h-4 text-emerald-500" /> Verified Deal Links
