@@ -13,7 +13,8 @@ import { AiLinkAnalyzerModal } from './components/AiLinkAnalyzerModal';
 import { PostDealModal } from './components/PostDealModal';
 import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
-import { Flame, Sparkles, Filter, RefreshCw, ShoppingBag, ShieldCheck } from 'lucide-react';
+import { AdminDashboard } from './components/AdminDashboard';
+import { Flame, Sparkles, Filter, RefreshCw, ShoppingBag, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 export default function App() {
   // Deals State with LocalStorage Persistence
@@ -60,6 +61,31 @@ export default function App() {
   const [isAiInspectorOpen, setIsAiInspectorOpen] = useState(false);
   const [isPostDealOpen, setIsPostDealOpen] = useState(false);
   const [isWatchlistOpen, setIsWatchlistOpen] = useState(false);
+  
+  // Admin Route State
+  const [isAdminOpen, setIsAdminOpen] = useState<boolean>(() => {
+    return window.location.hash === '#admin' || window.location.pathname === '/admin';
+  });
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setIsAdminOpen(window.location.hash === '#admin' || window.location.pathname === '/admin');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const handleOpenAdmin = () => {
+    window.location.hash = 'admin';
+    setIsAdminOpen(true);
+  };
+
+  const handleCloseAdmin = () => {
+    if (window.location.hash === '#admin') {
+      window.location.hash = '';
+    }
+    setIsAdminOpen(false);
+  };
 
   // Voting Handler
   const handleVote = (dealId: string, type: 'up' | 'down') => {
@@ -126,6 +152,34 @@ export default function App() {
         return updatedDeal;
       })
     );
+  };
+
+  // Update Deal Handler (from Admin)
+  const handleUpdateDeal = (updatedDeal: Deal) => {
+    setDeals(prev => prev.map(d => d.id === updatedDeal.id ? updatedDeal : d));
+    try {
+      const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
+      const userDeals: Deal[] = saved ? JSON.parse(saved) : [];
+      const updatedUserDeals = userDeals.map(d => d.id === updatedDeal.id ? updatedDeal : d);
+      localStorage.setItem('monday_bazaar_user_deals', JSON.stringify(updatedUserDeals));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Delete Deal Handler (from Admin)
+  const handleDeleteDeal = (dealId: string) => {
+    setDeals(prev => prev.filter(d => d.id !== dealId));
+    try {
+      const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
+      if (saved) {
+        const userDeals: Deal[] = JSON.parse(saved);
+        const filtered = userDeals.filter(d => d.id !== dealId);
+        localStorage.setItem('monday_bazaar_user_deals', JSON.stringify(filtered));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   // Add New Deal Handler
@@ -247,6 +301,21 @@ export default function App() {
     return deals.filter(d => savedDealIds.includes(d.id));
   }, [deals, savedDealIds]);
 
+  // Render Standalone Admin Module
+  if (isAdminOpen) {
+    return (
+      <div className="min-h-screen bg-slate-100 font-sans text-slate-900 selection:bg-orange-500 selection:text-white">
+        <AdminDashboard
+          deals={deals}
+          onAddDeal={handleAddDeal}
+          onUpdateDeal={handleUpdateDeal}
+          onDeleteDeal={handleDeleteDeal}
+          onCloseAdmin={handleCloseAdmin}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-900 flex flex-col selection:bg-orange-500 selection:text-white">
       
@@ -262,8 +331,12 @@ export default function App() {
         onOpenSavedDeals={() => setIsWatchlistOpen(true)}
         onOpenPostDeal={() => setIsPostDealOpen(true)}
         onOpenAiInspector={() => setIsAiInspectorOpen(true)}
+        onOpenAdmin={handleOpenAdmin}
         totalDealsCount={deals.length}
-        onLogoClick={() => setSelectedDeal(null)}
+        onLogoClick={() => {
+          setSelectedDeal(null);
+          handleCloseAdmin();
+        }}
       />
 
       {selectedDeal ? (
@@ -423,6 +496,14 @@ export default function App() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-500">
             <p>© {new Date().getFullYear()} Monday Bazaar. All rights reserved. E-Commerce deals & coupons aggregator.</p>
             <div className="flex items-center gap-4">
+              <button
+                onClick={handleOpenAdmin}
+                className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold hover:underline transition-colors"
+              >
+                <ShieldAlert className="w-4 h-4 text-orange-500" />
+                <span>Admin Console</span>
+              </button>
+              <span>•</span>
               <span className="flex items-center gap-1 text-slate-400">
                 <ShieldCheck className="w-4 h-4 text-emerald-500" /> Verified Deal Links
               </span>

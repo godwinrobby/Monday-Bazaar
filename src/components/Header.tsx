@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Flame, Plus, Heart, Sparkles, X, SlidersHorizontal, ArrowUpDown } from 'lucide-react';
+import { Search, Flame, Plus, Heart, Sparkles, X, SlidersHorizontal, ArrowUpDown, ShieldAlert } from 'lucide-react';
 import { FilterOptions } from '../types';
 
 interface HeaderProps {
@@ -9,6 +9,7 @@ interface HeaderProps {
   onOpenSavedDeals: () => void;
   onOpenPostDeal: () => void;
   onOpenAiInspector: () => void;
+  onOpenAdmin?: () => void;
   totalDealsCount: number;
   onLogoClick?: () => void;
 }
@@ -20,6 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSavedDeals,
   onOpenPostDeal,
   onOpenAiInspector,
+  onOpenAdmin,
   totalDealsCount,
   onLogoClick,
 }) => {
@@ -73,6 +75,19 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Action Buttons */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Admin Panel Button */}
+            {onOpenAdmin && (
+              <button
+                onClick={onOpenAdmin}
+                id="admin-panel-header-btn"
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 rounded-full font-bold text-xs transition-all shadow-2xs"
+                title="Manage Deals & Affiliation Rules"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-orange-600" />
+                <span className="hidden md:inline">Admin</span>
+              </button>
+            )}
+
             {/* AI Link Inspector */}
             <button
               onClick={onOpenAiInspector}
