@@ -1,0 +1,6 @@
+{
+  "name": "Dealsified",
+  "description": "Deals & discount aggregator for Amazon, Flipkart, Myntra, Ajio, and major e-commerce stores with AI deal analysis and price tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
