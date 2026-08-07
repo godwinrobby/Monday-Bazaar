@@ -122,6 +122,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     tables?: string[];
     error?: string;
   }>({});
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<string | null>(null);
 
   const fetchDbStatus = async () => {
     try {
@@ -132,6 +134,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     } catch (err) {
       console.warn('Failed fetching DB status:', err);
+    }
+  };
+
+  const handleMigrateToMySql = async () => {
+    setIsMigrating(true);
+    setMigrationResult(null);
+    try {
+      const res = await fetch('/api/migrate-to-mysql', { method: 'POST' });
+      const json = await res.json();
+      if (json.message) {
+        setMigrationResult(json.message);
+      } else {
+        setMigrationResult('Migration process finished.');
+      }
+      fetchDbStatus();
+    } catch (err: any) {
+      setMigrationResult(`Migration error: ${err.message}`);
+    } finally {
+      setIsMigrating(false);
     }
   };
 
@@ -1104,13 +1125,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <p className="text-xs text-slate-500">Node.js Express backend database connection & relational schema manager</p>
                   </div>
                 </div>
-                <button
-                  onClick={fetchDbStatus}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
-                >
-                  Refresh Status
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleMigrateToMySql}
+                    disabled={isMigrating}
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>{isMigrating ? 'Syncing...' : '⚡ Migrate All Data to MySQL'}</span>
+                  </button>
+                  <button
+                    onClick={fetchDbStatus}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
+
+              {migrationResult && (
+                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-xs text-indigo-900 font-semibold flex items-center justify-between">
+                  <span>{migrationResult}</span>
+                  <button onClick={() => setMigrationResult(null)} className="text-indigo-500 hover:text-indigo-800 font-bold ml-2">✕</button>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">

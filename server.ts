@@ -47,6 +47,16 @@ app.get("/api/db-status", async (req, res) => {
   }
 });
 
+// POST /api/migrate-to-mysql - Migrate all catalog deals & store configs into MySQL
+app.post("/api/migrate-to-mysql", async (req, res) => {
+  try {
+    const result = await mySqlDb.syncAllDataToMySql();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ================= DATABASE API ROUTES =================
 
 // GET /api/deals - Fetch all deals from MySQL / Node.js database

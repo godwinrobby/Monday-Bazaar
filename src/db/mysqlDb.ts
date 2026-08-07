@@ -29,7 +29,7 @@ class MySqlDatabaseService {
     const port = Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306);
     const mysqlUri = process.env.MYSQL_URI || process.env.DATABASE_URL;
 
-    if (mysqlUri) {
+    if (mysqlUri && mysqlUri.trim() !== '') {
       try {
         this.pool = mysql.createPool(mysqlUri);
         console.log('✅ MySQL Pool created via MYSQL_URI');
@@ -37,7 +37,7 @@ class MySqlDatabaseService {
         this.connectionError = err.message;
         console.warn('⚠️ Could not create MySQL pool via URI:', err.message);
       }
-    } else if (host) {
+    } else if (host && user && host.trim() !== '' && user.trim() !== '') {
       try {
         this.pool = mysql.createPool({
           host,
@@ -48,6 +48,7 @@ class MySqlDatabaseService {
           waitForConnections: true,
           connectionLimit: 10,
           queueLimit: 0,
+          connectTimeout: 5000,
         });
         console.log(`✅ MySQL Pool created for ${user}@${host}:${port}/${database}`);
       } catch (err: any) {
@@ -55,8 +56,8 @@ class MySqlDatabaseService {
         console.warn('⚠️ Could not create MySQL pool:', err.message);
       }
     } else {
-      this.connectionError = 'MYSQL_HOST or MYSQL_URI environment variable not configured.';
-      console.log('ℹ️ MySQL configuration missing. Operating with Node.js persistent DB engine with MySQL schema compatibility.');
+      this.connectionError = 'MySQL credentials (MYSQL_USER, MYSQL_HOST or MYSQL_URI) not configured in environment variables.';
+      console.log('ℹ️ MySQL credentials missing or incomplete. Seamlessly using Node.js persistent DB engine.');
     }
   }
 
@@ -65,7 +66,12 @@ class MySqlDatabaseService {
     if (!this.pool) return false;
 
     try {
-      const conn = await this.pool.getConnection();
+      const conn = await Promise.race([
+        this.pool.getConnection(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('MySQL connection timeout (5s)')), 5000)
+        )
+      ]);
       
       // 1. Create Deals Table
       await conn.query(`
@@ -88,6 +94,8 @@ class MySqlDatabaseService {
           downvotes INT DEFAULT 0,
           aiScore INT DEFAULT 85,
           aiVerdict TEXT,
+          aiPros TEXT,
+          aiCons TEXT,
           postedAt VARCHAR(64),
           postedBy VARCHAR(128),
           viewsCount INT DEFAULT 0,
@@ -125,7 +133,8 @@ class MySqlDatabaseService {
       return true;
     } catch (err: any) {
       this.connectionError = err.message;
-      console.error('❌ MySQL Table Setup Error:', err.message);
+      this.isInitialized = false;
+      console.info('ℹ️ MySQL database connection notice:', err.message, '- Using Node.js persistent database fallback.');
       return false;
     }
   }
@@ -324,6 +333,108 @@ class MySqlDatabaseService {
     }
 
     return deleted;
+  }
+
+  // Migrate / Sync All Catalog & Configuration Data into MySQL
+  public async syncAllDataToMySql(): Promise<{
+    success: boolean;
+    migratedDealsCount: number;
+    migratedConfigsCount: number;
+    engine: string;
+    message: string;
+  }> {
+    const allDeals = dbManager.getDeals();
+    const configs = DEFAULT_AFFILIATE_CONFIGS;
+
+    if (!this.pool) {
+      return {
+        success: false,
+        migratedDealsCount: 0,
+        migratedConfigsCount: 0,
+        engine: 'Node.js Express Persistent DB (Fallback)',
+        message: 'MySQL pool is not active. Configure MYSQL_HOST or MYSQL_URI environment variables to sync directly with a MySQL server.'
+      };
+    }
+
+    try {
+      await this.setupTables();
+
+      // 1. Sync Deals
+      let dealsSynced = 0;
+      for (const deal of allDeals) {
+        await this.pool.execute(
+          `INSERT INTO deals (
+            id, title, description, store, category, originalPrice, dealPrice, 
+            discountPercentage, couponCode, imageUrl, dealUrl, isLootDeal, 
+            isVerified, isActive, upvotes, downvotes, aiScore, aiVerdict, aiPros, aiCons,
+            postedAt, postedBy, viewsCount, commentsCount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE 
+            title=VALUES(title), description=VALUES(description), store=VALUES(store),
+            category=VALUES(category), originalPrice=VALUES(originalPrice), dealPrice=VALUES(dealPrice),
+            discountPercentage=VALUES(discountPercentage), couponCode=VALUES(couponCode),
+            imageUrl=VALUES(imageUrl), dealUrl=VALUES(dealUrl), isLootDeal=VALUES(isLootDeal),
+            isVerified=VALUES(isVerified), isActive=VALUES(isActive), aiScore=VALUES(aiScore),
+            aiVerdict=VALUES(aiVerdict), aiPros=VALUES(aiPros), aiCons=VALUES(aiCons)`,
+          [
+            deal.id,
+            deal.title,
+            deal.description || '',
+            deal.store,
+            deal.category,
+            deal.originalPrice,
+            deal.dealPrice,
+            deal.discountPercentage,
+            deal.couponCode || null,
+            deal.imageUrl,
+            deal.dealUrl,
+            deal.isLootDeal ? 1 : 0,
+            deal.isVerified ? 1 : 0,
+            deal.isActive !== false ? 1 : 0,
+            deal.upvotes || 0,
+            deal.downvotes || 0,
+            deal.aiScore || 85,
+            deal.aiVerdict || '',
+            JSON.stringify(deal.aiPros || []),
+            JSON.stringify(deal.aiCons || []),
+            deal.postedAt || 'Recently',
+            deal.postedBy || 'Community Member',
+            deal.viewsCount || 0,
+            deal.commentsCount || 0
+          ]
+        );
+        dealsSynced++;
+      }
+
+      // 2. Sync Affiliate Configs
+      let configsSynced = 0;
+      for (const [key, cfg] of Object.entries(configs)) {
+        await this.pool.execute(
+          `INSERT INTO affiliate_configs (store_key, store_name, tag, parameter_name, is_active)
+           VALUES (?, ?, ?, ?, 1)
+           ON DUPLICATE KEY UPDATE tag=VALUES(tag), parameter_name=VALUES(parameter_name)`,
+          [key, cfg.store, cfg.tagValue, cfg.tagParam]
+        );
+        configsSynced++;
+      }
+
+      return {
+        success: true,
+        migratedDealsCount: dealsSynced,
+        migratedConfigsCount: configsSynced,
+        engine: 'MySQL 8.0 / MariaDB Server',
+        message: `Successfully migrated ${dealsSynced} deals and ${configsSynced} affiliate configurations to MySQL database!`
+      };
+    } catch (err: any) {
+      console.error('Error migrating data to MySQL:', err);
+      return {
+        success: false,
+        migratedDealsCount: 0,
+        migratedConfigsCount: 0,
+        engine: 'MySQL Database',
+        message: `Migration failed: ${err.message}`
+      };
+    }
   }
 }
 
