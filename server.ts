@@ -66,8 +66,12 @@ app.post("/api/migrate-localstorage", async (req, res) => {
     if (Array.isArray(localDeals) && localDeals.length > 0) {
       for (const deal of localDeals) {
         if (deal && deal.title) {
-          await mySqlDb.addDeal(deal);
-          migratedDealsCount++;
+          try {
+            await mySqlDb.addDeal(deal, true);
+            migratedDealsCount++;
+          } catch (e) {
+            // Ignore duplicate errors during migration
+          }
         }
       }
     }

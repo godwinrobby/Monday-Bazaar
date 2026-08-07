@@ -188,10 +188,15 @@ class MySqlDatabaseService {
 
   // Get MySQL DB Connection Status
   public async getStatus(): Promise<MySqlStatus> {
+    const configuredHost = process.env.MYSQL_HOST || process.env.DB_HOST || 'srv625.hstgr.io';
+    const configuredDb = process.env.MYSQL_DATABASE || process.env.DB_NAME || 'u179476470_dealdb';
+
     if (!this.pool) {
       return {
         isConnected: false,
         engine: 'Node.js Express Persistent DB (MySQL Schema Emulated)',
+        host: configuredHost,
+        database: configuredDb,
         error: this.connectionError || 'No MySQL host configured in environment variables',
         tables: ['deals', 'affiliate_configs', 'price_history', 'comments']
       };
@@ -209,14 +214,16 @@ class MySqlDatabaseService {
       return {
         isConnected: true,
         engine: 'MySQL 8.0 / MariaDB Server',
-        host: process.env.MYSQL_HOST || 'Connected via MYSQL_URI',
-        database: process.env.MYSQL_DATABASE || 'dealsified_db',
+        host: configuredHost,
+        database: configuredDb,
         tables: tableNames
       };
     } catch (err: any) {
       return {
         isConnected: false,
         engine: 'MySQL Server (Connection Failed)',
+        host: configuredHost,
+        database: configuredDb,
         error: err.message,
         tables: ['deals', 'affiliate_configs', 'price_history', 'comments']
       };
