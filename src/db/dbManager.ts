@@ -3,17 +3,141 @@ import path from 'path';
 import { Deal, StoreName } from '../types';
 import { StoreAffiliateConfig, DEFAULT_AFFILIATE_CONFIGS } from '../utils/affiliate';
 
+export interface UserRecord {
+  id: string;
+  username: string;
+  email: string;
+  role: 'admin' | 'user' | 'moderator';
+  avatarUrl: string;
+  dealsPosted: number;
+  createdAt: string;
+}
+
+export interface LinkClickRecord {
+  id?: number;
+  dealId: string;
+  dealTitle: string;
+  store: string;
+  affiliateUrl: string;
+  userId?: string;
+  ipAddress?: string;
+  clickedAt: string;
+}
+
+export interface DealViewRecord {
+  id?: number;
+  dealId: string;
+  userId?: string;
+  ipAddress?: string;
+  viewedAt: string;
+}
+
 interface DatabaseSchema {
   deals: Deal[];
+  users: UserRecord[];
+  linkClicks: LinkClickRecord[];
+  dealViews: DealViewRecord[];
   affiliateConfigs: Record<string, StoreAffiliateConfig>;
   stats: {
     totalClicks: number;
+    totalViews: number;
     totalSavingsGenerated: number;
     updatedAt: string;
   };
 }
 
 const DB_FILE_PATH = path.join(process.cwd(), 'data', 'database.json');
+
+// Initial Users Seed Data
+export const INITIAL_USERS_SEED: UserRecord[] = [
+  {
+    id: 'user_1',
+    username: 'DealMaster_Pro',
+    email: 'admin@dealsified.com',
+    role: 'admin',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    dealsPosted: 14,
+    createdAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'user_2',
+    username: 'AudioLover99',
+    email: 'audio@dealsified.com',
+    role: 'user',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    dealsPosted: 8,
+    createdAt: '2026-01-10T12:00:00.000Z'
+  },
+  {
+    id: 'user_3',
+    username: 'TechGeek_IN',
+    email: 'techgeek@dealsified.com',
+    role: 'user',
+    avatarUrl: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
+    dealsPosted: 12,
+    createdAt: '2026-01-15T08:30:00.000Z'
+  },
+  {
+    id: 'user_4',
+    username: 'LootHunter_Raj',
+    email: 'raj.loot@dealsified.com',
+    role: 'user',
+    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    dealsPosted: 23,
+    createdAt: '2026-01-20T14:15:00.000Z'
+  },
+  {
+    id: 'user_demo',
+    username: 'You (Demo Member)',
+    email: 'godwinrobby@gmail.com',
+    role: 'admin',
+    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+    dealsPosted: 5,
+    createdAt: '2026-02-01T10:00:00.000Z'
+  }
+];
+
+// Initial Clicks Seed Data
+export const INITIAL_CLICKS_SEED: LinkClickRecord[] = [
+  {
+    id: 1,
+    dealId: 'deal_1',
+    dealTitle: 'Apple iPhone 15 (128 GB) - Blue',
+    store: 'Amazon',
+    affiliateUrl: 'https://www.amazon.in/dp/B0CX58S7S9?tag=mondaybazaar-21',
+    userId: 'user_demo',
+    ipAddress: '127.0.0.1',
+    clickedAt: new Date(Date.now() - 3600000 * 2).toISOString()
+  },
+  {
+    id: 2,
+    dealId: 'deal_2',
+    dealTitle: 'Sony WH-1000XM5 Wireless Headphones',
+    store: 'Amazon',
+    affiliateUrl: 'https://www.amazon.in/dp/B0CHX1M1XP?tag=mondaybazaar-21',
+    userId: 'user_2',
+    ipAddress: '127.0.0.1',
+    clickedAt: new Date(Date.now() - 3600000 * 5).toISOString()
+  },
+  {
+    id: 3,
+    dealId: 'deal_4',
+    dealTitle: 'boAt Airdopes 141 ANC TWS Earbuds',
+    store: 'Boat',
+    affiliateUrl: 'https://www.boat-lifestyle.com?affid=mbazaar_boat',
+    userId: 'user_4',
+    ipAddress: '127.0.0.1',
+    clickedAt: new Date(Date.now() - 3600000 * 12).toISOString()
+  }
+];
+
+// Initial Views Seed Data
+export const INITIAL_VIEWS_SEED: DealViewRecord[] = [
+  { id: 1, dealId: 'deal_1', userId: 'user_demo', ipAddress: '127.0.0.1', viewedAt: new Date(Date.now() - 1800000).toISOString() },
+  { id: 2, dealId: 'deal_2', userId: 'user_2', ipAddress: '127.0.0.1', viewedAt: new Date(Date.now() - 3600000).toISOString() },
+  { id: 3, dealId: 'deal_3', userId: 'user_3', ipAddress: '127.0.0.1', viewedAt: new Date(Date.now() - 7200000).toISOString() },
+  { id: 4, dealId: 'deal_4', userId: 'user_4', ipAddress: '127.0.0.1', viewedAt: new Date(Date.now() - 10800000).toISOString() }
+];
 
 // Initial deals array
 const INITIAL_DEALS_SEED: Deal[] = [
@@ -162,8 +286,11 @@ class DatabaseManager {
         const parsed = JSON.parse(fileContent);
         return {
           deals: Array.isArray(parsed.deals) ? parsed.deals : INITIAL_DEALS_SEED,
+          users: Array.isArray(parsed.users) ? parsed.users : INITIAL_USERS_SEED,
+          linkClicks: Array.isArray(parsed.linkClicks) ? parsed.linkClicks : INITIAL_CLICKS_SEED,
+          dealViews: Array.isArray(parsed.dealViews) ? parsed.dealViews : INITIAL_VIEWS_SEED,
           affiliateConfigs: parsed.affiliateConfigs || DEFAULT_AFFILIATE_CONFIGS,
-          stats: parsed.stats || { totalClicks: 1250, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
+          stats: parsed.stats || { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
         };
       }
     } catch (err) {
@@ -173,8 +300,11 @@ class DatabaseManager {
     // Default fallback
     const initialDb: DatabaseSchema = {
       deals: INITIAL_DEALS_SEED,
+      users: INITIAL_USERS_SEED,
+      linkClicks: INITIAL_CLICKS_SEED,
+      dealViews: INITIAL_VIEWS_SEED,
       affiliateConfigs: DEFAULT_AFFILIATE_CONFIGS,
-      stats: { totalClicks: 1250, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
+      stats: { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
     };
     this.saveDatabase(initialDb);
     return initialDb;
@@ -203,7 +333,20 @@ class DatabaseManager {
   }
 
   // Insert new deal
-  public addDeal(dealData: Partial<Deal>): Deal {
+  public addDeal(dealData: Partial<Deal>, allowDuplicate: boolean = false): Deal {
+    const titleTrim = (dealData.title || '').trim().toLowerCase();
+    const urlTrim = (dealData.dealUrl || '').trim().toLowerCase();
+
+    if (!allowDuplicate && (titleTrim || urlTrim)) {
+      const match = this.db.deals.find(d => 
+        (titleTrim && d.title.trim().toLowerCase() === titleTrim) ||
+        (urlTrim && urlTrim !== 'https://www.amazon.in' && urlTrim !== 'https://amazon.in' && d.dealUrl.trim().toLowerCase() === urlTrim)
+      );
+      if (match) {
+        throw new Error(`Duplicate Deal Error: A deal with this title or link already exists in the database ("${match.title}")!`);
+      }
+    }
+
     const newDeal: Deal = {
       id: dealData.id || `deal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       title: dealData.title || 'Untitled Deal',
@@ -292,6 +435,93 @@ class DatabaseManager {
     };
     this.saveDatabase(this.db);
     return this.db.affiliateConfigs;
+  }
+
+  // --- USER MANAGEMENT ---
+  public getUsers(): UserRecord[] {
+    return this.db.users || INITIAL_USERS_SEED;
+  }
+
+  public addUser(userData: Partial<UserRecord>): UserRecord {
+    const newUser: UserRecord = {
+      id: userData.id || `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      username: userData.username || 'Anonymous Deal Hunter',
+      email: userData.email || 'user@dealsified.com',
+      role: userData.role || 'user',
+      avatarUrl: userData.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      dealsPosted: userData.dealsPosted || 0,
+      createdAt: userData.createdAt || new Date().toISOString()
+    };
+
+    const existingIndex = this.db.users.findIndex(u => u.id === newUser.id || u.email === newUser.email);
+    if (existingIndex >= 0) {
+      this.db.users[existingIndex] = { ...this.db.users[existingIndex], ...newUser };
+    } else {
+      this.db.users.push(newUser);
+    }
+
+    this.saveDatabase(this.db);
+    return newUser;
+  }
+
+  // --- LINK CLICK TRACKING ---
+  public getLinkClicks(): LinkClickRecord[] {
+    return this.db.linkClicks || INITIAL_CLICKS_SEED;
+  }
+
+  public recordLinkClick(clickData: {
+    dealId: string;
+    dealTitle?: string;
+    store?: string;
+    affiliateUrl?: string;
+    userId?: string;
+    ipAddress?: string;
+  }): LinkClickRecord {
+    const deal = this.getDealById(clickData.dealId);
+    const newClick: LinkClickRecord = {
+      id: (this.db.linkClicks.length || 0) + 1,
+      dealId: clickData.dealId,
+      dealTitle: clickData.dealTitle || (deal ? deal.title : 'Unspecified Deal'),
+      store: clickData.store || (deal ? deal.store : 'Store'),
+      affiliateUrl: clickData.affiliateUrl || (deal ? deal.dealUrl : ''),
+      userId: clickData.userId || 'user_anonymous',
+      ipAddress: clickData.ipAddress || '127.0.0.1',
+      clickedAt: new Date().toISOString()
+    };
+
+    this.db.linkClicks.unshift(newClick);
+    this.db.stats.totalClicks = (this.db.stats.totalClicks || 0) + 1;
+    this.saveDatabase(this.db);
+    return newClick;
+  }
+
+  // --- DEAL VIEW TRACKING ---
+  public getDealViews(): DealViewRecord[] {
+    return this.db.dealViews || INITIAL_VIEWS_SEED;
+  }
+
+  public recordDealView(viewData: {
+    dealId: string;
+    userId?: string;
+    ipAddress?: string;
+  }): DealViewRecord {
+    const deal = this.getDealById(viewData.dealId);
+    if (deal) {
+      deal.viewsCount = (deal.viewsCount || 0) + 1;
+    }
+
+    const newView: DealViewRecord = {
+      id: (this.db.dealViews.length || 0) + 1,
+      dealId: viewData.dealId,
+      userId: viewData.userId || 'user_anonymous',
+      ipAddress: viewData.ipAddress || '127.0.0.1',
+      viewedAt: new Date().toISOString()
+    };
+
+    this.db.dealViews.unshift(newView);
+    this.db.stats.totalViews = (this.db.stats.totalViews || 0) + 1;
+    this.saveDatabase(this.db);
+    return newView;
   }
 }
 

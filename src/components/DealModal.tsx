@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Deal, Comment } from '../types';
 import { STORES_INFO } from '../data/initialDeals';
 import { PriceHistoryChart } from './PriceHistoryChart';
+import { recordLinkClick } from '../utils/analytics';
 import { 
   X, 
   ExternalLink, 
@@ -166,6 +167,7 @@ export const DealModal: React.FC<DealModalProps> = ({
                 href={deal.dealUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => recordLinkClick(deal)}
                 className="w-full py-3 px-6 bg-gradient-to-r from-orange-500 via-amber-600 to-orange-600 hover:from-orange-600 hover:to-amber-700 text-white font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 shadow-md transition-all hover:scale-[1.01]"
               >
                 <span>OPEN DEAL AT {deal.store.toUpperCase()}</span>

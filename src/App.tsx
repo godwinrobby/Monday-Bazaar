@@ -15,6 +15,7 @@ import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
 import { AdminDashboard } from './components/AdminDashboard';
 import { MobileLootAlertModal } from './components/MobileLootAlertModal';
+import { ToastContainer, ToastMessage } from './components/Toast';
 import { Flame, Sparkles, Filter, RefreshCw, ShoppingBag, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 export default function App() {
@@ -32,16 +33,39 @@ export default function App() {
     return INITIAL_DEALS;
   });
 
-  // Fetch initial deals from Node.js database endpoint
+  // Fetch initial deals from Node.js database endpoint & auto-migrate localStorage data
   useEffect(() => {
-    fetch('/api/deals')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.deals) && data.deals.length > 0) {
-          setDeals(data.deals);
+    const syncLocalStorageToDb = async () => {
+      try {
+        const rawUserDeals = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
+        const rawConfigs = localStorage.getItem('monday_bazaar_affiliate_configs');
+        const localDeals = rawUserDeals ? JSON.parse(rawUserDeals) : [];
+        const localAffiliateConfigs = rawConfigs ? JSON.parse(rawConfigs) : {};
+
+        // Migrate local items to server database
+        if ((Array.isArray(localDeals) && localDeals.length > 0) || Object.keys(localAffiliateConfigs).length > 0) {
+          await fetch('/api/migrate-localstorage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ localDeals, affiliateConfigs: localAffiliateConfigs })
+          });
         }
-      })
-      .catch(err => console.log('Database fetch fallback to client cache:', err));
+      } catch (e) {
+        console.warn('LocalStorage auto-sync notice:', e);
+      }
+
+      // Fetch all persisted database deals
+      fetch('/api/deals')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.deals) && data.deals.length > 0) {
+            setDeals(data.deals);
+          }
+        })
+        .catch(err => console.log('Database fetch fallback to client cache:', err));
+    };
+
+    syncLocalStorageToDb();
   }, []);
 
   // Watchlist State
@@ -68,7 +92,20 @@ export default function App() {
     onlyCoupons: false,
   });
 
-  // Modals State
+  // Global Toast Messages State
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (toast: Omit<ToastMessage, 'id'>) => {
+    const id = `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    setToasts(prev => [...prev, { ...toast, id }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
+
+  const handleDismissToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [dealForAlert, setDealForAlert] = useState<Deal | null>(null);
   const [isAiInspectorOpen, setIsAiInspectorOpen] = useState(false);
@@ -203,14 +240,23 @@ export default function App() {
     }
   };
 
-  // Delete Deal Handler (from Admin)
+  // Delete Deal Handler
   const handleDeleteDeal = (dealId: string) => {
+    const targetDeal = deals.find(d => d.id === dealId);
     setDeals(prev => prev.filter(d => d.id !== dealId));
 
     // Sync deletion to Node.js Database backend
     fetch(`/api/deals/${dealId}`, {
       method: 'DELETE'
-    }).catch(err => console.error('Failed to delete deal from DB:', err));
+    }).then(res => res.json()).then(data => {
+      addToast({
+        type: 'success',
+        title: 'Deal Deleted',
+        message: targetDeal ? `"${targetDeal.title}" was removed from database.` : 'Deal removed from database.'
+      });
+    }).catch(err => {
+      console.error('Failed to delete deal from DB:', err);
+    });
 
     try {
       const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
@@ -224,8 +270,27 @@ export default function App() {
     }
   };
 
-  // Add New Deal Handler
-  const handleAddDeal = (newDealData: Partial<Deal>) => {
+  // Add New Deal Handler with Duplicate Check
+  const handleAddDeal = async (newDealData: Partial<Deal>): Promise<{ success: boolean; error?: string; deal?: Deal }> => {
+    // 1. Client-side duplicate check
+    const titleLower = (newDealData.title || '').trim().toLowerCase();
+    const urlLower = (newDealData.dealUrl || '').trim().toLowerCase();
+
+    const existingLocal = deals.find(d => 
+      (titleLower && d.title.trim().toLowerCase() === titleLower) ||
+      (urlLower && urlLower !== 'https://www.amazon.in' && urlLower !== 'https://amazon.in' && d.dealUrl.trim().toLowerCase() === urlLower)
+    );
+
+    if (existingLocal) {
+      const errText = `Duplicate Deal Error: A deal with this title or link already exists ("${existingLocal.title}")!`;
+      addToast({
+        type: 'error',
+        title: 'Duplicate Deal Detected',
+        message: errText
+      });
+      return { success: false, error: errText };
+    }
+
     const fullDeal: Deal = {
       id: newDealData.id || ('deal_' + Date.now()),
       title: newDealData.title || 'New Bargain Deal',
@@ -257,22 +322,49 @@ export default function App() {
       postedBy: newDealData.postedBy || 'You'
     };
 
-    setDeals(prev => [fullDeal, ...prev]);
-
-    // Save to Node.js Database backend
-    fetch('/api/deals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fullDeal)
-    }).catch(err => console.error('Failed to post deal to DB:', err));
-
-    // Save user added deals to localStorage as fallback
     try {
-      const saved = localStorage.getItem('dealsified_user_deals');
-      const userDeals = saved ? JSON.parse(saved) : [];
-      localStorage.setItem('dealsified_user_deals', JSON.stringify([fullDeal, ...userDeals]));
-    } catch (e) {
-      console.error(e);
+      const res = await fetch('/api/deals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fullDeal)
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        const errMsg = data.error || data.message || 'Duplicate deal detected in database.';
+        addToast({
+          type: 'error',
+          title: 'Duplicate Deal Blocked',
+          message: errMsg
+        });
+        return { success: false, error: errMsg };
+      }
+
+      setDeals(prev => [data.deal || fullDeal, ...prev]);
+
+      addToast({
+        type: 'success',
+        title: 'Deal Published Successfully',
+        message: `"${fullDeal.title}" has been added to the live catalog.`
+      });
+
+      try {
+        const saved = localStorage.getItem('dealsified_user_deals');
+        const userDeals = saved ? JSON.parse(saved) : [];
+        localStorage.setItem('dealsified_user_deals', JSON.stringify([data.deal || fullDeal, ...userDeals]));
+      } catch (e) {
+        console.error(e);
+      }
+
+      return { success: true, deal: data.deal || fullDeal };
+    } catch (err: any) {
+      setDeals(prev => [fullDeal, ...prev]);
+      addToast({
+        type: 'success',
+        title: 'Deal Added',
+        message: `"${fullDeal.title}" added to catalog.`
+      });
+      return { success: true, deal: fullDeal };
     }
   };
 
@@ -594,6 +686,9 @@ export default function App() {
 
       {/* Mobile-Only Loot Alert Notification Popup */}
       <MobileLootAlertModal />
+
+      {/* Global Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
 
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Deal } from '../types';
 import { STORES_INFO } from '../data/initialDeals';
+import { recordLinkClick, recordDealView } from '../utils/analytics';
 import { 
   Flame, 
   ExternalLink, 
@@ -73,7 +74,10 @@ export const DealCard: React.FC<DealCardProps> = ({
   return (
     <div
       id={`deal-card-${deal.id}`}
-      onClick={() => onSelectDeal(deal)}
+      onClick={() => {
+        recordDealView(deal.id);
+        onSelectDeal(deal);
+      }}
       className="group relative bg-white rounded-2xl border border-slate-200 hover:border-orange-300 shadow-2xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between overflow-hidden cursor-pointer"
     >
       <div>
@@ -100,7 +104,10 @@ export const DealCard: React.FC<DealCardProps> = ({
                 href={deal.dealUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  recordLinkClick(deal);
+                }}
                 className="p-1.5 rounded-full bg-orange-600 hover:bg-orange-700 text-white backdrop-blur-md transition-colors"
                 title="Open Deal directly in new tab"
               >
@@ -308,7 +315,10 @@ export const DealCard: React.FC<DealCardProps> = ({
           href={deal.dealUrl}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            recordLinkClick(deal);
+          }}
           className="w-full py-2.5 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all group-hover:shadow-md"
         >
           <span>GET DEAL ON {deal.store.toUpperCase()}</span>

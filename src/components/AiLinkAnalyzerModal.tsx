@@ -18,7 +18,7 @@ import {
 interface AiLinkAnalyzerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPostAnalyzedDeal: (deal: Partial<Deal>) => void;
+  onPostAnalyzedDeal: (deal: Partial<Deal>) => Promise<{ success: boolean; error?: string }> | void;
 }
 
 export const AiLinkAnalyzerModal: React.FC<AiLinkAnalyzerModalProps> = ({
@@ -62,28 +62,37 @@ export const AiLinkAnalyzerModal: React.FC<AiLinkAnalyzerModalProps> = ({
     }
   };
 
-  const handlePostToFeed = () => {
+  const handlePostToFeed = async () => {
     if (!analysisResult) return;
+    setError(null);
 
-    onPostAnalyzedDeal({
-      title: analysisResult.title,
-      store: analysisResult.store,
-      category: analysisResult.category,
-      originalPrice: analysisResult.originalPrice,
-      dealPrice: analysisResult.dealPrice,
-      discountPercentage: analysisResult.discountPercentage,
-      couponCode: analysisResult.couponCode,
-      dealUrl: inputUrl.startsWith('http') ? inputUrl : 'https://www.amazon.in',
-      imageUrl: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80',
-      description: analysisResult.aiVerdict,
-      isLootDeal: analysisResult.isLootDeal,
-      aiScore: analysisResult.aiScore,
-      aiVerdict: analysisResult.aiVerdict,
-      aiPros: analysisResult.aiPros,
-      aiCons: analysisResult.aiCons,
-    });
+    try {
+      const res = await onPostAnalyzedDeal({
+        title: analysisResult.title,
+        store: analysisResult.store,
+        category: analysisResult.category,
+        originalPrice: analysisResult.originalPrice,
+        dealPrice: analysisResult.dealPrice,
+        discountPercentage: analysisResult.discountPercentage,
+        couponCode: analysisResult.couponCode,
+        dealUrl: inputUrl.startsWith('http') ? inputUrl : 'https://www.amazon.in',
+        imageUrl: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80',
+        description: analysisResult.aiVerdict,
+        isLootDeal: analysisResult.isLootDeal,
+        aiScore: analysisResult.aiScore,
+        aiVerdict: analysisResult.aiVerdict,
+        aiPros: analysisResult.aiPros,
+        aiCons: analysisResult.aiCons,
+      });
 
-    onClose();
+      if (res && !res.success) {
+        setError(res.error || 'Duplicate deal detected! A deal with this title or link already exists.');
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error publishing deal.');
+    }
   };
 
   return (

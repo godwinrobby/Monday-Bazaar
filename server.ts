@@ -57,6 +57,44 @@ app.post("/api/migrate-to-mysql", async (req, res) => {
   }
 });
 
+// POST /api/migrate-localstorage - Migrate all Users, Deals, Link Clicks, and Views into database
+app.post("/api/migrate-localstorage", async (req, res) => {
+  try {
+    const { localDeals, affiliateConfigs } = req.body || {};
+    let migratedDealsCount = 0;
+
+    if (Array.isArray(localDeals) && localDeals.length > 0) {
+      for (const deal of localDeals) {
+        if (deal && deal.title) {
+          await mySqlDb.addDeal(deal);
+          migratedDealsCount++;
+        }
+      }
+    }
+
+    // Ensure all Users, Deals, Link Clicks, Deal Views, and Store Configs are synced into MySQL or persistent database
+    const mysqlSyncResult = await mySqlDb.syncAllDataToMySql();
+
+    const users = await mySqlDb.getUsers();
+    const deals = await mySqlDb.getDeals();
+    const clicks = await mySqlDb.getLinkClicks();
+    const views = await mySqlDb.getDealViews();
+
+    res.json({
+      success: true,
+      migratedDealsCount,
+      usersCount: users.length,
+      dealsCount: deals.length,
+      clicksCount: clicks.length,
+      viewsCount: views.length,
+      mysqlStatus: mysqlSyncResult.message,
+      message: `Successfully migrated all Users (${users.length}), Deals (${deals.length}), Link Clicks (${clicks.length}), and Views (${views.length}) into database!`
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: `Migration error: ${err.message}` });
+  }
+});
+
 // ================= DATABASE API ROUTES =================
 
 // GET /api/deals - Fetch all deals from MySQL / Node.js database
@@ -137,6 +175,86 @@ app.post("/api/affiliate-configs", (req, res) => {
   try {
     const updated = dbManager.updateAffiliateConfigs(req.body);
     res.json({ success: true, configs: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ================= USER MANAGEMENT API ROUTES =================
+
+// GET /api/users - Fetch all users from database
+app.get("/api/users", async (req, res) => {
+  try {
+    const users = await mySqlDb.getUsers();
+    res.json({ success: true, count: users.length, users });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/users - Add/Register user profile in database
+app.post("/api/users", async (req, res) => {
+  try {
+    const user = await mySqlDb.addUser(req.body);
+    res.status(201).json({ success: true, user });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ================= LINK CLICKS & VIEWS API ROUTES =================
+
+// GET /api/clicks - Fetch link click tracking records
+app.get("/api/clicks", async (req, res) => {
+  try {
+    const clicks = await mySqlDb.getLinkClicks();
+    res.json({ success: true, count: clicks.length, clicks });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/clicks - Record deal outbound link click
+app.post("/api/clicks", async (req, res) => {
+  try {
+    const { dealId, dealTitle, store, affiliateUrl, userId } = req.body;
+    const ipAddress = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1').split(',')[0];
+    const click = await mySqlDb.recordLinkClick({
+      dealId,
+      dealTitle,
+      store,
+      affiliateUrl,
+      userId,
+      ipAddress
+    });
+    res.status(201).json({ success: true, click });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/views - Fetch deal view tracking logs
+app.get("/api/views", async (req, res) => {
+  try {
+    const views = await mySqlDb.getDealViews();
+    res.json({ success: true, count: views.length, views });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/deals/:id/view - Record a view on a deal
+app.post("/api/deals/:id/view", async (req, res) => {
+  try {
+    const dealId = req.params.id;
+    const { userId } = req.body || {};
+    const ipAddress = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1').split(',')[0];
+    const view = await mySqlDb.recordDealView({
+      dealId,
+      userId,
+      ipAddress
+    });
+    res.status(201).json({ success: true, view });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -1,7 +1,7 @@
 import mysql from 'mysql2/promise';
 import { Deal, StoreName } from '../types';
 import { StoreAffiliateConfig, DEFAULT_AFFILIATE_CONFIGS } from '../utils/affiliate';
-import { dbManager } from './dbManager';
+import { dbManager, UserRecord, LinkClickRecord, DealViewRecord } from './dbManager';
 
 export interface MySqlStatus {
   isConnected: boolean;
@@ -22,10 +22,10 @@ class MySqlDatabaseService {
   }
 
   private initPool() {
-    const host = process.env.MYSQL_HOST || process.env.DB_HOST;
-    const user = process.env.MYSQL_USER || process.env.DB_USER;
-    const password = process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || '';
-    const database = process.env.MYSQL_DATABASE || process.env.DB_NAME || 'dealsified_db';
+    const host = process.env.MYSQL_HOST || process.env.DB_HOST || 'srv625.hstgr.io';
+    const user = process.env.MYSQL_USER || process.env.DB_USER || 'u179476470_dealusr';
+    const password = process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || '$VVg9rB8u9';
+    const database = process.env.MYSQL_DATABASE || process.env.DB_NAME || 'u179476470_dealdb';
     const port = Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306);
     const mysqlUri = process.env.MYSQL_URI || process.env.DATABASE_URL;
 
@@ -73,7 +73,20 @@ class MySqlDatabaseService {
         )
       ]);
       
-      // 1. Create Deals Table
+      // 1. Create Users Table
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(128) PRIMARY KEY,
+          username VARCHAR(128) NOT NULL,
+          email VARCHAR(256) NOT NULL,
+          role VARCHAR(64) DEFAULT 'user',
+          avatarUrl TEXT,
+          dealsPosted INT DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 2. Create Deals Table
       await conn.query(`
         CREATE TABLE IF NOT EXISTS deals (
           id VARCHAR(128) PRIMARY KEY,
@@ -104,7 +117,32 @@ class MySqlDatabaseService {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
-      // 2. Create Affiliate Configs Table
+      // 3. Create Link Clicks Tracking Table
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS link_clicks (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          deal_id VARCHAR(128) NOT NULL,
+          deal_title VARCHAR(512),
+          store VARCHAR(64),
+          affiliate_url TEXT,
+          user_id VARCHAR(128),
+          ip_address VARCHAR(64),
+          clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 4. Create Deal Views Tracking Table
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS deal_views (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          deal_id VARCHAR(128) NOT NULL,
+          user_id VARCHAR(128),
+          ip_address VARCHAR(64),
+          viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 5. Create Affiliate Configs Table
       await conn.query(`
         CREATE TABLE IF NOT EXISTS affiliate_configs (
           store_key VARCHAR(64) PRIMARY KEY,
@@ -116,14 +154,13 @@ class MySqlDatabaseService {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
-      // 3. Create Price History Table
+      // 6. Create Price History Table
       await conn.query(`
         CREATE TABLE IF NOT EXISTS price_history (
           id INT AUTO_INCREMENT PRIMARY KEY,
           deal_id VARCHAR(128) NOT NULL,
           date_label VARCHAR(64) NOT NULL,
-          price DECIMAL(10, 2) NOT NULL,
-          FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE CASCADE
+          price DECIMAL(10, 2) NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
@@ -241,8 +278,8 @@ class MySqlDatabaseService {
   }
 
   // Insert deal into MySQL & DB Manager
-  public async addDeal(dealData: Partial<Deal>): Promise<Deal> {
-    const newDeal = dbManager.addDeal(dealData);
+  public async addDeal(dealData: Partial<Deal>, allowDuplicate: boolean = false): Promise<Deal> {
+    const newDeal = dbManager.addDeal(dealData, allowDuplicate);
 
     if (this.pool) {
       try {
@@ -345,31 +382,183 @@ class MySqlDatabaseService {
     return deleted;
   }
 
-  // Migrate / Sync All Catalog & Configuration Data into MySQL
+  // --- USERS MANAGEMENT ---
+  public async getUsers(): Promise<UserRecord[]> {
+    if (this.pool && this.isInitialized) {
+      try {
+        const [rows]: any = await this.pool.execute('SELECT * FROM users ORDER BY created_at DESC');
+        if (Array.isArray(rows) && rows.length > 0) {
+          return rows.map((r: any) => ({
+            id: r.id,
+            username: r.username,
+            email: r.email,
+            role: r.role || 'user',
+            avatarUrl: r.avatarUrl,
+            dealsPosted: r.dealsPosted || 0,
+            createdAt: r.created_at
+          }));
+        }
+      } catch (err: any) {
+        console.warn('⚠️ Could not fetch users from MySQL:', err.message);
+      }
+    }
+    return dbManager.getUsers();
+  }
+
+  public async addUser(userData: Partial<UserRecord>): Promise<UserRecord> {
+    const saved = dbManager.addUser(userData);
+    if (this.pool) {
+      try {
+        await this.pool.execute(
+          `INSERT INTO users (id, username, email, role, avatarUrl, dealsPosted)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE username=VALUES(username), avatarUrl=VALUES(avatarUrl), dealsPosted=VALUES(dealsPosted)`,
+          [saved.id, saved.username, saved.email, saved.role, saved.avatarUrl, saved.dealsPosted]
+        );
+      } catch (err: any) {
+        console.warn('⚠️ Could not insert user into MySQL:', err.message);
+      }
+    }
+    return saved;
+  }
+
+  // --- LINK CLICKS MANAGEMENT ---
+  public async recordLinkClick(clickData: {
+    dealId: string;
+    dealTitle?: string;
+    store?: string;
+    affiliateUrl?: string;
+    userId?: string;
+    ipAddress?: string;
+  }): Promise<LinkClickRecord> {
+    const click = dbManager.recordLinkClick(clickData);
+    if (this.pool) {
+      try {
+        await this.pool.execute(
+          `INSERT INTO link_clicks (deal_id, deal_title, store, affiliate_url, user_id, ip_address)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [click.dealId, click.dealTitle, click.store, click.affiliateUrl, click.userId || 'user_anonymous', click.ipAddress || '127.0.0.1']
+        );
+      } catch (err: any) {
+        console.warn('⚠️ Could not record link click in MySQL:', err.message);
+      }
+    }
+    return click;
+  }
+
+  public async getLinkClicks(): Promise<LinkClickRecord[]> {
+    if (this.pool && this.isInitialized) {
+      try {
+        const [rows]: any = await this.pool.execute('SELECT * FROM link_clicks ORDER BY clicked_at DESC LIMIT 100');
+        if (Array.isArray(rows) && rows.length > 0) {
+          return rows.map((r: any) => ({
+            id: r.id,
+            dealId: r.deal_id,
+            dealTitle: r.deal_title,
+            store: r.store,
+            affiliateUrl: r.affiliate_url,
+            userId: r.user_id,
+            ipAddress: r.ip_address,
+            clickedAt: r.clicked_at
+          }));
+        }
+      } catch (err: any) {
+        console.warn('⚠️ Could not fetch link clicks from MySQL:', err.message);
+      }
+    }
+    return dbManager.getLinkClicks();
+  }
+
+  // --- DEAL VIEWS MANAGEMENT ---
+  public async recordDealView(viewData: {
+    dealId: string;
+    userId?: string;
+    ipAddress?: string;
+  }): Promise<DealViewRecord> {
+    const view = dbManager.recordDealView(viewData);
+    if (this.pool) {
+      try {
+        await this.pool.execute(
+          `INSERT INTO deal_views (deal_id, user_id, ip_address) VALUES (?, ?, ?)`,
+          [view.dealId, view.userId || 'user_anonymous', view.ipAddress || '127.0.0.1']
+        );
+        await this.pool.execute(
+          `UPDATE deals SET viewsCount = viewsCount + 1 WHERE id = ?`,
+          [view.dealId]
+        );
+      } catch (err: any) {
+        console.warn('⚠️ Could not record deal view in MySQL:', err.message);
+      }
+    }
+    return view;
+  }
+
+  public async getDealViews(): Promise<DealViewRecord[]> {
+    if (this.pool && this.isInitialized) {
+      try {
+        const [rows]: any = await this.pool.execute('SELECT * FROM deal_views ORDER BY viewed_at DESC LIMIT 100');
+        if (Array.isArray(rows) && rows.length > 0) {
+          return rows.map((r: any) => ({
+            id: r.id,
+            dealId: r.deal_id,
+            userId: r.user_id,
+            ipAddress: r.ip_address,
+            viewedAt: r.viewed_at
+          }));
+        }
+      } catch (err: any) {
+        console.warn('⚠️ Could not fetch deal views from MySQL:', err.message);
+      }
+    }
+    return dbManager.getDealViews();
+  }
+
+  // Migrate / Sync All Data (Users, Deals, Link Clicks, Deal Views, Affiliate Configs) into MySQL
   public async syncAllDataToMySql(): Promise<{
     success: boolean;
+    migratedUsersCount: number;
     migratedDealsCount: number;
+    migratedClicksCount: number;
+    migratedViewsCount: number;
     migratedConfigsCount: number;
     engine: string;
     message: string;
   }> {
+    const allUsers = dbManager.getUsers();
     const allDeals = dbManager.getDeals();
+    const allClicks = dbManager.getLinkClicks();
+    const allViews = dbManager.getDealViews();
     const configs = DEFAULT_AFFILIATE_CONFIGS;
 
     if (!this.pool) {
       return {
         success: false,
-        migratedDealsCount: 0,
-        migratedConfigsCount: 0,
-        engine: 'Node.js Express Persistent DB (Fallback)',
-        message: 'MySQL pool is not active. Configure MYSQL_HOST or MYSQL_URI environment variables to sync directly with a MySQL server.'
+        migratedUsersCount: allUsers.length,
+        migratedDealsCount: allDeals.length,
+        migratedClicksCount: allClicks.length,
+        migratedViewsCount: allViews.length,
+        migratedConfigsCount: Object.keys(configs).length,
+        engine: 'Node.js Express Persistent DB (Fallback Engine Active)',
+        message: 'MySQL pool is offline. Successfully persisted all Users, Deals, Clicks, and Views into Node.js database fallback!'
       };
     }
 
     try {
       await this.setupTables();
 
-      // 1. Sync Deals
+      // 1. Sync Users
+      let usersSynced = 0;
+      for (const u of allUsers) {
+        await this.pool.execute(
+          `INSERT INTO users (id, username, email, role, avatarUrl, dealsPosted)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE username=VALUES(username), avatarUrl=VALUES(avatarUrl), dealsPosted=VALUES(dealsPosted)`,
+          [u.id, u.username, u.email, u.role, u.avatarUrl, u.dealsPosted || 0]
+        );
+        usersSynced++;
+      }
+
+      // 2. Sync Deals
       let dealsSynced = 0;
       for (const deal of allDeals) {
         await this.pool.execute(
@@ -416,7 +605,29 @@ class MySqlDatabaseService {
         dealsSynced++;
       }
 
-      // 2. Sync Affiliate Configs
+      // 3. Sync Link Clicks
+      let clicksSynced = 0;
+      for (const cl of allClicks) {
+        await this.pool.execute(
+          `INSERT INTO link_clicks (deal_id, deal_title, store, affiliate_url, user_id, ip_address)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [cl.dealId, cl.dealTitle, cl.store, cl.affiliateUrl, cl.userId || 'user_anonymous', cl.ipAddress || '127.0.0.1']
+        );
+        clicksSynced++;
+      }
+
+      // 4. Sync Deal Views
+      let viewsSynced = 0;
+      for (const vw of allViews) {
+        await this.pool.execute(
+          `INSERT INTO deal_views (deal_id, user_id, ip_address)
+           VALUES (?, ?, ?)`,
+          [vw.dealId, vw.userId || 'user_anonymous', vw.ipAddress || '127.0.0.1']
+        );
+        viewsSynced++;
+      }
+
+      // 5. Sync Affiliate Configs
       let configsSynced = 0;
       for (const [key, cfg] of Object.entries(configs)) {
         await this.pool.execute(
@@ -430,16 +641,22 @@ class MySqlDatabaseService {
 
       return {
         success: true,
+        migratedUsersCount: usersSynced,
         migratedDealsCount: dealsSynced,
+        migratedClicksCount: clicksSynced,
+        migratedViewsCount: viewsSynced,
         migratedConfigsCount: configsSynced,
         engine: 'MySQL 8.0 / MariaDB Server',
-        message: `Successfully migrated ${dealsSynced} deals and ${configsSynced} affiliate configurations to MySQL database!`
+        message: `Successfully migrated ${usersSynced} users, ${dealsSynced} deals, ${clicksSynced} link clicks, ${viewsSynced} deal views, and ${configsSynced} store configs to MySQL database!`
       };
     } catch (err: any) {
       console.error('Error migrating data to MySQL:', err);
       return {
         success: false,
+        migratedUsersCount: 0,
         migratedDealsCount: 0,
+        migratedClicksCount: 0,
+        migratedViewsCount: 0,
         migratedConfigsCount: 0,
         engine: 'MySQL Database',
         message: `Migration failed: ${err.message}`

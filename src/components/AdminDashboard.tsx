@@ -42,10 +42,12 @@ import {
   Database
 } from 'lucide-react';
 import { AmazonAffiliateImporter } from './AmazonAffiliateImporter';
+import { ConfirmDeleteModal } from './ConfirmDeleteModal';
+import { ToastContainer, ToastMessage } from './Toast';
 
 interface AdminDashboardProps {
   deals: Deal[];
-  onAddDeal: (newDeal: Deal) => void;
+  onAddDeal: (newDeal: Deal) => Promise<{ success: boolean; error?: string }> | void;
   onUpdateDeal: (updatedDeal: Deal) => void;
   onDeleteDeal: (dealId: string) => void;
   onCloseAdmin: () => void;
@@ -113,7 +115,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     localStorage.setItem('monday_bazaar_site_banner', JSON.stringify(siteBanner));
   }, [siteBanner]);
 
-  // MySQL Database Status State
+  // MySQL Database Status State & Entity Collections
   const [dbInfo, setDbInfo] = useState<{
     engine?: string;
     isConnected?: boolean;
@@ -122,18 +124,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     tables?: string[];
     error?: string;
   }>({});
+  const [dbUsersCount, setDbUsersCount] = useState<number>(0);
+  const [dbClicksCount, setDbClicksCount] = useState<number>(0);
+  const [dbViewsCount, setDbViewsCount] = useState<number>(0);
+  const [recentUsersList, setRecentUsersList] = useState<any[]>([]);
+  const [recentClicksList, setRecentClicksList] = useState<any[]>([]);
+
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<string | null>(null);
 
-  const fetchDbStatus = async () => {
+  const fetchDbData = async () => {
     try {
-      const res = await fetch('/api/db-status');
-      const json = await res.json();
-      if (json.success && json.db) {
-        setDbInfo(json.db);
+      // 1. Fetch DB Status
+      const resStatus = await fetch('/api/db-status');
+      const jsonStatus = await resStatus.json();
+      if (jsonStatus.success && jsonStatus.db) {
+        setDbInfo(jsonStatus.db);
+      }
+
+      // 2. Fetch Users
+      const resUsers = await fetch('/api/users');
+      const jsonUsers = await resUsers.json();
+      if (jsonUsers.success && jsonUsers.users) {
+        setDbUsersCount(jsonUsers.count || jsonUsers.users.length);
+        setRecentUsersList(jsonUsers.users.slice(0, 5));
+      }
+
+      // 3. Fetch Link Clicks
+      const resClicks = await fetch('/api/clicks');
+      const jsonClicks = await resClicks.json();
+      if (jsonClicks.success && jsonClicks.clicks) {
+        setDbClicksCount(jsonClicks.count || jsonClicks.clicks.length);
+        setRecentClicksList(jsonClicks.clicks.slice(0, 5));
+      }
+
+      // 4. Fetch Deal Views
+      const resViews = await fetch('/api/views');
+      const jsonViews = await resViews.json();
+      if (jsonViews.success && jsonViews.views) {
+        setDbViewsCount(jsonViews.count || jsonViews.views.length);
       }
     } catch (err) {
-      console.warn('Failed fetching DB status:', err);
+      console.warn('Failed fetching DB status and entity metrics:', err);
     }
   };
 
@@ -141,14 +173,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsMigrating(true);
     setMigrationResult(null);
     try {
-      const res = await fetch('/api/migrate-to-mysql', { method: 'POST' });
+      // Gather local deals from browser storage
+      let localDeals: any[] = [];
+      try {
+        const rawUserDeals = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
+        if (rawUserDeals) {
+          localDeals = JSON.parse(rawUserDeals);
+        }
+      } catch (e) {
+        console.warn('Could not parse local deals from localStorage:', e);
+      }
+
+      // Gather affiliate configs from browser storage
+      let localAffiliateConfigs = {};
+      try {
+        const rawConfigs = localStorage.getItem('monday_bazaar_affiliate_configs');
+        if (rawConfigs) {
+          localAffiliateConfigs = JSON.parse(rawConfigs);
+        }
+      } catch (e) {
+        console.warn('Could not parse affiliate configs from localStorage:', e);
+      }
+
+      const res = await fetch('/api/migrate-localstorage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          localDeals,
+          affiliateConfigs: localAffiliateConfigs
+        })
+      });
       const json = await res.json();
       if (json.message) {
         setMigrationResult(json.message);
       } else {
-        setMigrationResult('Migration process finished.');
+        setMigrationResult('All Users, Deals, Link Clicks, and Views migrated successfully into database!');
       }
-      fetchDbStatus();
+      fetchDbData();
     } catch (err: any) {
       setMigrationResult(`Migration error: ${err.message}`);
     } finally {
@@ -157,12 +218,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   useEffect(() => {
-    fetchDbStatus();
+    fetchDbData();
   }, []);
 
   // Deal Form Modal State
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [dealToDelete, setDealToDelete] = useState<Deal | null>(null);
+  const [dealModalError, setDealModalError] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (toast: Omit<ToastMessage, 'id'>) => {
+    const id = `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    setToasts(prev => [...prev, { ...toast, id }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
+
+  const handleConfirmDeleteDeal = (dealId: string) => {
+    const targetDeal = deals.find(d => d.id === dealId);
+    onDeleteDeal(dealId);
+    addToast({
+      type: 'success',
+      title: 'Deal Deleted Successfully',
+      message: targetDeal ? `"${targetDeal.title}" has been permanently removed.` : 'Deal was removed from database.'
+    });
+  };
 
   // Search & Filter State inside Admin
   const [searchQuery, setSearchQuery] = useState('');
@@ -200,6 +282,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Open Add Deal Modal
   const handleOpenAddModal = () => {
     setEditingDeal(null);
+    setDealModalError(null);
     setFormData({
       title: '',
       description: '',
@@ -225,15 +308,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Open Edit Deal Modal
   const handleOpenEditModal = (deal: Deal) => {
     setEditingDeal(deal);
+    setDealModalError(null);
     setFormData({ ...deal, isActive: deal.isActive !== false });
     setIsDealModalOpen(true);
   };
 
   // Save Deal Form
-  const handleSaveDeal = (e: React.FormEvent) => {
+  const handleSaveDeal = async (e: React.FormEvent) => {
     e.preventDefault();
+    setDealModalError(null);
     if (!formData.title || !formData.dealUrl || !formData.dealPrice) {
-      alert('Please fill in title, deal price, and valid deal URL');
+      setDealModalError('Please fill in title, deal price, and valid deal URL');
       return;
     }
 
@@ -262,6 +347,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         aiVerdict: formData.aiVerdict || 'Verified deal',
       };
       onUpdateDeal(updated);
+      addToast({
+        type: 'success',
+        title: 'Deal Updated',
+        message: `Successfully updated deal "${updated.title}"`
+      });
+      setIsDealModalOpen(false);
     } else {
       const newDeal: Deal = {
         id: `deal-${Date.now()}`,
@@ -294,10 +385,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         viewsCount: 150,
         postedBy: 'Admin_Master',
       };
-      onAddDeal(newDeal);
-    }
 
-    setIsDealModalOpen(false);
+      const res = await onAddDeal(newDeal);
+      if (res && !res.success) {
+        setDealModalError(res.error || 'Duplicate Deal Error: A deal with this title or link already exists.');
+        addToast({
+          type: 'error',
+          title: 'Duplicate Deal Blocked',
+          message: res.error || 'A deal with this title or link already exists in the database!'
+        });
+      } else {
+        addToast({
+          type: 'success',
+          title: 'Deal Published',
+          message: `Successfully added new deal "${newDeal.title}"`
+        });
+        setIsDealModalOpen(false);
+      }
+    }
   };
 
   // Test Affiliate Converter
@@ -585,6 +690,73 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500">User deal views and click interactions</p>
+              </div>
+            </div>
+
+            {/* Database & Entity Storage Migration Card */}
+            <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-md border border-slate-800 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-orange-600/20 text-orange-400 border border-orange-500/30 rounded-2xl">
+                    <Database className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-lg text-white">Database Migration & Entity Tracking</h3>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        dbInfo.isConnected ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {dbInfo.engine || 'Node.js Persistent Database Engine'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Sync and persist Users, Deals, Link Clicks, Views, and Affiliate Configs into MySQL database.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleMigrateToMySql}
+                  disabled={isMigrating}
+                  className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 disabled:opacity-50 text-white font-extrabold text-xs rounded-2xl shadow-sm transition-all flex items-center gap-2 shrink-0"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isMigrating ? 'animate-spin' : ''}`} />
+                  <span>{isMigrating ? 'Migrating All Entities...' : 'Migrate All Data Into Database'}</span>
+                </button>
+              </div>
+
+              {migrationResult && (
+                <div className="p-4 bg-emerald-950/60 border border-emerald-500/40 rounded-2xl text-emerald-200 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{migrationResult}</span>
+                </div>
+              )}
+
+              {/* Entity Count Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/80 space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Users Stored</p>
+                  <p className="text-2xl font-black text-amber-400">{dbUsersCount}</p>
+                  <p className="text-[10px] text-slate-400">User accounts in DB</p>
+                </div>
+
+                <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/80 space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Deals Stored</p>
+                  <p className="text-2xl font-black text-orange-400">{totalDealsCount}</p>
+                  <p className="text-[10px] text-slate-400">Catalog items in DB</p>
+                </div>
+
+                <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/80 space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Link Clicks Tracked</p>
+                  <p className="text-2xl font-black text-emerald-400">{dbClicksCount}</p>
+                  <p className="text-[10px] text-slate-400">Outbound link clicks in DB</p>
+                </div>
+
+                <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/80 space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Deal Views Logged</p>
+                  <p className="text-2xl font-black text-indigo-400">{dbViewsCount}</p>
+                  <p className="text-[10px] text-slate-400">Impression views in DB</p>
+                </div>
               </div>
             </div>
 
@@ -937,11 +1109,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </button>
 
                               <button
-                                onClick={() => {
-                                  if (confirm(`Are you sure you want to permanently delete "${deal.title}"?`)) {
-                                    onDeleteDeal(deal.id);
-                                  }
-                                }}
+                                onClick={() => setDealToDelete(deal)}
                                 className="px-3 py-1.5 bg-red-50/80 hover:bg-red-100 text-red-600 border border-red-200/90 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
                                 title="Delete Deal"
                               >
@@ -1134,7 +1302,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <span>{isMigrating ? 'Syncing...' : '⚡ Migrate All Data to MySQL'}</span>
                   </button>
                   <button
-                    onClick={fetchDbStatus}
+                    onClick={fetchDbData}
                     className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                   >
                     Refresh
@@ -1265,6 +1433,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             <form onSubmit={handleSaveDeal} className="space-y-4 text-xs">
+              
+              {dealModalError && (
+                <div className="p-3.5 bg-red-50 border border-red-300 rounded-2xl text-red-700 text-xs font-bold flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                  <span>{dealModalError}</span>
+                </div>
+              )}
               
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Deal Title *</label>
@@ -1463,6 +1638,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
+
+      {/* Delete Confirmation Toast Dialog */}
+      <ConfirmDeleteModal
+        isOpen={!!dealToDelete}
+        deal={dealToDelete}
+        onClose={() => setDealToDelete(null)}
+        onConfirm={handleConfirmDeleteDeal}
+      />
 
     </div>
   );

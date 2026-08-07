@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { CategoryName, Deal, StoreName } from '../types';
 import { STORES_INFO } from '../data/initialDeals';
-import { X, Plus, Sparkles, Image, Ticket, DollarSign, Tag, Store } from 'lucide-react';
+import { X, Plus, Sparkles, Image, Ticket, DollarSign, Tag, Store, AlertTriangle } from 'lucide-react';
 
 interface PostDealModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddDeal: (deal: Partial<Deal>) => void;
+  onAddDeal: (deal: Partial<Deal>) => Promise<{ success: boolean; error?: string }> | void;
 }
 
 const STORES = Object.keys(STORES_INFO) as StoreName[];
@@ -37,32 +37,46 @@ export const PostDealModal: React.FC<PostDealModalProps> = ({
   const [dealUrl, setDealUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [description, setDescription] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
     if (!title || !dealPrice || !dealUrl) return;
 
     const orig = parseFloat(originalPrice) || parseFloat(dealPrice);
     const dealP = parseFloat(dealPrice);
     const discountPct = Math.round(((orig - dealP) / orig) * 100) || 0;
 
-    onAddDeal({
-      title,
-      store,
-      category,
-      originalPrice: orig,
-      dealPrice: dealP,
-      discountPercentage: discountPct,
-      couponCode: couponCode.trim() || undefined,
-      dealUrl,
-      imageUrl: imageUrl.trim() || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80',
-      description: description.trim() || 'Verified bargain deal found by Monday Bazaar user community.',
-      isLootDeal: discountPct >= 40,
-      isVerified: true,
-      postedAt: 'Just now',
-    });
+    setIsSubmitting(true);
+    try {
+      const res = await onAddDeal({
+        title,
+        store,
+        category,
+        originalPrice: orig,
+        dealPrice: dealP,
+        discountPercentage: discountPct,
+        couponCode: couponCode.trim() || undefined,
+        dealUrl,
+        imageUrl: imageUrl.trim() || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80',
+        description: description.trim() || 'Verified bargain deal found by Monday Bazaar user community.',
+        isLootDeal: discountPct >= 40,
+        isVerified: true,
+        postedAt: 'Just now',
+      });
 
-    onClose();
+      if (res && !res.success) {
+        setErrorMsg(res.error || 'Failed to post deal. A deal with this title or link already exists.');
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error creating deal.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -94,6 +108,13 @@ export const PostDealModal: React.FC<PostDealModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto max-h-[80vh] text-xs">
+          
+          {errorMsg && (
+            <div className="p-3.5 bg-red-50 border border-red-300 rounded-2xl text-red-700 text-xs font-bold flex items-start gap-2.5 animate-in fade-in duration-200">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
           
           <div>
             <label className="block font-bold text-slate-700 mb-1">Product Title *</label>
