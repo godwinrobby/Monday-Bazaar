@@ -1353,8 +1353,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <p className="text-emerald-400 font-bold">MYSQL_USER={dbInfo.user || 'u179476470_dealusr'}</p>
                 <p className="text-slate-400">MYSQL_PASSWORD=••••••••</p>
                 <p className="text-emerald-400 font-bold">MYSQL_DATABASE={dbInfo.database || 'u179476470_dealdb'}</p>
-                <p className="text-slate-400 text-[11px] pt-1 border-t border-slate-800 font-sans">
-                  💡 Active Configuration: Connected & mapped directly to Hostinger live MySQL database (<code className="text-amber-300">srv625.hstgr.io</code>).
+                <p className="text-slate-300 text-[11px] pt-2 border-t border-slate-800 font-sans leading-relaxed">
+                  💡 <strong>Hostinger Remote MySQL Setup:</strong> Your credentials for <code className="text-amber-300">srv625.hstgr.io</code> are mapped. If Hostinger blocks direct connection, log into Hostinger hPanel &gt; <strong>Databases</strong> &gt; <strong>Remote MySQL</strong> and add <code className="text-amber-300">%</code> to <i>Access Hosts</i> to allow external cloud connections.
                 </p>
               </div>
             </div>

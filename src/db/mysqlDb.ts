@@ -24,14 +24,14 @@ class MySqlDatabaseService {
   }
 
   private initPool() {
-    const host = process.env.MYSQL_HOST || process.env.DB_HOST || 'srv625.hstgr.io';
-    const user = process.env.MYSQL_USER || process.env.DB_USER || 'u179476470_dealusr';
-    const password = process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || '$VVg9rB8u9';
-    const database = process.env.MYSQL_DATABASE || process.env.DB_NAME || 'u179476470_dealdb';
-    const port = Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306);
-    const mysqlUri = process.env.MYSQL_URI || process.env.DATABASE_URL;
+    const host = (process.env.MYSQL_HOST || process.env.DB_HOST || '').trim() || 'srv625.hstgr.io';
+    const user = (process.env.MYSQL_USER || process.env.DB_USER || '').trim() || 'u179476470_dealusr';
+    const password = (process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD || '').trim() || '$VVg9rB8u9';
+    const database = (process.env.MYSQL_DATABASE || process.env.DB_NAME || '').trim() || 'u179476470_dealdb';
+    const port = Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306) || 3306;
+    const mysqlUri = (process.env.MYSQL_URI || process.env.DATABASE_URL || '').trim();
 
-    if (mysqlUri && mysqlUri.trim() !== '') {
+    if (mysqlUri && mysqlUri.startsWith('mysql')) {
       try {
         this.pool = mysql.createPool(mysqlUri);
         console.log('✅ MySQL Pool created via MYSQL_URI');
@@ -39,7 +39,7 @@ class MySqlDatabaseService {
         this.connectionError = err.message;
         console.warn('⚠️ Could not create MySQL pool via URI:', err.message);
       }
-    } else if (host && user && host.trim() !== '' && user.trim() !== '') {
+    } else if (host && user) {
       try {
         this.pool = mysql.createPool({
           host,
@@ -58,7 +58,7 @@ class MySqlDatabaseService {
         console.warn('⚠️ Could not create MySQL pool:', err.message);
       }
     } else {
-      this.connectionError = 'MySQL credentials (MYSQL_USER, MYSQL_HOST or MYSQL_URI) not configured in environment variables.';
+      this.connectionError = 'MySQL credentials missing or incomplete.';
       console.log('ℹ️ MySQL credentials missing or incomplete. Seamlessly using Node.js persistent DB engine.');
     }
   }
@@ -561,7 +561,19 @@ class MySqlDatabaseService {
     }
 
     try {
-      await this.setupTables();
+      const isReady = await this.setupTables();
+      if (!isReady) {
+        return {
+          success: false,
+          migratedUsersCount: 0,
+          migratedDealsCount: 0,
+          migratedClicksCount: 0,
+          migratedViewsCount: 0,
+          migratedConfigsCount: 0,
+          engine: 'MySQL Server',
+          message: `Could not connect to MySQL server at srv625.hstgr.io. (${this.connectionError || 'Connection refused or access denied. Ensure Remote MySQL "%" is allowed in Hostinger cPanel.'})`
+        };
+      }
 
       // 1. Sync Users
       let usersSynced = 0;
