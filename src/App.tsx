@@ -279,6 +279,9 @@ export default function App() {
   // Filter & Sort Calculations
   const filteredDeals = useMemo(() => {
     return deals.filter(deal => {
+      // Inactive filter - hide inactive deals from storefront
+      if (deal.isActive === false) return false;
+
       // Category filter
       if (filters.category !== 'All' && deal.category !== filters.category) return false;
 

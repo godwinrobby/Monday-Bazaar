@@ -87,6 +87,7 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
         if (apiData.originalPrice) result.originalPrice = apiData.originalPrice;
         if (apiData.dealPrice) result.dealPrice = apiData.dealPrice;
         if (apiData.couponCode) result.couponCode = apiData.couponCode;
+        if (apiData.imageUrl) result.imageUrl = apiData.imageUrl;
       }
 
       setFetchedResult(result);

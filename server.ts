@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { dbManager } from "./src/db/dbManager";
+import { mySqlDb } from "./src/db/mysqlDb";
 
 const app = express();
 const PORT = 3000;
@@ -24,37 +25,54 @@ function getGeminiClient() {
   });
 }
 
-// Health route
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", app: "Dealsified", dbStatus: "connected", time: new Date().toISOString() });
+// Health route with MySQL status
+app.get("/api/health", async (req, res) => {
+  const status = await mySqlDb.getStatus();
+  res.json({
+    status: "ok",
+    app: "Dealsified",
+    dbEngine: status.engine,
+    isMySqlConnected: status.isConnected,
+    time: new Date().toISOString()
+  });
+});
+
+// GET /api/db-status - Detail MySQL Database Engine Status
+app.get("/api/db-status", async (req, res) => {
+  try {
+    const status = await mySqlDb.getStatus();
+    res.json({ success: true, db: status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ================= DATABASE API ROUTES =================
 
-// GET /api/deals - Fetch all deals from Node.js database
-app.get("/api/deals", (req, res) => {
+// GET /api/deals - Fetch all deals from MySQL / Node.js database
+app.get("/api/deals", async (req, res) => {
   try {
-    const deals = dbManager.getDeals();
+    const deals = await mySqlDb.getDeals();
     res.json({ success: true, count: deals.length, deals });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// POST /api/deals - Add new deal to database
-app.post("/api/deals", (req, res) => {
+// POST /api/deals - Add new deal to MySQL database
+app.post("/api/deals", async (req, res) => {
   try {
-    const newDeal = dbManager.addDeal(req.body);
+    const newDeal = await mySqlDb.addDeal(req.body);
     res.status(201).json({ success: true, deal: newDeal });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// PUT /api/deals/:id - Update deal in database
-app.put("/api/deals/:id", (req, res) => {
+// PUT /api/deals/:id - Update deal in MySQL database
+app.put("/api/deals/:id", async (req, res) => {
   try {
-    const updated = dbManager.updateDeal(req.params.id, req.body);
+    const updated = await mySqlDb.updateDeal(req.params.id, req.body);
     if (!updated) {
       return res.status(404).json({ success: false, error: "Deal not found" });
     }
@@ -64,10 +82,10 @@ app.put("/api/deals/:id", (req, res) => {
   }
 });
 
-// DELETE /api/deals/:id - Remove deal from database
-app.delete("/api/deals/:id", (req, res) => {
+// DELETE /api/deals/:id - Remove deal from MySQL database
+app.delete("/api/deals/:id", async (req, res) => {
   try {
-    const deleted = dbManager.deleteDeal(req.params.id);
+    const deleted = await mySqlDb.deleteDeal(req.params.id);
     if (!deleted) {
       return res.status(404).json({ success: false, error: "Deal not found" });
     }
@@ -141,10 +159,20 @@ app.post("/api/analyze-deal", async (req, res) => {
         ? `Amazon Super Deal Item (ASIN: ${extractedAsin})`
         : "Parsed Deal Product (" + (urlOrText.length > 35 ? urlOrText.slice(0, 35) + '...' : urlOrText) + ")";
 
-      if (extractedAsin === 'B0FBQLM3O' || extractedAsin === 'B0CX58S7S9') {
+      let parsedImage = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80";
+
+      if (extractedAsin === 'B0FBQLM3O' || extractedAsin === 'B0CX58S7S9' || urlOrText.toLowerCase().includes('iphone')) {
         parsedTitle = 'Apple iPhone 15 (128 GB) - Premium Blue';
-      } else if (extractedAsin === 'B0CHX1M1XP') {
+        parsedImage = 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=800&q=80';
+      } else if (extractedAsin === 'B0CHX1M1XP' || urlOrText.toLowerCase().includes('sony') || urlOrText.toLowerCase().includes('headphone')) {
         parsedTitle = 'Sony WH-1000XM5 Wireless ANC Headphones';
+        parsedImage = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80';
+      } else if (urlOrText.toLowerCase().includes('watch') || urlOrText.toLowerCase().includes('smartwatch')) {
+        parsedTitle = 'Noise ColorFit Pulse 3 Smart Watch';
+        parsedImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
+      } else if (urlOrText.toLowerCase().includes('macbook') || urlOrText.toLowerCase().includes('laptop')) {
+        parsedTitle = 'Apple MacBook Air Laptop M2 chip';
+        parsedImage = 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80';
       }
 
       return res.json({
@@ -157,6 +185,7 @@ app.post("/api/analyze-deal", async (req, res) => {
           dealPrice: 6999,
           discountPercentage: 46,
           couponCode: "AMZLOOT46",
+          imageUrl: parsedImage,
           aiScore: 92,
           aiVerdict: "Significant discount verified against historical price logs. Strong value recommendation.",
           aiPros: ["46% discount off average selling price", "Includes 1 year brand warranty", "Free standard shipping"],
@@ -169,7 +198,7 @@ app.post("/api/analyze-deal", async (req, res) => {
     }
 
     const prompt = `Analyze this e-commerce deal link or text prompt: "${urlOrText}".
-If this is an Amazon link (e.g. https://link.amazon/B0fBQlm3o, amzn.in, or amazon.in), extract the ASIN code and generate a clean, realistic e-commerce product title (e.g. Apple iPhone 15, Sony Headphones, Samsung Galaxy phone, boAt Earbuds, etc.).
+If this is an Amazon link (e.g. https://link.amazon/B0fBQlm3o, amzn.in, or amazon.in), extract the ASIN code and generate a clean, realistic e-commerce product title (e.g. Apple iPhone 15, Sony Headphones, Samsung Galaxy phone, boAt Earbuds, etc.) and appropriate Unsplash product image URL.
 Determine the store name (must be one of: Amazon, Flipkart, Myntra, Ajio, Tata CLiQ, Croma, Reliance Digital, Boat, Noise, Samsung, Apple).
 Extract or estimate reasonable numeric prices in INR (₹). Original price should be higher than deal price.
 Determine if this is a "Loot Deal" (huge price drop >= 40% discount or historical low).
@@ -191,6 +220,7 @@ Provide honest buyer advice pros, cons, AI score (0-100), and buy recommendation
             dealPrice: { type: Type.NUMBER, description: "Current discounted deal price in INR" },
             discountPercentage: { type: Type.NUMBER, description: "Percentage off (0-99)" },
             couponCode: { type: Type.STRING, description: "Coupon code if applicable or empty string" },
+            imageUrl: { type: Type.STRING, description: "Product image URL from Unsplash or e-commerce CDN" },
             aiScore: { type: Type.NUMBER, description: "Overall deal quality score out of 100" },
             aiVerdict: { type: Type.STRING, description: "One sentence summary verdict" },
             aiPros: {
@@ -215,10 +245,25 @@ Provide honest buyer advice pros, cons, AI score (0-100), and buy recommendation
     const jsonText = response.text || "{}";
     const parsedData = JSON.parse(jsonText);
 
-    // Sanitize store name
+    // Sanitize store name & fallback image
     const validStores = ['Amazon', 'Flipkart', 'Myntra', 'Ajio', 'Tata CLiQ', 'Croma', 'Reliance Digital', 'Boat', 'Noise', 'Samsung', 'Apple'];
     if (!validStores.includes(parsedData.store)) {
       parsedData.store = 'Amazon';
+    }
+
+    if (!parsedData.imageUrl || !parsedData.imageUrl.startsWith('http')) {
+      const lowerT = (parsedData.title || '').toLowerCase();
+      if (lowerT.includes('phone') || lowerT.includes('iphone') || lowerT.includes('samsung') || lowerT.includes('mobile')) {
+        parsedData.imageUrl = 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=800&q=80';
+      } else if (lowerT.includes('headphone') || lowerT.includes('earbud') || lowerT.includes('audio') || lowerT.includes('boat')) {
+        parsedData.imageUrl = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80';
+      } else if (lowerT.includes('watch') || lowerT.includes('smartwatch')) {
+        parsedData.imageUrl = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
+      } else if (lowerT.includes('macbook') || lowerT.includes('laptop')) {
+        parsedData.imageUrl = 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80';
+      } else {
+        parsedData.imageUrl = 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=800&q=80';
+      }
     }
 
     return res.json({
@@ -236,6 +281,11 @@ Provide honest buyer advice pros, cons, AI score (0-100), and buy recommendation
 });
 
 async function startServer() {
+  // Initialize MySQL Database Tables if configured
+  await mySqlDb.setupTables().catch(err => {
+    console.warn('MySQL initialization notice:', err.message);
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

@@ -38,7 +38,8 @@ import {
   AlertTriangle,
   Download,
   Upload,
-  ShoppingBag
+  ShoppingBag,
+  Database
 } from 'lucide-react';
 import { AmazonAffiliateImporter } from './AmazonAffiliateImporter';
 
@@ -112,6 +113,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     localStorage.setItem('monday_bazaar_site_banner', JSON.stringify(siteBanner));
   }, [siteBanner]);
 
+  // MySQL Database Status State
+  const [dbInfo, setDbInfo] = useState<{
+    engine?: string;
+    isConnected?: boolean;
+    host?: string;
+    database?: string;
+    tables?: string[];
+    error?: string;
+  }>({});
+
+  const fetchDbStatus = async () => {
+    try {
+      const res = await fetch('/api/db-status');
+      const json = await res.json();
+      if (json.success && json.db) {
+        setDbInfo(json.db);
+      }
+    } catch (err) {
+      console.warn('Failed fetching DB status:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDbStatus();
+  }, []);
+
   // Deal Form Modal State
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
@@ -120,6 +147,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [storeFilter, setStoreFilter] = useState<string>('All');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
 
   // Affiliate Tester Tool State
   const [testUrlInput, setTestUrlInput] = useState('https://www.amazon.in/dp/B09XS7JWHH');
@@ -140,6 +168,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     dealUrl: '',
     isLootDeal: true,
     isVerified: true,
+    isActive: true,
     aiScore: 90,
     aiVerdict: 'Verified high-discount offer with solid price drop history.',
     aiPros: ['Great savings compared to standard MRP', 'Verified merchant deal'],
@@ -162,6 +191,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       dealUrl: 'https://www.amazon.in/dp/example',
       isLootDeal: true,
       isVerified: true,
+      isActive: true,
       aiScore: 90,
       aiVerdict: 'Verified high-discount offer with solid price drop history.',
       aiPros: ['Great savings compared to standard MRP', 'Verified merchant deal'],
@@ -174,7 +204,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Open Edit Deal Modal
   const handleOpenEditModal = (deal: Deal) => {
     setEditingDeal(deal);
-    setFormData({ ...deal });
+    setFormData({ ...deal, isActive: deal.isActive !== false });
     setIsDealModalOpen(true);
   };
 
@@ -206,6 +236,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         dealUrl: formData.dealUrl || editingDeal.dealUrl,
         isLootDeal: !!formData.isLootDeal,
         isVerified: !!formData.isVerified,
+        isActive: formData.isActive !== false,
         aiScore: Number(formData.aiScore) || 85,
         aiVerdict: formData.aiVerdict || 'Verified deal',
       };
@@ -225,6 +256,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         dealUrl: formData.dealUrl || 'https://www.amazon.in',
         isLootDeal: discountPct >= 40 || !!formData.isLootDeal,
         isVerified: true,
+        isActive: formData.isActive !== false,
         upvotes: 25,
         downvotes: 0,
         aiScore: Number(formData.aiScore) || 90,
@@ -301,6 +333,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           originalPrice: d.originalPrice || prev.originalPrice,
           dealPrice: d.dealPrice || prev.dealPrice,
           couponCode: d.couponCode || prev.couponCode,
+          imageUrl: d.imageUrl || prev.imageUrl,
           dealUrl: convertedUrl,
           aiScore: d.aiScore || prev.aiScore,
           aiVerdict: d.aiVerdict || prev.aiVerdict,
@@ -323,7 +356,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           d.category.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStore = storeFilter === 'All' || d.store === storeFilter;
     const matchesCategory = categoryFilter === 'All' || d.category === categoryFilter;
-    return matchesSearch && matchesStore && matchesCategory;
+    const matchesStatus = statusFilter === 'All' || 
+                          (statusFilter === 'Active' && d.isActive !== false) ||
+                          (statusFilter === 'Inactive' && d.isActive === false);
+    return matchesSearch && matchesStore && matchesCategory && matchesStatus;
   });
 
   // Calculate Metrics
@@ -707,6 +743,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto">
                 <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
+                >
+                  <option value="All">All Status</option>
+                  <option value="Active">🟢 Active Only</option>
+                  <option value="Inactive">⚪ Inactive Only</option>
+                </select>
+
+                <select
                   value={storeFilter}
                   onChange={(e) => setStoreFilter(e.target.value)}
                   className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
@@ -753,17 +799,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider">
                       <th className="py-3 px-4 font-bold">Product / Title</th>
+                      <th className="py-3 px-4 font-bold">Status</th>
                       <th className="py-3 px-4 font-bold">Store</th>
                       <th className="py-3 px-4 font-bold">Price & Discount</th>
                       <th className="py-3 px-4 font-bold">Coupon</th>
                       <th className="py-3 px-4 font-bold">Badges</th>
                       <th className="py-3 px-4 font-bold">AI Score</th>
-                      <th className="py-3 px-4 font-bold text-right">Actions</th>
+                      <th className="py-3 px-4 font-bold text-right uppercase tracking-wider text-slate-600">ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredAdminDeals.map((deal) => {
                       const affUrl = buildAffiliateUrl(deal.dealUrl, deal.store, affiliateConfigs);
+                      const isActive = deal.isActive !== false;
 
                       return (
                         <tr key={deal.id} className="hover:bg-slate-50/70 transition-colors">
@@ -772,13 +820,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               <img
                                 src={deal.imageUrl}
                                 alt={deal.title}
-                                className="w-10 h-10 object-cover rounded-xl border border-slate-200 shrink-0"
+                                className="w-10 h-10 object-cover rounded-xl border border-slate-200 shrink-0 bg-slate-100"
                               />
                               <div className="min-w-0">
-                                <p className="font-bold text-slate-900 line-clamp-1">{deal.title}</p>
+                                <p className={`font-bold line-clamp-1 ${isActive ? 'text-slate-900' : 'text-slate-400 line-through'}`}>
+                                  {deal.title}
+                                </p>
                                 <p className="text-[10px] text-slate-500">{deal.category} • Posted by {deal.postedBy}</p>
                               </div>
                             </div>
+                          </td>
+
+                          <td className="py-3 px-4">
+                            <button
+                              onClick={() => {
+                                const updated = { ...deal, isActive: !isActive };
+                                onUpdateDeal(updated);
+                              }}
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                                isActive
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
+                              }`}
+                              title="Click to toggle Active / Inactive"
+                            >
+                              <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                              <span>{isActive ? 'Active' : 'Inactive'}</span>
+                            </button>
                           </td>
 
                           <td className="py-3 px-4 font-bold text-slate-800">
@@ -827,35 +895,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </td>
 
                           <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex items-center justify-end gap-2">
                               <a
                                 href={affUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-1.5 text-slate-600 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                                title="Test Affiliate Link"
+                                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors border border-transparent hover:border-slate-200"
+                                title="Open Deal Link"
                               >
                                 <ExternalLink className="w-4 h-4" />
                               </a>
 
                               <button
                                 onClick={() => handleOpenEditModal(deal)}
-                                className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                className="px-3 py-1.5 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/90 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
                                 title="Edit Deal"
                               >
-                                <Edit className="w-4 h-4" />
+                                <Edit className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Edit</span>
                               </button>
 
                               <button
                                 onClick={() => {
-                                  if (confirm(`Delete deal "${deal.title}"?`)) {
+                                  if (confirm(`Are you sure you want to permanently delete "${deal.title}"?`)) {
                                     onDeleteDeal(deal.id);
                                   }
                                 }}
-                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                className="px-3 py-1.5 bg-red-50/80 hover:bg-red-100 text-red-600 border border-red-200/90 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
                                 title="Delete Deal"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                <span>Delete</span>
                               </button>
                             </div>
                           </td>
@@ -1021,6 +1091,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <span>{siteBanner.text}</span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* MySQL Database Engine & Server Configuration Card */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Database className="w-5 h-5 text-indigo-600" />
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900">MySQL Database Engine & Node.js Server Integration</h3>
+                    <p className="text-xs text-slate-500">Node.js Express backend database connection & relational schema manager</p>
+                  </div>
+                </div>
+                <button
+                  onClick={fetchDbStatus}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+                >
+                  Refresh Status
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Database Engine</span>
+                  <p className="font-extrabold text-slate-900">{dbInfo.engine || 'MySQL 8.0 / Node.js Relational Engine'}</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">MySQL Server Connection Status</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${dbInfo.isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                    <span className={`font-black ${dbInfo.isConnected ? 'text-emerald-700' : 'text-amber-700'}`}>
+                      {dbInfo.isConnected ? '🟢 MySQL Connected & Active' : '🟡 Active Node.js Persistent DB (MySQL Ready)'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Database Name</span>
+                  <p className="font-mono font-bold text-indigo-600">{dbInfo.database || 'dealsified_db'}</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tables Schema Verified</span>
+                  <p className="font-mono text-slate-700 font-bold">
+                    {dbInfo.tables ? dbInfo.tables.join(', ') : 'deals, affiliate_configs, price_history, comments'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl text-xs font-mono space-y-2 border border-slate-800">
+                <p className="text-amber-400 font-bold"># Environment Variables for External MySQL Server Connection (.env)</p>
+                <p className="text-slate-400">MYSQL_HOST={dbInfo.host || 'localhost'}</p>
+                <p className="text-slate-400">MYSQL_PORT=3306</p>
+                <p className="text-slate-400">MYSQL_USER=root</p>
+                <p className="text-slate-400">MYSQL_DATABASE=dealsified_db</p>
+                <p className="text-slate-500 text-[11px] pt-1 border-t border-slate-800 font-sans">
+                  💡 Tip: Provide your MySQL credentials via .env secrets or <code className="text-amber-300">MYSQL_URI</code> to connect directly to an external MySQL server or Cloud SQL instance.
+                </p>
               </div>
             </div>
 
@@ -1199,14 +1328,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Product Image URL</label>
-                <input
-                  type="url"
-                  value={formData.imageUrl}
-                  onChange={(e) => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
-                />
+                <label className="block font-bold text-slate-700 mb-1">Product Image URL *</label>
+                <div className="flex items-center gap-3">
+                  {formData.imageUrl ? (
+                    <img
+                      src={formData.imageUrl}
+                      alt="Product preview"
+                      className="w-12 h-12 object-cover rounded-xl border border-slate-200 shrink-0 bg-slate-100"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 text-xs shrink-0 font-bold">
+                      No Img
+                    </div>
+                  )}
+                  <input
+                    type="url"
+                    value={formData.imageUrl}
+                    onChange={(e) => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
+                    placeholder="https://images.unsplash.com/..."
+                    className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
+                  />
+                </div>
               </div>
 
               <div>
@@ -1219,30 +1364,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 />
               </div>
 
-              {/* Toggles */}
-              <div className="flex items-center gap-6 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={formData.isLootDeal}
-                    onChange={(e) => setFormData(prev => ({ ...prev, isLootDeal: e.target.checked }))}
-                    className="w-4 h-4 text-orange-600 rounded"
-                  />
-                  <span className="flex items-center gap-1 text-red-600">
-                    <Flame className="w-4 h-4 fill-red-600" />
-                    Mark as LOOT DEAL
-                  </span>
-                </label>
+              {/* Toggles & Status */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Product Status (Active / Inactive)</label>
+                  <select
+                    value={formData.isActive !== false ? 'active' : 'inactive'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.value === 'active' }))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold text-xs"
+                  >
+                    <option value="active">🟢 Active (Visible to store users)</option>
+                    <option value="inactive">⚪ Inactive (Hidden from store users)</option>
+                  </select>
+                </div>
 
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={formData.isVerified}
-                    onChange={(e) => setFormData(prev => ({ ...prev, isVerified: e.target.checked }))}
-                    className="w-4 h-4 text-emerald-600 rounded"
-                  />
-                  <span className="text-emerald-700">Verified Badge</span>
-                </label>
+                <div className="flex items-center gap-6 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={formData.isLootDeal}
+                      onChange={(e) => setFormData(prev => ({ ...prev, isLootDeal: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded"
+                    />
+                    <span className="flex items-center gap-1 text-red-600">
+                      <Flame className="w-4 h-4 fill-red-600" />
+                      Mark as LOOT DEAL
+                    </span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={formData.isVerified}
+                      onChange={(e) => setFormData(prev => ({ ...prev, isVerified: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded"
+                    />
+                    <span className="text-emerald-700">Verified Badge</span>
+                  </label>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">

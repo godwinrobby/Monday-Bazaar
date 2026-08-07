@@ -51,6 +51,7 @@ export interface Deal {
   isLootDeal?: boolean;
   isVerified?: boolean;
   isExpiringSoon?: boolean;
+  isActive?: boolean; // Default true, allows admin to set Active/Inactive
   upvotes: number;
   downvotes: number;
   userVoted?: 'up' | 'down';
