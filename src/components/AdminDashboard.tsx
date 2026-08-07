@@ -59,7 +59,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'amazon-import' | 'deals' | 'affiliation' | 'pending' | 'settings'>('overview');
 
-  // Affiliate Config State with LocalStorage Persistence
+  // Affiliate Config State with Node.js Backend Database Persistence
   const [affiliateConfigs, setAffiliateConfigs] = useState<Record<StoreName, StoreAffiliateConfig>>(() => {
     try {
       const saved = localStorage.getItem('monday_bazaar_affiliate_configs');
@@ -69,8 +69,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   });
 
+  // Load from backend Node.js database
+  useEffect(() => {
+    fetch('/api/affiliate-configs')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.configs) {
+          setAffiliateConfigs(data.configs);
+        }
+      })
+      .catch(err => console.log('Failed fetching affiliate configs from DB:', err));
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('monday_bazaar_affiliate_configs', JSON.stringify(affiliateConfigs));
+    fetch('/api/affiliate-configs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(affiliateConfigs)
+    }).catch(err => console.error('Failed syncing affiliate configs to DB:', err));
   }, [affiliateConfigs]);
 
   // Site Banner Settings
@@ -252,6 +269,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         [field]: value
       }
     }));
+  };
+
+  // Auto Fetch Link Details (Title, Prices, Affiliate URL)
+  const [isAnalyzingLink, setIsAnalyzingLink] = useState(false);
+
+  const handleAutoFetchLink = async () => {
+    if (!formData.dealUrl || !formData.dealUrl.trim()) {
+      alert('Please enter a product deal URL first (e.g. https://link.amazon/B0fBQlm3o)');
+      return;
+    }
+
+    setIsAnalyzingLink(true);
+    try {
+      const res = await fetch('/api/analyze-deal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urlOrText: formData.dealUrl })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        const d = data.data;
+        const storeName = (d.store as StoreName) || formData.store || 'Amazon';
+        const convertedUrl = buildAffiliateUrl(formData.dealUrl, storeName, affiliateConfigs);
+
+        setFormData(prev => ({
+          ...prev,
+          title: d.title || prev.title,
+          store: storeName,
+          category: (d.category as CategoryName) || prev.category,
+          originalPrice: d.originalPrice || prev.originalPrice,
+          dealPrice: d.dealPrice || prev.dealPrice,
+          couponCode: d.couponCode || prev.couponCode,
+          dealUrl: convertedUrl,
+          aiScore: d.aiScore || prev.aiScore,
+          aiVerdict: d.aiVerdict || prev.aiVerdict,
+          aiPros: d.aiPros || prev.aiPros,
+          aiCons: d.aiCons || prev.aiCons,
+          isLootDeal: d.isLootDeal ?? prev.isLootDeal,
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to auto fetch deal details:', err);
+    } finally {
+      setIsAnalyzingLink(false);
+    }
   };
 
   // Filtered deals in admin table
@@ -1114,14 +1176,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Product Deal URL *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700">Product Deal URL *</label>
+                  <button
+                    type="button"
+                    onClick={handleAutoFetchLink}
+                    disabled={isAnalyzingLink}
+                    className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-extrabold text-[11px] rounded-lg shadow-xs flex items-center gap-1 transition-all"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{isAnalyzingLink ? 'Extracting Title...' : 'Auto-Fetch Title & Details'}</span>
+                  </button>
+                </div>
                 <input
                   type="url"
                   required
                   value={formData.dealUrl}
                   onChange={(e) => setFormData(prev => ({ ...prev, dealUrl: e.target.value }))}
-                  placeholder="https://www.amazon.in/dp/..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900"
+                  placeholder="Paste Amazon link e.g. https://link.amazon/B0fBQlm3o..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
 

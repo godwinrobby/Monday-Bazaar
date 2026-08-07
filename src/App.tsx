@@ -14,10 +14,11 @@ import { PostDealModal } from './components/PostDealModal';
 import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
 import { AdminDashboard } from './components/AdminDashboard';
+import { MobileLootAlertModal } from './components/MobileLootAlertModal';
 import { Flame, Sparkles, Filter, RefreshCw, ShoppingBag, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 export default function App() {
-  // Deals State with LocalStorage Persistence
+  // Deals State with Node.js Database Backend + Local Storage Fallback
   const [deals, setDeals] = useState<Deal[]>(() => {
     try {
       const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
@@ -30,6 +31,18 @@ export default function App() {
     }
     return INITIAL_DEALS;
   });
+
+  // Fetch initial deals from Node.js database endpoint
+  useEffect(() => {
+    fetch('/api/deals')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.deals) && data.deals.length > 0) {
+          setDeals(data.deals);
+        }
+      })
+      .catch(err => console.log('Database fetch fallback to client cache:', err));
+  }, []);
 
   // Watchlist State
   const [savedDealIds, setSavedDealIds] = useState<string[]>(() => {
@@ -119,6 +132,13 @@ export default function App() {
         };
       })
     );
+
+    // Sync vote with Node.js Database backend
+    fetch(`/api/deals/${dealId}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type })
+    }).catch(err => console.error('Failed to sync vote to DB:', err));
   };
 
   // Toggle Save Watchlist
@@ -149,6 +169,14 @@ export default function App() {
         if (selectedDeal?.id === dealId) {
           setSelectedDeal(updatedDeal);
         }
+
+        // Sync comment with Node.js Database backend
+        fetch(`/api/deals/${dealId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comments: updatedComments, commentsCount: updatedComments.length })
+        }).catch(err => console.error('Failed to update deal comments in DB:', err));
+
         return updatedDeal;
       })
     );
@@ -157,6 +185,14 @@ export default function App() {
   // Update Deal Handler (from Admin)
   const handleUpdateDeal = (updatedDeal: Deal) => {
     setDeals(prev => prev.map(d => d.id === updatedDeal.id ? updatedDeal : d));
+
+    // Sync update to Node.js Database backend
+    fetch(`/api/deals/${updatedDeal.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedDeal)
+    }).catch(err => console.error('Failed to update deal in DB:', err));
+
     try {
       const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
       const userDeals: Deal[] = saved ? JSON.parse(saved) : [];
@@ -170,6 +206,12 @@ export default function App() {
   // Delete Deal Handler (from Admin)
   const handleDeleteDeal = (dealId: string) => {
     setDeals(prev => prev.filter(d => d.id !== dealId));
+
+    // Sync deletion to Node.js Database backend
+    fetch(`/api/deals/${dealId}`, {
+      method: 'DELETE'
+    }).catch(err => console.error('Failed to delete deal from DB:', err));
+
     try {
       const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
       if (saved) {
@@ -185,7 +227,7 @@ export default function App() {
   // Add New Deal Handler
   const handleAddDeal = (newDealData: Partial<Deal>) => {
     const fullDeal: Deal = {
-      id: 'deal_' + Date.now(),
+      id: newDealData.id || ('deal_' + Date.now()),
       title: newDealData.title || 'New Bargain Deal',
       description: newDealData.description || 'Discovered offer',
       store: newDealData.store || 'Amazon',
@@ -198,26 +240,33 @@ export default function App() {
       dealUrl: newDealData.dealUrl || 'https://www.amazon.in',
       isLootDeal: newDealData.isLootDeal ?? false,
       isVerified: true,
-      upvotes: 1,
-      downvotes: 0,
+      upvotes: newDealData.upvotes || 1,
+      downvotes: newDealData.downvotes || 0,
       aiScore: newDealData.aiScore || 85,
       aiVerdict: newDealData.aiVerdict || 'Community submitted price drop verified.',
       aiPros: newDealData.aiPros || ['Substantial discount off MRP', 'Community verified link'],
       aiCons: newDealData.aiCons || ['Check store delivery pin code before checkout'],
       postedAt: 'Just now',
-      priceHistory: [
+      priceHistory: newDealData.priceHistory || [
         { date: 'Yesterday', price: newDealData.originalPrice || 1000 },
         { date: 'Today', price: newDealData.dealPrice || 500 }
       ],
       commentsCount: 0,
       comments: [],
       viewsCount: 1,
-      postedBy: 'You'
+      postedBy: newDealData.postedBy || 'You'
     };
 
     setDeals(prev => [fullDeal, ...prev]);
 
-    // Save user added deals to localStorage
+    // Save to Node.js Database backend
+    fetch('/api/deals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullDeal)
+    }).catch(err => console.error('Failed to post deal to DB:', err));
+
+    // Save user added deals to localStorage as fallback
     try {
       const saved = localStorage.getItem('dealsified_user_deals');
       const userDeals = saved ? JSON.parse(saved) : [];
@@ -539,6 +588,9 @@ export default function App() {
         onSelectDeal={(d) => setSelectedDeal(d)}
         onRemoveSave={(id) => setSavedDealIds(prev => prev.filter(i => i !== id))}
       />
+
+      {/* Mobile-Only Loot Alert Notification Popup */}
+      <MobileLootAlertModal />
 
     </div>
   );

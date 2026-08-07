@@ -120,3 +120,10 @@ export interface PriceAlert {
   userEmail: string;
   createdAt: string;
 }
+
+export interface StoreAffiliateConfig {
+  storeName: StoreName;
+  tag: string;
+  paramName: string;
+  isEnabled: boolean;
+}

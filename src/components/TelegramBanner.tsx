@@ -3,7 +3,7 @@ import { Send, Zap, Bell, Sparkles } from 'lucide-react';
 
 export const TelegramBanner: React.FC = () => {
   return (
-    <div id="telegram-banner-container" className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white shadow-md">
+    <div id="telegram-banner-container" className="hidden md:block bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 py-2.5 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
         <div className="flex items-center gap-2.5 text-center sm:text-left">
           <span className="inline-flex items-center justify-center p-1 bg-white/20 rounded-full animate-pulse">

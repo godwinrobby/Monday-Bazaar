@@ -129,16 +129,27 @@ export function extractAmazonAsin(input: string): string | null {
   if (!input) return null;
   const trimmed = input.trim();
 
-  // If input is direct 10-char ASIN like B0CX58S7S9
+  // 1. Direct 10-character ASIN
   if (/^[A-Z0-9]{10}$/i.test(trimmed)) {
     return trimmed.toUpperCase();
   }
 
-  // Regular expression to catch Amazon ASINs from standard product URLs
-  const asinRegex = /(?:dp|gp\/product|asin|product-reviews)\/([A-Z0-9]{10})/i;
-  const match = trimmed.match(asinRegex);
-  if (match && match[1]) {
-    return match[1].toUpperCase();
+  // 2. Specific Amazon URL patterns (e.g., /dp/B0..., /gp/product/B0..., /link.amazon/B0..., /d/B0...)
+  const urlPatternMatch = trimmed.match(/(?:dp|gp\/product|asin|product-reviews|d|link\.amazon[^\/]*|amzn[^\/]*)\/([A-Z0-9]{10})/i);
+  if (urlPatternMatch && urlPatternMatch[1]) {
+    return urlPatternMatch[1].toUpperCase();
+  }
+
+  // 3. Any 10-char ASIN starting with B0 anywhere in the string
+  const b0Match = trimmed.match(/\b(B0[A-Z0-9]{8})\b/i);
+  if (b0Match && b0Match[1]) {
+    return b0Match[1].toUpperCase();
+  }
+
+  // 4. Fallback 10-character alphanumeric token in path
+  const generalMatch = trimmed.match(/(?:^|\/|=)([A-Z0-9]{10})(?:[\/?#&]|$)/i);
+  if (generalMatch && generalMatch[1]) {
+    return generalMatch[1].toUpperCase();
   }
 
   return null;

@@ -64,10 +64,31 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
     setPublishSuccessMsg(null);
 
     try {
-      // Simulate network request for fetching Amazon DOM/metadata
-      await new Promise(res => setTimeout(res, 600));
+      let apiData: any = null;
+      try {
+        const response = await fetch('/api/analyze-deal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urlOrText: targetInput })
+        });
+        const json = await response.json();
+        if (json.success && json.data) {
+          apiData = json.data;
+        }
+      } catch (err) {
+        console.warn('Backend API fetch error, falling back to local Amazon fetcher:', err);
+      }
+
       const result = await fetchAmazonProductDetails(targetInput, amazonTag);
       
+      if (apiData) {
+        if (apiData.title) result.title = apiData.title;
+        if (apiData.category) result.category = apiData.category;
+        if (apiData.originalPrice) result.originalPrice = apiData.originalPrice;
+        if (apiData.dealPrice) result.dealPrice = apiData.dealPrice;
+        if (apiData.couponCode) result.couponCode = apiData.couponCode;
+      }
+
       setFetchedResult(result);
       setSelectedCategory(result.category);
       setEditablePrice(result.dealPrice);
