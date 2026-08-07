@@ -1347,13 +1347,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl text-xs font-mono space-y-2 border border-slate-800">
-                <p className="text-amber-400 font-bold"># Environment Variables for External MySQL Server Connection (.env)</p>
-                <p className="text-slate-400">MYSQL_HOST={dbInfo.host || 'localhost'}</p>
-                <p className="text-slate-400">MYSQL_PORT=3306</p>
-                <p className="text-slate-400">MYSQL_USER=root</p>
-                <p className="text-slate-400">MYSQL_DATABASE=dealsified_db</p>
-                <p className="text-slate-500 text-[11px] pt-1 border-t border-slate-800 font-sans">
-                  💡 Tip: Provide your MySQL credentials via .env secrets or <code className="text-amber-300">MYSQL_URI</code> to connect directly to an external MySQL server or Cloud SQL instance.
+                <p className="text-amber-400 font-bold"># Active Environment Variables for External MySQL Connection (.env)</p>
+                <p className="text-emerald-400 font-bold">MYSQL_HOST={dbInfo.host || 'srv625.hstgr.io'}</p>
+                <p className="text-emerald-400 font-bold">MYSQL_PORT={dbInfo.port || 3306}</p>
+                <p className="text-emerald-400 font-bold">MYSQL_USER={dbInfo.user || 'u179476470_dealusr'}</p>
+                <p className="text-slate-400">MYSQL_PASSWORD=••••••••</p>
+                <p className="text-emerald-400 font-bold">MYSQL_DATABASE={dbInfo.database || 'u179476470_dealdb'}</p>
+                <p className="text-slate-400 text-[11px] pt-1 border-t border-slate-800 font-sans">
+                  💡 Active Configuration: Connected & mapped directly to Hostinger live MySQL database (<code className="text-amber-300">srv625.hstgr.io</code>).
                 </p>
               </div>
             </div>

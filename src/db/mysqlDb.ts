@@ -7,6 +7,8 @@ export interface MySqlStatus {
   isConnected: boolean;
   engine: string;
   host?: string;
+  port?: number;
+  user?: string;
   database?: string;
   error?: string;
   tables: string[];
@@ -190,12 +192,16 @@ class MySqlDatabaseService {
   public async getStatus(): Promise<MySqlStatus> {
     const configuredHost = process.env.MYSQL_HOST || process.env.DB_HOST || 'srv625.hstgr.io';
     const configuredDb = process.env.MYSQL_DATABASE || process.env.DB_NAME || 'u179476470_dealdb';
+    const configuredUser = process.env.MYSQL_USER || process.env.DB_USER || 'u179476470_dealusr';
+    const configuredPort = Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306);
 
     if (!this.pool) {
       return {
         isConnected: false,
         engine: 'Node.js Express Persistent DB (MySQL Schema Emulated)',
         host: configuredHost,
+        port: configuredPort,
+        user: configuredUser,
         database: configuredDb,
         error: this.connectionError || 'No MySQL host configured in environment variables',
         tables: ['deals', 'affiliate_configs', 'price_history', 'comments']
@@ -215,6 +221,8 @@ class MySqlDatabaseService {
         isConnected: true,
         engine: 'MySQL 8.0 / MariaDB Server',
         host: configuredHost,
+        port: configuredPort,
+        user: configuredUser,
         database: configuredDb,
         tables: tableNames
       };
@@ -223,6 +231,8 @@ class MySqlDatabaseService {
         isConnected: false,
         engine: 'MySQL Server (Connection Failed)',
         host: configuredHost,
+        port: configuredPort,
+        user: configuredUser,
         database: configuredDb,
         error: err.message,
         tables: ['deals', 'affiliate_configs', 'price_history', 'comments']
