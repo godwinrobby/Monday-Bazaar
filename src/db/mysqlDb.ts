@@ -111,6 +111,8 @@ class MySqlDatabaseService {
           aiVerdict TEXT,
           aiPros TEXT,
           aiCons TEXT,
+          priceHistory TEXT,
+          comments TEXT,
           postedAt VARCHAR(64),
           postedBy VARCHAR(128),
           viewsCount INT DEFAULT 0,
@@ -163,6 +165,15 @@ class MySqlDatabaseService {
           deal_id VARCHAR(128) NOT NULL,
           date_label VARCHAR(64) NOT NULL,
           price DECIMAL(10, 2) NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 7. Create Site Config Table (for site banner & global configs)
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS site_config (
+          config_key VARCHAR(64) PRIMARY KEY,
+          config_value TEXT NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
