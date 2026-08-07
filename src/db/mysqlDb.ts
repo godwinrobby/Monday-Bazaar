@@ -130,6 +130,16 @@ class MySqlDatabaseService {
       conn.release();
       this.isInitialized = true;
       console.log('✅ MySQL schema & tables verified successfully');
+
+      // Auto-migrate demo data & store configurations into MySQL
+      this.syncAllDataToMySql().then((res) => {
+        if (res.success) {
+          console.log(`✅ Demo information automatically migrated into MySQL: ${res.migratedDealsCount} deals & ${res.migratedConfigsCount} store configs.`);
+        }
+      }).catch(err => {
+        console.warn('⚠️ Demo data migration warning:', err.message);
+      });
+
       return true;
     } catch (err: any) {
       this.connectionError = err.message;
