@@ -1,0 +1,208 @@
+{
+  "deals": [],
+  "users": [
+    {
+      "id": "user_1",
+      "username": "DealMaster_Pro",
+      "email": "admin@dealsified.com",
+      "role": "admin",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      "dealsPosted": 14,
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "user_2",
+      "username": "AudioLover99",
+      "email": "audio@dealsified.com",
+      "role": "user",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+      "dealsPosted": 8,
+      "createdAt": "2026-01-10T12:00:00.000Z"
+    },
+    {
+      "id": "user_3",
+      "username": "TechGeek_IN",
+      "email": "techgeek@dealsified.com",
+      "role": "user",
+      "avatarUrl": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80",
+      "dealsPosted": 12,
+      "createdAt": "2026-01-15T08:30:00.000Z"
+    },
+    {
+      "id": "user_4",
+      "username": "LootHunter_Raj",
+      "email": "raj.loot@dealsified.com",
+      "role": "user",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
+      "dealsPosted": 23,
+      "createdAt": "2026-01-20T14:15:00.000Z"
+    },
+    {
+      "id": "user_demo",
+      "username": "You (Demo Member)",
+      "email": "godwinrobby@gmail.com",
+      "role": "admin",
+      "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+      "dealsPosted": 5,
+      "createdAt": "2026-02-01T10:00:00.000Z"
+    }
+  ],
+  "linkClicks": [
+    {
+      "id": 1,
+      "dealId": "deal_1",
+      "dealTitle": "Apple iPhone 15 (128 GB) - Blue",
+      "store": "Amazon",
+      "affiliateUrl": "https://www.amazon.in/dp/B0CX58S7S9?tag=mondaybazaar-21",
+      "userId": "user_demo",
+      "ipAddress": "127.0.0.1",
+      "clickedAt": "2026-08-08T05:08:23.363Z"
+    },
+    {
+      "id": 2,
+      "dealId": "deal_2",
+      "dealTitle": "Sony WH-1000XM5 Wireless Headphones",
+      "store": "Amazon",
+      "affiliateUrl": "https://www.amazon.in/dp/B0CHX1M1XP?tag=mondaybazaar-21",
+      "userId": "user_2",
+      "ipAddress": "127.0.0.1",
+      "clickedAt": "2026-08-08T02:08:23.363Z"
+    },
+    {
+      "id": 3,
+      "dealId": "deal_4",
+      "dealTitle": "boAt Airdopes 141 ANC TWS Earbuds",
+      "store": "Boat",
+      "affiliateUrl": "https://www.boat-lifestyle.com?affid=mbazaar_boat",
+      "userId": "user_4",
+      "ipAddress": "127.0.0.1",
+      "clickedAt": "2026-08-07T19:08:23.363Z"
+    }
+  ],
+  "dealViews": [
+    {
+      "id": 1,
+      "dealId": "deal_1",
+      "userId": "user_demo",
+      "ipAddress": "127.0.0.1",
+      "viewedAt": "2026-08-08T06:38:23.363Z"
+    },
+    {
+      "id": 2,
+      "dealId": "deal_2",
+      "userId": "user_2",
+      "ipAddress": "127.0.0.1",
+      "viewedAt": "2026-08-08T06:08:23.363Z"
+    },
+    {
+      "id": 3,
+      "dealId": "deal_3",
+      "userId": "user_3",
+      "ipAddress": "127.0.0.1",
+      "viewedAt": "2026-08-08T05:08:23.363Z"
+    },
+    {
+      "id": 4,
+      "dealId": "deal_4",
+      "userId": "user_4",
+      "ipAddress": "127.0.0.1",
+      "viewedAt": "2026-08-08T04:08:23.363Z"
+    }
+  ],
+  "affiliateConfigs": {
+    "Amazon": {
+      "store": "Amazon",
+      "tagParam": "tag",
+      "tagValue": "mondaybazaar-21",
+      "commissionRate": 8.5,
+      "isActive": true,
+      "notes": "Amazon Associates India tag"
+    },
+    "Flipkart": {
+      "store": "Flipkart",
+      "tagParam": "affid",
+      "tagValue": "mondaybazaaff",
+      "commissionRate": 7,
+      "isActive": true,
+      "notes": "Flipkart Affiliate ID"
+    },
+    "Myntra": {
+      "store": "Myntra",
+      "tagParam": "aff_sub",
+      "tagValue": "mondaybazaar_myntra",
+      "commissionRate": 10,
+      "isActive": true,
+      "notes": "Myntra Partner Network"
+    },
+    "Ajio": {
+      "store": "Ajio",
+      "tagParam": "utm_source",
+      "tagValue": "mondaybazaar_affiliate",
+      "commissionRate": 9,
+      "isActive": true,
+      "notes": "Ajio Partner UTM Tracking"
+    },
+    "Tata CLiQ": {
+      "store": "Tata CLiQ",
+      "tagParam": "icid",
+      "tagValue": "mbz_tatacliq_2026",
+      "commissionRate": 6.5,
+      "isActive": true,
+      "notes": "Tata CLiQ Affiliate Campaign"
+    },
+    "Croma": {
+      "store": "Croma",
+      "tagParam": "utm_campaign",
+      "tagValue": "mondaybazaar_croma",
+      "commissionRate": 5,
+      "isActive": true,
+      "notes": "Croma Affiliate Tracking"
+    },
+    "Reliance Digital": {
+      "store": "Reliance Digital",
+      "tagParam": "ref_id",
+      "tagValue": "mondaybazaar_rd",
+      "commissionRate": 5.5,
+      "isActive": true,
+      "notes": "Reliance Digital Referral Code"
+    },
+    "Boat": {
+      "store": "Boat",
+      "tagParam": "sca_ref",
+      "tagValue": "mondaybazaar_boat",
+      "commissionRate": 12,
+      "isActive": true,
+      "notes": "boAt Lifestyle Direct Affiliate"
+    },
+    "Noise": {
+      "store": "Noise",
+      "tagParam": "ref",
+      "tagValue": "mondaybazaar_noise",
+      "commissionRate": 11,
+      "isActive": true,
+      "notes": "Noise Affiliate Referral"
+    },
+    "Samsung": {
+      "store": "Samsung",
+      "tagParam": "CID",
+      "tagValue": "in-aff-mbz-2026",
+      "commissionRate": 4.5,
+      "isActive": true,
+      "notes": "Samsung Corporate Affiliate"
+    },
+    "Apple": {
+      "store": "Apple",
+      "tagParam": "at",
+      "tagValue": "1000lmBZ",
+      "commissionRate": 3.5,
+      "isActive": true,
+      "notes": "Apple Performance Network"
+    }
+  },
+  "stats": {
+    "totalClicks": 1250,
+    "totalViews": 4500,
+    "totalSavingsGenerated": 485000,
+    "updatedAt": "2026-08-08T07:08:23.364Z"
+  }
+}

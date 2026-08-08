@@ -20,22 +20,25 @@ import { Flame, Sparkles, Filter, RefreshCw, ShoppingBag, ShieldCheck, ShieldAle
 
 export default function App() {
   // Deals State fetched exclusively from MySQL Database API
-  const [deals, setDeals] = useState<Deal[]>(INITIAL_DEALS);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Fetch initial deals from Node.js database endpoint on mount
   useEffect(() => {
+    setIsLoading(true);
     fetch('/api/deals')
       .then(res => res.json())
       .then(data => {
-        if (data.success && Array.isArray(data.deals) && data.deals.length > 0) {
+        if (data.success && Array.isArray(data.deals)) {
           setDeals(data.deals);
         }
       })
-      .catch(err => console.error('Database fetch error:', err));
+      .catch(err => console.error('Database fetch error:', err))
+      .finally(() => setIsLoading(false));
   }, []);
 
-  // Watchlist State (in-memory, default selected deals)
-  const [savedDealIds, setSavedDealIds] = useState<string[]>(['deal-1', 'deal-3']);
+  // Watchlist State (in-memory)
+  const [savedDealIds, setSavedDealIds] = useState<string[]>([]);
 
   // Filters State
   const [filters, setFilters] = useState<FilterOptions>({
@@ -489,7 +492,21 @@ export default function App() {
             </div>
 
             {/* Deals Cards Grid */}
-            {filteredDeals.length > 0 ? (
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="bg-white rounded-3xl p-5 border border-slate-200 animate-pulse space-y-4">
+                    <div className="w-full h-44 bg-slate-100 rounded-2xl"></div>
+                    <div className="h-4 bg-slate-100 rounded w-3/4"></div>
+                    <div className="h-3 bg-slate-100 rounded w-1/2"></div>
+                    <div className="flex justify-between items-center pt-2">
+                      <div className="h-6 bg-slate-100 rounded w-20"></div>
+                      <div className="h-8 bg-slate-100 rounded-xl w-24"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredDeals.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {filteredDeals.map((deal) => (
                   <DealCard
@@ -506,8 +523,33 @@ export default function App() {
                   />
                 ))}
               </div>
+            ) : deals.length === 0 ? (
+              /* Database Empty State */
+              <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
+                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
+                  <ShoppingBag className="w-8 h-8" />
+                </div>
+                <h3 className="font-bold text-slate-900 text-lg">No Live Deals in Database</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Your MySQL database is connected and active. Import live deals directly from Amazon, Flipkart, or Myntra using our Admin Importer or post your first deal!
+                </p>
+                <div className="flex flex-wrap justify-center gap-3 pt-2">
+                  <button
+                    onClick={handleOpenAdmin}
+                    className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition-colors"
+                  >
+                    Open Admin & Import Deals
+                  </button>
+                  <button
+                    onClick={() => setIsPostDealOpen(true)}
+                    className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors"
+                  >
+                    Post a Deal
+                  </button>
+                </div>
+              </div>
             ) : (
-              /* Empty State */
+              /* Filter Empty State */
               <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
                 <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto">
                   <ShoppingBag className="w-8 h-8" />

@@ -265,7 +265,7 @@ class MySqlDatabaseService {
     if (this.pool && this.isInitialized) {
       try {
         const [rows]: any = await this.pool.query('SELECT * FROM deals ORDER BY created_at DESC');
-        if (Array.isArray(rows) && rows.length > 0) {
+        if (Array.isArray(rows)) {
           return rows.map((r: any) => ({
             id: r.id,
             title: r.title,

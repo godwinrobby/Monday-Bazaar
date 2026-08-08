@@ -172,132 +172,7 @@ export const INITIAL_VIEWS_SEED: DealViewRecord[] = [
 ];
 
 // Initial deals array
-const INITIAL_DEALS_SEED: Deal[] = [
-  {
-    id: 'deal_1',
-    title: 'Apple iPhone 15 (128 GB) - Blue',
-    description: 'Dynamic Island, 48MP main camera with 2x Telephoto, durable color-infused glass and aluminum design, USB-C connector.',
-    store: 'Amazon',
-    category: 'Mobiles & Tablets',
-    originalPrice: 79900,
-    dealPrice: 64999,
-    discountPercentage: 19,
-    couponCode: 'BANK5000OFF',
-    imageUrl: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=800&q=80',
-    dealUrl: 'https://www.amazon.in/dp/B0CX58S7S9?tag=mondaybazaar-21',
-    isLootDeal: true,
-    isVerified: true,
-    upvotes: 428,
-    downvotes: 12,
-    aiScore: 94,
-    aiVerdict: 'All-time low price for iPhone 15 on Amazon India with flat bank discount.',
-    aiPros: ['Flat ₹5,000 SBI Card Instant Discount', 'Type-C Port & Dynamic Island', 'Highest resale value'],
-    aiCons: ['Standard 60Hz display refresh rate'],
-    postedAt: '12 mins ago',
-    priceHistory: [
-      { date: 'Jan 2026', price: 72999 },
-      { date: 'Feb 2026', price: 68999 },
-      { date: 'Today', price: 64999 },
-    ],
-    commentsCount: 18,
-    comments: [],
-    viewsCount: 3420,
-    postedBy: 'DealMaster_Pro',
-  },
-  {
-    id: 'deal_2',
-    title: 'Sony WH-1000XM5 Wireless Industry Leading ANC Headphones',
-    description: 'Auto NC Optimizer, 30hr Battery Life, Multi-point Connection, Ultra Clear Call Quality with AI Noise Reduction.',
-    store: 'Amazon',
-    category: 'Audio & Headphones',
-    originalPrice: 34990,
-    dealPrice: 24990,
-    discountPercentage: 29,
-    couponCode: 'SONY2000OFF',
-    imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80',
-    dealUrl: 'https://www.amazon.in/dp/B0CHX1M1XP?tag=mondaybazaar-21',
-    isLootDeal: true,
-    isVerified: true,
-    upvotes: 312,
-    downvotes: 8,
-    aiScore: 96,
-    aiVerdict: 'Best noise-cancelling headphones on the market at 29% price reduction.',
-    aiPros: ['Unmatched ANC performance', 'Super comfortable lightweight build', '30hr fast charge battery'],
-    aiCons: ['Does not fold completely compact like XM4'],
-    postedAt: '45 mins ago',
-    priceHistory: [
-      { date: 'Jan 2026', price: 29990 },
-      { date: 'Feb 2026', price: 27990 },
-      { date: 'Today', price: 24990 },
-    ],
-    commentsCount: 24,
-    comments: [],
-    viewsCount: 2150,
-    postedBy: 'AudioLover99',
-  },
-  {
-    id: 'deal_3',
-    title: 'Apple MacBook Air Laptop M2 chip (13.6-inch, 8GB RAM, 256GB SSD) - Starlight',
-    description: 'Incredibly thin design, 13.6-inch Liquid Retina Display, 8GB Unified Memory, Backlit Keyboard, 1080p FaceTime HD Camera.',
-    store: 'Amazon',
-    category: 'Electronics & Laptops',
-    originalPrice: 114900,
-    dealPrice: 83990,
-    discountPercentage: 27,
-    couponCode: 'MACM2SAVER',
-    imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80',
-    dealUrl: 'https://www.amazon.in/dp/B0B3RRWSF6?tag=mondaybazaar-21',
-    isLootDeal: true,
-    isVerified: true,
-    upvotes: 560,
-    downvotes: 14,
-    aiScore: 98,
-    aiVerdict: 'Steal deal for students and professionals. M2 chip delivers legendary battery life.',
-    aiPros: ['18 hours continuous battery life', 'MagSafe 3 charging port', 'Fanless quiet operation'],
-    aiCons: ['256GB base storage capacity'],
-    postedAt: '2 hours ago',
-    priceHistory: [
-      { date: 'Jan 2026', price: 92990 },
-      { date: 'Feb 2026', price: 87990 },
-      { date: 'Today', price: 83990 },
-    ],
-    commentsCount: 39,
-    comments: [],
-    viewsCount: 5120,
-    postedBy: 'TechGeek_IN',
-  },
-  {
-    id: 'deal_4',
-    title: 'boAt Airdopes 141 ANC TWS Earbuds with 42H Playtime',
-    description: '32dB Active Noise Cancellation, Beast Mode for Low Latency Gaming, ENx Tech for clear voice calls.',
-    store: 'Boat',
-    category: 'Audio & Headphones',
-    originalPrice: 4490,
-    dealPrice: 1299,
-    discountPercentage: 71,
-    couponCode: 'BOAT200',
-    imageUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
-    dealUrl: 'https://www.boat-lifestyle.com?affid=mbazaar_boat',
-    isLootDeal: true,
-    isVerified: true,
-    upvotes: 890,
-    downvotes: 45,
-    aiScore: 91,
-    aiVerdict: 'Loot Deal! True wireless ANC earbuds under ₹1,300 with 42 hours battery.',
-    aiPros: ['Massive 71% discount', 'Active Noise Cancellation included', 'Fast ASAP charging'],
-    aiCons: ['Plastic case finish'],
-    postedAt: '3 hours ago',
-    priceHistory: [
-      { date: 'Jan 2026', price: 1999 },
-      { date: 'Feb 2026', price: 1599 },
-      { date: 'Today', price: 1299 },
-    ],
-    commentsCount: 52,
-    comments: [],
-    viewsCount: 7890,
-    postedBy: 'LootHunter_Raj',
-  }
-];
+const INITIAL_DEALS_SEED: Deal[] = [];
 
 class DatabaseManager {
   private db: DatabaseSchema;
@@ -317,12 +192,12 @@ class DatabaseManager {
         const fileContent = fs.readFileSync(DB_FILE_PATH, 'utf-8');
         const parsed = JSON.parse(fileContent);
         return {
-          deals: Array.isArray(parsed.deals) ? parsed.deals : INITIAL_DEALS_SEED,
+          deals: Array.isArray(parsed.deals) ? parsed.deals : [],
           users: Array.isArray(parsed.users) ? parsed.users : INITIAL_USERS_SEED,
           linkClicks: Array.isArray(parsed.linkClicks) ? parsed.linkClicks : INITIAL_CLICKS_SEED,
           dealViews: Array.isArray(parsed.dealViews) ? parsed.dealViews : INITIAL_VIEWS_SEED,
           affiliateConfigs: parsed.affiliateConfigs || DEFAULT_AFFILIATE_CONFIGS,
-          stats: parsed.stats || { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
+          stats: parsed.stats || { totalClicks: 0, totalViews: 0, totalSavingsGenerated: 0, updatedAt: new Date().toISOString() }
         };
       }
     } catch (err) {
@@ -331,12 +206,12 @@ class DatabaseManager {
 
     // Default fallback
     const initialDb: DatabaseSchema = {
-      deals: INITIAL_DEALS_SEED,
+      deals: [],
       users: INITIAL_USERS_SEED,
       linkClicks: INITIAL_CLICKS_SEED,
       dealViews: INITIAL_VIEWS_SEED,
       affiliateConfigs: DEFAULT_AFFILIATE_CONFIGS,
-      stats: { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
+      stats: { totalClicks: 0, totalViews: 0, totalSavingsGenerated: 0, updatedAt: new Date().toISOString() }
     };
     this.saveDatabase(initialDb);
     return initialDb;
