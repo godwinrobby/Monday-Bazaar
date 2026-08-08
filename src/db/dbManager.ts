@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Deal, StoreName } from '../types';
 import { StoreAffiliateConfig, DEFAULT_AFFILIATE_CONFIGS } from '../utils/affiliate';
+import { INITIAL_DEALS } from '../data/initialDeals';
 
 export interface UserRecord {
   id: string;
@@ -172,7 +173,7 @@ export const INITIAL_VIEWS_SEED: DealViewRecord[] = [
 ];
 
 // Initial deals array
-const INITIAL_DEALS_SEED: Deal[] = [];
+const INITIAL_DEALS_SEED: Deal[] = INITIAL_DEALS;
 
 class DatabaseManager {
   private db: DatabaseSchema;
@@ -191,14 +192,19 @@ class DatabaseManager {
       if (fs.existsSync(DB_FILE_PATH)) {
         const fileContent = fs.readFileSync(DB_FILE_PATH, 'utf-8');
         const parsed = JSON.parse(fileContent);
-        return {
-          deals: Array.isArray(parsed.deals) ? parsed.deals : [],
+        const deals = Array.isArray(parsed.deals) && parsed.deals.length > 0 ? parsed.deals : INITIAL_DEALS;
+        const loadedDb = {
+          deals,
           users: Array.isArray(parsed.users) ? parsed.users : INITIAL_USERS_SEED,
           linkClicks: Array.isArray(parsed.linkClicks) ? parsed.linkClicks : INITIAL_CLICKS_SEED,
           dealViews: Array.isArray(parsed.dealViews) ? parsed.dealViews : INITIAL_VIEWS_SEED,
           affiliateConfigs: parsed.affiliateConfigs || DEFAULT_AFFILIATE_CONFIGS,
-          stats: parsed.stats || { totalClicks: 0, totalViews: 0, totalSavingsGenerated: 0, updatedAt: new Date().toISOString() }
+          stats: parsed.stats || { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
         };
+        if (!Array.isArray(parsed.deals) || parsed.deals.length === 0) {
+          this.saveDatabase(loadedDb);
+        }
+        return loadedDb;
       }
     } catch (err) {
       console.error('Failed reading database file, initializing new DB instance:', err);
@@ -206,12 +212,12 @@ class DatabaseManager {
 
     // Default fallback
     const initialDb: DatabaseSchema = {
-      deals: [],
+      deals: INITIAL_DEALS,
       users: INITIAL_USERS_SEED,
       linkClicks: INITIAL_CLICKS_SEED,
       dealViews: INITIAL_VIEWS_SEED,
       affiliateConfigs: DEFAULT_AFFILIATE_CONFIGS,
-      stats: { totalClicks: 0, totalViews: 0, totalSavingsGenerated: 0, updatedAt: new Date().toISOString() }
+      stats: { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
     };
     this.saveDatabase(initialDb);
     return initialDb;
@@ -231,6 +237,10 @@ class DatabaseManager {
 
   // Get all deals
   public getDeals(): Deal[] {
+    if (!this.db.deals || this.db.deals.length === 0) {
+      this.db.deals = [...INITIAL_DEALS];
+      this.saveDatabase(this.db);
+    }
     return this.db.deals;
   }
 

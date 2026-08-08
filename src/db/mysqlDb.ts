@@ -265,7 +265,7 @@ class MySqlDatabaseService {
     if (this.pool && this.isInitialized) {
       try {
         const [rows]: any = await this.pool.query('SELECT * FROM deals ORDER BY created_at DESC');
-        if (Array.isArray(rows)) {
+        if (Array.isArray(rows) && rows.length > 0) {
           return rows.map((r: any) => ({
             id: r.id,
             title: r.title,
@@ -297,6 +297,51 @@ class MySqlDatabaseService {
             ],
             comments: []
           }));
+        } else if (Array.isArray(rows) && rows.length === 0) {
+          console.log('🌱 MySQL deals table empty, seeding initial live deals...');
+          const initialDeals = dbManager.getDeals();
+          for (const deal of initialDeals) {
+            try {
+              await this.pool.execute(
+                `INSERT INTO deals (
+                  id, title, description, store, category, originalPrice, dealPrice, 
+                  discountPercentage, couponCode, imageUrl, dealUrl, isLootDeal, 
+                  isVerified, isActive, upvotes, downvotes, aiScore, aiVerdict, aiPros, aiCons,
+                  postedAt, postedBy, viewsCount, commentsCount
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE title=VALUES(title)`,
+                [
+                  deal.id,
+                  deal.title,
+                  deal.description || '',
+                  deal.store,
+                  deal.category,
+                  deal.originalPrice,
+                  deal.dealPrice,
+                  deal.discountPercentage,
+                  deal.couponCode || null,
+                  deal.imageUrl,
+                  deal.dealUrl,
+                  deal.isLootDeal ? 1 : 0,
+                  deal.isVerified ? 1 : 0,
+                  1,
+                  deal.upvotes || 0,
+                  deal.downvotes || 0,
+                  deal.aiScore || 85,
+                  deal.aiVerdict || '',
+                  JSON.stringify(deal.aiPros || []),
+                  JSON.stringify(deal.aiCons || []),
+                  deal.postedAt || 'Recently',
+                  deal.postedBy || 'Community Member',
+                  deal.viewsCount || 0,
+                  deal.commentsCount || 0
+                ]
+              );
+            } catch (e) {
+              console.warn('Seed insert warning:', e);
+            }
+          }
+          return initialDeals;
         }
       } catch (err) {
         console.warn('⚠️ MySQL query failed, using persistent DB fallback:', err);
