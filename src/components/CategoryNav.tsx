@@ -89,8 +89,8 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
   };
 
   return (
-    <div id="category-and-sort-nav" className="bg-white border-b border-slate-200 py-3 shadow-2xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-3">
+    <div id="category-and-sort-nav" className="bg-white border-b border-slate-200 py-2.5 sm:py-3 shadow-2xs w-full max-w-full overflow-hidden">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-2.5 sm:space-y-3">
         
         {/* Category Pills Container */}
         <div className="relative">
@@ -125,14 +125,14 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
                   key={cat.name}
                   id={`cat-btn-${cat.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                   onClick={() => setFilters(prev => ({ ...prev, category: cat.name }))}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all shrink-0 ${
+                  className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border transition-all shrink-0 ${
                     isSelected
                       ? 'bg-orange-500 text-white border-orange-600 shadow-sm shadow-orange-500/20'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
-                  <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-slate-500'}`} />
-                  <span>{cat.name}</span>
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-white' : 'text-slate-500'}`} />
+                  <span className="whitespace-nowrap">{cat.name}</span>
                   {count > 0 && (
                     <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                       isSelected ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'
@@ -158,20 +158,20 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
         </div>
 
         {/* Quick Toggles and Sorting Row */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100 text-xs">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100 text-xs">
           
           {/* Quick Badges Toggles */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
             <button
               onClick={() => setFilters(prev => ({ ...prev, onlyLootDeals: !prev.onlyLootDeals }))}
               id="toggle-loot-deals-btn"
-              className={`px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 border transition-all ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 border transition-all shrink-0 text-[11px] sm:text-xs ${
                 filters.onlyLootDeals
                   ? 'bg-red-500 text-white border-red-600 shadow-xs ring-2 ring-red-400/30'
                   : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
               }`}
             >
-              <Flame className="w-3.5 h-3.5 fill-current" />
+              <Flame className="w-3.5 h-3.5 fill-current shrink-0" />
               <span>LOOT DEALS ONLY</span>
               {filters.onlyLootDeals && <span className="ml-1 text-[10px]">✕</span>}
             </button>
@@ -179,22 +179,22 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
             <button
               onClick={() => setFilters(prev => ({ ...prev, onlyCoupons: !prev.onlyCoupons }))}
               id="toggle-coupons-btn"
-              className={`px-3 py-1 rounded-lg font-medium flex items-center gap-1.5 border transition-all ${
+              className={`px-2.5 sm:px-3 py-1 rounded-lg font-medium flex items-center gap-1.5 border transition-all shrink-0 text-[11px] sm:text-xs ${
                 filters.onlyCoupons
                   ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
                   : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
               }`}
             >
-              <Ticket className="w-3.5 h-3.5" />
+              <Ticket className="w-3.5 h-3.5 shrink-0" />
               <span>With Coupon Codes</span>
               {filters.onlyCoupons && <span className="ml-1 text-[10px]">✕</span>}
             </button>
           </div>
 
           {/* Sort Selector */}
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-slate-500 font-medium flex items-center gap-1">
-              <ArrowUpDown className="w-3.5 h-3.5" />
+          <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+            <span className="text-slate-500 font-medium flex items-center gap-1 text-[11px] sm:text-xs">
+              <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
               Sort By:
             </span>
             <select

@@ -64,10 +64,10 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
   };
 
   return (
-    <div id="store-filter-bar" className="bg-slate-50/80 border-b border-slate-200 py-3 relative group/bar">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-2 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-          <Store className="w-3.5 h-3.5 text-slate-400" />
+    <div id="store-filter-bar" className="bg-slate-50/80 border-b border-slate-200 py-2.5 sm:py-3 relative group/bar w-full max-w-full overflow-hidden">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-2 mb-1.5 sm:mb-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <Store className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <span>Filter by E-Commerce Platform</span>
         </div>
 

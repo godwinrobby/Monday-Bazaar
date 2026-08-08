@@ -391,7 +391,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans text-slate-900 flex flex-col selection:bg-orange-500 selection:text-white">
+    <div className="min-h-screen bg-slate-100 font-sans text-slate-900 flex flex-col selection:bg-orange-500 selection:text-white max-w-full overflow-x-hidden">
       
       {/* Top Banner & Stats */}
       <TelegramBanner />
@@ -415,7 +415,7 @@ export default function App() {
 
       {selectedDeal ? (
         /* Dedicated Full-Page View for Selected Deal */
-        <main className="flex-1">
+        <main className="flex-1 max-w-full overflow-x-hidden">
           <DealDetailPage
             deal={selectedDeal}
             onBack={() => setSelectedDeal(null)}
@@ -449,11 +449,11 @@ export default function App() {
           />
 
           {/* Main Container Content */}
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6 overflow-x-hidden">
             
             {/* Active Filter Indicators Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-700">
                 <span className="text-slate-500">Showing</span>
                 <span className="px-2 py-0.5 bg-orange-100 text-orange-800 font-extrabold rounded-md">
                   {filteredDeals.length} Deals

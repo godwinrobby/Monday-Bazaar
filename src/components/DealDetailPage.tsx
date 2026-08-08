@@ -87,43 +87,43 @@ export const DealDetailPage: React.FC<DealDetailPageProps> = ({
     .slice(0, 4);
 
   return (
-    <div id="deal-detail-page" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 animate-in fade-in duration-300">
+    <div id="deal-detail-page" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 sm:space-y-8 animate-in fade-in duration-300 w-full max-w-full overflow-hidden">
       
       {/* Navigation & Action Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <button
           onClick={onBack}
           id="back-to-deals-btn"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 shadow-xs transition-colors"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 shadow-xs transition-colors shrink-0"
         >
           <ArrowLeft className="w-4 h-4 text-orange-600" />
           <span>← Back to All Deals</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => onToggleSave(deal)}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-colors ${
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${
               isSaved
                 ? 'bg-red-500 text-white border-red-600 shadow-xs'
                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
             }`}
           >
             <Heart className={`w-4 h-4 ${isSaved ? 'fill-white' : 'text-red-500'}`} />
-            <span>{isSaved ? 'Saved in Watchlist' : 'Save Deal'}</span>
+            <span>{isSaved ? 'Saved' : 'Save'}</span>
           </button>
 
           <button
             onClick={handleShare}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold transition-colors"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold transition-colors"
           >
             {copiedShare ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4 text-slate-500" />}
-            <span>{copiedShare ? 'Link Copied!' : 'Share'}</span>
+            <span>{copiedShare ? 'Copied!' : 'Share'}</span>
           </button>
 
           <button
             onClick={() => onOpenPriceAlert(deal)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200 rounded-xl text-xs font-bold transition-colors"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200 rounded-xl text-xs font-bold transition-colors"
           >
             <Bell className="w-4 h-4 text-amber-600" />
             <span>Price Drop Alert</span>
