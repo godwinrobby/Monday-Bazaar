@@ -32,12 +32,44 @@ export interface DealViewRecord {
   viewedAt: string;
 }
 
+export interface SocialConfig {
+  facebookEnabled: boolean;
+  facebookPageId: string;
+  facebookAccessToken: string;
+  instagramEnabled: boolean;
+  instagramAccountId: string;
+  instagramAccessToken: string;
+  autoPostOnNewDeal: boolean;
+  autoPostLootOnly: boolean;
+  postTemplate: string;
+}
+
+export interface SocialLogRecord {
+  id: string;
+  platform: 'facebook' | 'instagram';
+  dealId: string;
+  dealTitle: string;
+  status: 'SUCCESS' | 'FAILED' | 'PENDING' | 'SIMULATED';
+  postUrl?: string;
+  message: string;
+  postedAt: string;
+}
+
+export interface SiteBannerConfig {
+  enabled: boolean;
+  text: string;
+  badge: string;
+}
+
 interface DatabaseSchema {
   deals: Deal[];
   users: UserRecord[];
   linkClicks: LinkClickRecord[];
   dealViews: DealViewRecord[];
   affiliateConfigs: Record<string, StoreAffiliateConfig>;
+  socialConfig?: SocialConfig;
+  socialLogs?: SocialLogRecord[];
+  siteBanner?: SiteBannerConfig;
   stats: {
     totalClicks: number;
     totalViews: number;
@@ -522,6 +554,89 @@ class DatabaseManager {
     this.db.stats.totalViews = (this.db.stats.totalViews || 0) + 1;
     this.saveDatabase(this.db);
     return newView;
+  }
+
+  // --- SOCIAL AUTO-POSTING CONFIG & LOGS ---
+  public getSocialConfig(): SocialConfig {
+    const defaultConfig: SocialConfig = {
+      facebookEnabled: false,
+      facebookPageId: process.env.FACEBOOK_PAGE_ID || '',
+      facebookAccessToken: process.env.FACEBOOK_PAGE_ACCESS_TOKEN || '',
+      instagramEnabled: false,
+      instagramAccountId: process.env.INSTAGRAM_ACCOUNT_ID || '',
+      instagramAccessToken: process.env.INSTAGRAM_ACCESS_TOKEN || '',
+      autoPostOnNewDeal: true,
+      autoPostLootOnly: false,
+      postTemplate: `🔥 {title}\n💰 Deal Price: ₹{dealPrice} (MRP: ₹{originalPrice}) - {discountPercentage}% OFF!\n🏪 Store: {store}\n{couponCodeText}\n👉 Grab Deal Now: {dealUrl}\n\n#Dealsified #{store}Deals #LootDeal #OnlineShopping #Discounts`
+    };
+
+    return {
+      ...defaultConfig,
+      ...(this.db.socialConfig || {})
+    };
+  }
+
+  public updateSocialConfig(config: Partial<SocialConfig>): SocialConfig {
+    const current = this.getSocialConfig();
+    const updated = { ...current, ...config };
+    this.db.socialConfig = updated;
+    this.saveDatabase(this.db);
+    return updated;
+  }
+
+  public getSocialLogs(): SocialLogRecord[] {
+    return this.db.socialLogs || [];
+  }
+
+  public addSocialLog(logData: Partial<SocialLogRecord>): SocialLogRecord {
+    if (!this.db.socialLogs) {
+      this.db.socialLogs = [];
+    }
+    const newLog: SocialLogRecord = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      platform: logData.platform || 'facebook',
+      dealId: logData.dealId || '',
+      dealTitle: logData.dealTitle || 'Loot Deal',
+      status: logData.status || 'SUCCESS',
+      postUrl: logData.postUrl,
+      message: logData.message || 'Successfully posted to feed',
+      postedAt: new Date().toISOString()
+    };
+
+    this.db.socialLogs.unshift(newLog);
+    // Keep last 100 logs
+    if (this.db.socialLogs.length > 100) {
+      this.db.socialLogs = this.db.socialLogs.slice(0, 100);
+    }
+    this.saveDatabase(this.db);
+    return newLog;
+  }
+
+  public clearSocialLogs(): boolean {
+    this.db.socialLogs = [];
+    this.saveDatabase(this.db);
+    return true;
+  }
+
+  // --- SITE BANNER CONFIG ---
+  public getSiteBanner(): SiteBannerConfig {
+    const defaultConfig: SiteBannerConfig = {
+      enabled: true,
+      text: '🔥 Monday Bazaar Super Sale is LIVE! Grab exclusive coupons & loot deals across Amazon, Flipkart & Myntra.',
+      badge: 'FLASH LOOT SALE'
+    };
+    return {
+      ...defaultConfig,
+      ...(this.db.siteBanner || {})
+    };
+  }
+
+  public updateSiteBanner(config: Partial<SiteBannerConfig>): SiteBannerConfig {
+    const current = this.getSiteBanner();
+    const updated = { ...current, ...config };
+    this.db.siteBanner = updated;
+    this.saveDatabase(this.db);
+    return updated;
   }
 }
 

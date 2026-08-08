@@ -19,68 +19,23 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { Flame, Sparkles, Filter, RefreshCw, ShoppingBag, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 export default function App() {
-  // Deals State with Node.js Database Backend + Local Storage Fallback
-  const [deals, setDeals] = useState<Deal[]>(() => {
-    try {
-      const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
-      if (saved) {
-        const userDeals = JSON.parse(saved);
-        return [...userDeals, ...INITIAL_DEALS];
-      }
-    } catch (e) {
-      console.error("Failed to load user deals:", e);
-    }
-    return INITIAL_DEALS;
-  });
+  // Deals State fetched exclusively from MySQL Database API
+  const [deals, setDeals] = useState<Deal[]>(INITIAL_DEALS);
 
-  // Fetch initial deals from Node.js database endpoint & auto-migrate localStorage data
+  // Fetch initial deals from Node.js database endpoint on mount
   useEffect(() => {
-    const syncLocalStorageToDb = async () => {
-      try {
-        const rawUserDeals = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
-        const rawConfigs = localStorage.getItem('monday_bazaar_affiliate_configs');
-        const localDeals = rawUserDeals ? JSON.parse(rawUserDeals) : [];
-        const localAffiliateConfigs = rawConfigs ? JSON.parse(rawConfigs) : {};
-
-        // Migrate local items to server database
-        if ((Array.isArray(localDeals) && localDeals.length > 0) || Object.keys(localAffiliateConfigs).length > 0) {
-          await fetch('/api/migrate-localstorage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ localDeals, affiliateConfigs: localAffiliateConfigs })
-          });
+    fetch('/api/deals')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.deals) && data.deals.length > 0) {
+          setDeals(data.deals);
         }
-      } catch (e) {
-        console.warn('LocalStorage auto-sync notice:', e);
-      }
-
-      // Fetch all persisted database deals
-      fetch('/api/deals')
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && Array.isArray(data.deals) && data.deals.length > 0) {
-            setDeals(data.deals);
-          }
-        })
-        .catch(err => console.log('Database fetch fallback to client cache:', err));
-    };
-
-    syncLocalStorageToDb();
+      })
+      .catch(err => console.error('Database fetch error:', err));
   }, []);
 
-  // Watchlist State
-  const [savedDealIds, setSavedDealIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('monday_bazaar_saved_ids') || localStorage.getItem('dealsified_saved_ids');
-      return saved ? JSON.parse(saved) : ['deal-1', 'deal-3'];
-    } catch {
-      return ['deal-1', 'deal-3'];
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('monday_bazaar_saved_ids', JSON.stringify(savedDealIds));
-  }, [savedDealIds]);
+  // Watchlist State (in-memory, default selected deals)
+  const [savedDealIds, setSavedDealIds] = useState<string[]>(['deal-1', 'deal-3']);
 
   // Filters State
   const [filters, setFilters] = useState<FilterOptions>({
@@ -229,15 +184,6 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedDeal)
     }).catch(err => console.error('Failed to update deal in DB:', err));
-
-    try {
-      const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
-      const userDeals: Deal[] = saved ? JSON.parse(saved) : [];
-      const updatedUserDeals = userDeals.map(d => d.id === updatedDeal.id ? updatedDeal : d);
-      localStorage.setItem('monday_bazaar_user_deals', JSON.stringify(updatedUserDeals));
-    } catch (e) {
-      console.error(e);
-    }
   };
 
   // Delete Deal Handler
@@ -257,17 +203,6 @@ export default function App() {
     }).catch(err => {
       console.error('Failed to delete deal from DB:', err);
     });
-
-    try {
-      const saved = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
-      if (saved) {
-        const userDeals: Deal[] = JSON.parse(saved);
-        const filtered = userDeals.filter(d => d.id !== dealId);
-        localStorage.setItem('monday_bazaar_user_deals', JSON.stringify(filtered));
-      }
-    } catch (e) {
-      console.error(e);
-    }
   };
 
   // Add New Deal Handler with Duplicate Check
@@ -347,14 +282,6 @@ export default function App() {
         title: 'Deal Published Successfully',
         message: `"${fullDeal.title}" has been added to the live catalog.`
       });
-
-      try {
-        const saved = localStorage.getItem('dealsified_user_deals');
-        const userDeals = saved ? JSON.parse(saved) : [];
-        localStorage.setItem('dealsified_user_deals', JSON.stringify([data.deal || fullDeal, ...userDeals]));
-      } catch (e) {
-        console.error(e);
-      }
 
       return { success: true, deal: data.deal || fullDeal };
     } catch (err: any) {

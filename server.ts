@@ -118,6 +118,17 @@ app.get("/api/deals", async (req, res) => {
 app.post("/api/deals", async (req, res) => {
   try {
     const newDeal = await mySqlDb.addDeal(req.body);
+    
+    // Automatically trigger Facebook & Instagram Auto-Post if enabled
+    try {
+      const socialConfig = dbManager.getSocialConfig();
+      if (socialConfig.autoPostOnNewDeal && (socialConfig.facebookEnabled || socialConfig.instagramEnabled)) {
+        triggerAutoPostForDeal(newDeal).catch(err => console.error('Auto post trigger background error:', err));
+      }
+    } catch (e) {
+      console.warn('Auto post check skipped:', e);
+    }
+
     res.status(201).json({ success: true, deal: newDeal });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -182,6 +193,26 @@ app.post("/api/affiliate-configs", (req, res) => {
   try {
     const updated = dbManager.updateAffiliateConfigs(req.body);
     res.json({ success: true, configs: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/site-banner - Get site banner settings
+app.get("/api/site-banner", (req, res) => {
+  try {
+    const banner = dbManager.getSiteBanner();
+    res.json({ success: true, banner });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/site-banner - Save site banner settings
+app.post("/api/site-banner", (req, res) => {
+  try {
+    const updated = dbManager.updateSiteBanner(req.body);
+    res.json({ success: true, banner: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -262,6 +293,370 @@ app.post("/api/deals/:id/view", async (req, res) => {
       ipAddress
     });
     res.status(201).json({ success: true, view });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ================= FACEBOOK & INSTAGRAM AUTO-POSTING API ROUTES =================
+
+// Format caption helper
+function formatDealCaption(template: string, deal: any): string {
+  if (!deal) return '';
+  const couponText = deal.couponCode ? `🏷️ Coupon Code: ${deal.couponCode}` : '';
+  let caption = (template || '')
+    .replace(/\{title\}/g, deal.title || '')
+    .replace(/\{dealPrice\}/g, deal.dealPrice ? deal.dealPrice.toLocaleString('en-IN') : '')
+    .replace(/\{originalPrice\}/g, deal.originalPrice ? deal.originalPrice.toLocaleString('en-IN') : '')
+    .replace(/\{discountPercentage\}/g, deal.discountPercentage || '0')
+    .replace(/\{store\}/g, deal.store || '')
+    .replace(/\{couponCodeText\}/g, couponText)
+    .replace(/\{couponCode\}/g, deal.couponCode || '')
+    .replace(/\{dealUrl\}/g, deal.dealUrl || '');
+
+  return caption.trim();
+}
+
+// Publish to Facebook Page
+async function publishToFacebookPage(pageId: string, accessToken: string, message: string, imageUrl?: string) {
+  if (!pageId || !accessToken) {
+    throw new Error("Facebook Page ID or Page Access Token is missing. Please configure Facebook settings in Admin.");
+  }
+
+  const endpoint = imageUrl 
+    ? `https://graph.facebook.com/v19.0/${pageId}/photos`
+    : `https://graph.facebook.com/v19.0/${pageId}/feed`;
+
+  const payload: Record<string, string> = {
+    access_token: accessToken,
+    ...(imageUrl ? { url: imageUrl, caption: message } : { message })
+  };
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  const resData = await response.json();
+  if (!response.ok || resData.error) {
+    throw new Error(resData.error?.message || `Facebook API Error: ${JSON.stringify(resData)}`);
+  }
+
+  const postId = resData.id || resData.post_id;
+  return {
+    postId,
+    postUrl: `https://facebook.com/${postId}`
+  };
+}
+
+// Publish to Instagram Feed
+async function publishToInstagramFeed(igAccountId: string, accessToken: string, caption: string, imageUrl: string) {
+  if (!igAccountId || !accessToken) {
+    throw new Error("Instagram Account ID or Access Token is missing. Please configure Instagram settings in Admin.");
+  }
+  if (!imageUrl) {
+    throw new Error("Instagram Feed requires a valid public image URL.");
+  }
+
+  // 1. Create Media Container
+  const containerUrl = `https://graph.facebook.com/v19.0/${igAccountId}/media`;
+  const containerRes = await fetch(containerUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      access_token: accessToken,
+      image_url: imageUrl,
+      caption: caption
+    })
+  });
+
+  const containerData = await containerRes.json();
+  if (!containerRes.ok || containerData.error) {
+    throw new Error(containerData.error?.message || `Instagram Media Container Error: ${JSON.stringify(containerData)}`);
+  }
+
+  const creationId = containerData.id;
+
+  // 2. Publish Media
+  const publishUrl = `https://graph.facebook.com/v19.0/${igAccountId}/media_publish`;
+  const publishRes = await fetch(publishUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      access_token: accessToken,
+      creation_id: creationId
+    })
+  });
+
+  const publishData = await publishRes.json();
+  if (!publishRes.ok || publishData.error) {
+    throw new Error(publishData.error?.message || `Instagram Media Publish Error: ${JSON.stringify(publishData)}`);
+  }
+
+  const mediaId = publishData.id;
+  return {
+    mediaId,
+    postUrl: `https://instagram.com/p/${mediaId}`
+  };
+}
+
+// Background Auto-Post Trigger Handler
+async function triggerAutoPostForDeal(deal: any) {
+  const config = dbManager.getSocialConfig();
+  if (!config.autoPostOnNewDeal) return;
+
+  // Check Loot filter
+  if (config.autoPostLootOnly && !deal.isLootDeal && (deal.discountPercentage || 0) < 40) {
+    console.log(`[AutoPost] Skipped deal "${deal.title}" because Loot-Only mode is enabled and discount is ${deal.discountPercentage}%.`);
+    return;
+  }
+
+  const caption = formatDealCaption(config.postTemplate, deal);
+
+  // Facebook Auto-Post
+  if (config.facebookEnabled) {
+    if (config.facebookPageId && config.facebookAccessToken) {
+      try {
+        const fbRes = await publishToFacebookPage(config.facebookPageId, config.facebookAccessToken, caption, deal.imageUrl);
+        dbManager.addSocialLog({
+          platform: 'facebook',
+          dealId: deal.id,
+          dealTitle: deal.title,
+          status: 'SUCCESS',
+          postUrl: fbRes.postUrl,
+          message: `Auto-posted to Facebook Page Feed successfully (Post ID: ${fbRes.postId})`
+        });
+      } catch (err: any) {
+        dbManager.addSocialLog({
+          platform: 'facebook',
+          dealId: deal.id,
+          dealTitle: deal.title,
+          status: 'FAILED',
+          message: `Facebook Auto-Post Failed: ${err.message}`
+        });
+      }
+    } else {
+      // Demo / Test Mode Log
+      dbManager.addSocialLog({
+        platform: 'facebook',
+        dealId: deal.id,
+        dealTitle: deal.title,
+        status: 'SIMULATED',
+        message: `[Simulated] Facebook feed auto-post generated. Configure Facebook Page Token in Admin to publish live.`
+      });
+    }
+  }
+
+  // Instagram Auto-Post
+  if (config.instagramEnabled) {
+    if (config.instagramAccountId && config.instagramAccessToken) {
+      try {
+        const igRes = await publishToInstagramFeed(config.instagramAccountId, config.instagramAccessToken, caption, deal.imageUrl);
+        dbManager.addSocialLog({
+          platform: 'instagram',
+          dealId: deal.id,
+          dealTitle: deal.title,
+          status: 'SUCCESS',
+          postUrl: igRes.postUrl,
+          message: `Auto-posted to Instagram Business Feed successfully (Media ID: ${igRes.mediaId})`
+        });
+      } catch (err: any) {
+        dbManager.addSocialLog({
+          platform: 'instagram',
+          dealId: deal.id,
+          dealTitle: deal.title,
+          status: 'FAILED',
+          message: `Instagram Auto-Post Failed: ${err.message}`
+        });
+      }
+    } else {
+      // Demo / Test Mode Log
+      dbManager.addSocialLog({
+        platform: 'instagram',
+        dealId: deal.id,
+        dealTitle: deal.title,
+        status: 'SIMULATED',
+        message: `[Simulated] Instagram feed auto-post generated. Configure Instagram Account ID & Access Token in Admin to publish live.`
+      });
+    }
+  }
+}
+
+// GET /api/social/config - Fetch social auto-posting config
+app.get("/api/social/config", (req, res) => {
+  try {
+    const config = dbManager.getSocialConfig();
+    res.json({ success: true, config });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/social/config - Save social auto-posting config
+app.post("/api/social/config", (req, res) => {
+  try {
+    const updated = dbManager.updateSocialConfig(req.body);
+    res.json({ success: true, config: updated, message: "Facebook & Instagram settings saved successfully!" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/social/logs - Get auto-post history logs
+app.get("/api/social/logs", (req, res) => {
+  try {
+    const logs = dbManager.getSocialLogs();
+    res.json({ success: true, count: logs.length, logs });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/social/logs - Clear auto-post history logs
+app.delete("/api/social/logs", (req, res) => {
+  try {
+    dbManager.clearSocialLogs();
+    res.json({ success: true, message: "Social auto-posting logs cleared successfully" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/social/post-facebook - Manual post deal to Facebook Page
+app.post("/api/social/post-facebook", async (req, res) => {
+  try {
+    const { deal, customMessage } = req.body;
+    if (!deal) {
+      return res.status(400).json({ success: false, error: "Deal object is required" });
+    }
+
+    const config = dbManager.getSocialConfig();
+    const message = customMessage || formatDealCaption(config.postTemplate, deal);
+
+    if (!config.facebookPageId || !config.facebookAccessToken) {
+      // Return clear simulated success with instructions
+      const log = dbManager.addSocialLog({
+        platform: 'facebook',
+        dealId: deal.id,
+        dealTitle: deal.title,
+        status: 'SIMULATED',
+        message: `[Test Mode] Post generated: "${message.slice(0, 80)}...". Enter Facebook Page Credentials to publish live to Meta!`
+      });
+      return res.json({
+        success: true,
+        simulated: true,
+        message: "Facebook Post simulation successful! Add Facebook Page Credentials in settings to broadcast live.",
+        log,
+        caption: message
+      });
+    }
+
+    const fbRes = await publishToFacebookPage(config.facebookPageId, config.facebookAccessToken, message, deal.imageUrl);
+    const log = dbManager.addSocialLog({
+      platform: 'facebook',
+      dealId: deal.id,
+      dealTitle: deal.title,
+      status: 'SUCCESS',
+      postUrl: fbRes.postUrl,
+      message: `Published to Facebook Page Feed successfully!`
+    });
+
+    res.json({
+      success: true,
+      postId: fbRes.postId,
+      postUrl: fbRes.postUrl,
+      message: "Successfully published deal to Facebook Page feed!",
+      log
+    });
+
+  } catch (err: any) {
+    const log = dbManager.addSocialLog({
+      platform: 'facebook',
+      dealId: req.body?.deal?.id || '',
+      dealTitle: req.body?.deal?.title || 'Deal',
+      status: 'FAILED',
+      message: `Facebook Post Failed: ${err.message}`
+    });
+    res.status(500).json({ success: false, error: err.message, log });
+  }
+});
+
+// POST /api/social/post-instagram - Manual post deal to Instagram Feed
+app.post("/api/social/post-instagram", async (req, res) => {
+  try {
+    const { deal, customCaption } = req.body;
+    if (!deal) {
+      return res.status(400).json({ success: false, error: "Deal object is required" });
+    }
+
+    const config = dbManager.getSocialConfig();
+    const caption = customCaption || formatDealCaption(config.postTemplate, deal);
+
+    if (!config.instagramAccountId || !config.instagramAccessToken) {
+      // Return clear simulated success with instructions
+      const log = dbManager.addSocialLog({
+        platform: 'instagram',
+        dealId: deal.id,
+        dealTitle: deal.title,
+        status: 'SIMULATED',
+        message: `[Test Mode] IG Feed post ready with image & caption: "${caption.slice(0, 80)}...". Enter Instagram Business ID to broadcast live!`
+      });
+      return res.json({
+        success: true,
+        simulated: true,
+        message: "Instagram Feed simulation successful! Add Instagram Account ID & Access Token to broadcast live.",
+        log,
+        caption
+      });
+    }
+
+    const igRes = await publishToInstagramFeed(config.instagramAccountId, config.instagramAccessToken, caption, deal.imageUrl);
+    const log = dbManager.addSocialLog({
+      platform: 'instagram',
+      dealId: deal.id,
+      dealTitle: deal.title,
+      status: 'SUCCESS',
+      postUrl: igRes.postUrl,
+      message: `Published to Instagram Feed successfully!`
+    });
+
+    res.json({
+      success: true,
+      mediaId: igRes.mediaId,
+      postUrl: igRes.postUrl,
+      message: "Successfully published deal to Instagram Feed!",
+      log
+    });
+
+  } catch (err: any) {
+    const log = dbManager.addSocialLog({
+      platform: 'instagram',
+      dealId: req.body?.deal?.id || '',
+      dealTitle: req.body?.deal?.title || 'Deal',
+      status: 'FAILED',
+      message: `Instagram Post Failed: ${err.message}`
+    });
+    res.status(500).json({ success: false, error: err.message, log });
+  }
+});
+
+// POST /api/social/auto-post-deal - Manual or system trigger to post a deal to both FB & IG
+app.post("/api/social/auto-post-deal", async (req, res) => {
+  try {
+    const { deal } = req.body;
+    if (!deal) {
+      return res.status(400).json({ success: false, error: "Deal object is required" });
+    }
+
+    await triggerAutoPostForDeal(deal);
+    const logs = dbManager.getSocialLogs();
+
+    res.json({
+      success: true,
+      message: `Triggered Facebook & Instagram feed auto-post for "${deal.title}"`,
+      latestLogs: logs.slice(0, 5)
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

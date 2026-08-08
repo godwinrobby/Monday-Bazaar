@@ -39,9 +39,12 @@ import {
   Download,
   Upload,
   ShoppingBag,
-  Database
+  Database,
+  Share2,
+  Send
 } from 'lucide-react';
 import { AmazonAffiliateImporter } from './AmazonAffiliateImporter';
+import { SocialAutoPoster } from './SocialAutoPoster';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { ToastContainer, ToastMessage } from './Toast';
 
@@ -60,19 +63,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteDeal,
   onCloseAdmin,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'amazon-import' | 'deals' | 'affiliation' | 'pending' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'amazon-import' | 'deals' | 'social-autopost' | 'affiliation' | 'pending' | 'settings'>('overview');
 
   // Affiliate Config State with Node.js Backend Database Persistence
-  const [affiliateConfigs, setAffiliateConfigs] = useState<Record<StoreName, StoreAffiliateConfig>>(() => {
-    try {
-      const saved = localStorage.getItem('monday_bazaar_affiliate_configs');
-      return saved ? JSON.parse(saved) : DEFAULT_AFFILIATE_CONFIGS;
-    } catch {
-      return DEFAULT_AFFILIATE_CONFIGS;
-    }
-  });
+  const [affiliateConfigs, setAffiliateConfigs] = useState<Record<StoreName, StoreAffiliateConfig>>(DEFAULT_AFFILIATE_CONFIGS);
 
-  // Load from backend Node.js database
+  // Load affiliate configs from database
   useEffect(() => {
     fetch('/api/affiliate-configs')
       .then(res => res.json())
@@ -84,36 +80,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       .catch(err => console.log('Failed fetching affiliate configs from DB:', err));
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('monday_bazaar_affiliate_configs', JSON.stringify(affiliateConfigs));
+  const handleSaveAffiliateConfigs = (newConfigs: Record<StoreName, StoreAffiliateConfig>) => {
+    setAffiliateConfigs(newConfigs);
     fetch('/api/affiliate-configs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(affiliateConfigs)
+      body: JSON.stringify(newConfigs)
     }).catch(err => console.error('Failed syncing affiliate configs to DB:', err));
-  }, [affiliateConfigs]);
+  };
 
-  // Site Banner Settings
-  const [siteBanner, setSiteBanner] = useState(() => {
-    try {
-      const saved = localStorage.getItem('monday_bazaar_site_banner');
-      return saved ? JSON.parse(saved) : {
-        enabled: true,
-        text: '🔥 Monday Bazaar Super Sale is LIVE! Grab exclusive coupons & loot deals across Amazon, Flipkart & Myntra.',
-        badge: 'FLASH LOOT SALE'
-      };
-    } catch {
-      return {
-        enabled: true,
-        text: '🔥 Monday Bazaar Super Sale is LIVE! Grab exclusive coupons & loot deals across Amazon, Flipkart & Myntra.',
-        badge: 'FLASH LOOT SALE'
-      };
-    }
+  // Site Banner Settings from Database
+  const [siteBanner, setSiteBanner] = useState({
+    enabled: true,
+    text: '🔥 Monday Bazaar Super Sale is LIVE! Grab exclusive coupons & loot deals across Amazon, Flipkart & Myntra.',
+    badge: 'FLASH LOOT SALE'
   });
 
   useEffect(() => {
-    localStorage.setItem('monday_bazaar_site_banner', JSON.stringify(siteBanner));
-  }, [siteBanner]);
+    fetch('/api/site-banner')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.banner) {
+          setSiteBanner(data.banner);
+        }
+      })
+      .catch(err => console.log('Failed fetching site banner from DB:', err));
+  }, []);
+
+  const handleSaveSiteBanner = (newBanner: typeof siteBanner) => {
+    setSiteBanner(newBanner);
+    fetch('/api/site-banner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newBanner)
+    }).catch(err => console.error('Failed syncing site banner to DB:', err));
+  };
 
   // MySQL Database Status State & Entity Collections
   const [dbInfo, setDbInfo] = useState<{
@@ -173,41 +174,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsMigrating(true);
     setMigrationResult(null);
     try {
-      // Gather local deals from browser storage
-      let localDeals: any[] = [];
-      try {
-        const rawUserDeals = localStorage.getItem('monday_bazaar_user_deals') || localStorage.getItem('dealsified_user_deals');
-        if (rawUserDeals) {
-          localDeals = JSON.parse(rawUserDeals);
-        }
-      } catch (e) {
-        console.warn('Could not parse local deals from localStorage:', e);
-      }
-
-      // Gather affiliate configs from browser storage
-      let localAffiliateConfigs = {};
-      try {
-        const rawConfigs = localStorage.getItem('monday_bazaar_affiliate_configs');
-        if (rawConfigs) {
-          localAffiliateConfigs = JSON.parse(rawConfigs);
-        }
-      } catch (e) {
-        console.warn('Could not parse affiliate configs from localStorage:', e);
-      }
-
       const res = await fetch('/api/migrate-localstorage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          localDeals,
-          affiliateConfigs: localAffiliateConfigs
+          localDeals: [],
+          affiliateConfigs: affiliateConfigs
         })
       });
       const json = await res.json();
       if (json.message) {
         setMigrationResult(json.message);
       } else {
-        setMigrationResult('All Users, Deals, Link Clicks, and Views migrated successfully into database!');
+        setMigrationResult('All Users, Deals, Link Clicks, and Views verified and synced successfully into MySQL database!');
       }
       fetchDbData();
     } catch (err: any) {
@@ -589,6 +568,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('social-autopost')}
+            className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-all shrink-0 ${
+              activeTab === 'social-autopost'
+                ? 'border-blue-500 text-blue-400 bg-slate-800/60'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+            }`}
+          >
+            <Share2 className="w-4 h-4 text-blue-400" />
+            <span>FB & IG Auto-Poster</span>
+            <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 font-extrabold rounded text-[10px]">Meta API</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('affiliation')}
             className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-all shrink-0 ${
               activeTab === 'affiliation'
@@ -914,6 +906,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <AmazonAffiliateImporter
             amazonTag={affiliateConfigs.Amazon.tag || 'mondaybazaar-21'}
             onPublishDeal={onAddDeal}
+          />
+        )}
+
+        {/* ==================== TAB: FACEBOOK & INSTAGRAM AUTO-POSTER ==================== */}
+        {activeTab === 'social-autopost' && (
+          <SocialAutoPoster
+            deals={deals}
+            addToast={addToast}
           />
         )}
 
