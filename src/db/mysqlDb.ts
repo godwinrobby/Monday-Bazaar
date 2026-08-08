@@ -177,6 +177,41 @@ class MySqlDatabaseService {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
+      // Ensure missing columns in existing 'deals' table are auto-migrated
+      try {
+        const [existingCols]: any = await conn.query("SHOW COLUMNS FROM deals");
+        const colNames = Array.isArray(existingCols)
+          ? existingCols.map((col: any) => col.Field || col.field)
+          : [];
+
+        const columnsToAdd = [
+          { name: 'aiPros', type: 'TEXT' },
+          { name: 'aiCons', type: 'TEXT' },
+          { name: 'priceHistory', type: 'TEXT' },
+          { name: 'comments', type: 'TEXT' },
+          { name: 'postedAt', type: 'VARCHAR(64)' },
+          { name: 'postedBy', type: 'VARCHAR(128)' },
+          { name: 'viewsCount', type: 'INT DEFAULT 0' },
+          { name: 'commentsCount', type: 'INT DEFAULT 0' },
+          { name: 'isActive', type: 'TINYINT(1) DEFAULT 1' },
+          { name: 'aiScore', type: 'INT DEFAULT 85' },
+          { name: 'aiVerdict', type: 'TEXT' }
+        ];
+
+        for (const col of columnsToAdd) {
+          if (!colNames.includes(col.name)) {
+            try {
+              await conn.query(`ALTER TABLE deals ADD COLUMN ${col.name} ${col.type}`);
+              console.log(`✅ Auto-migrated missing column '${col.name}' into MySQL 'deals' table`);
+            } catch (colErr: any) {
+              console.warn(`Column migration note for ${col.name}:`, colErr.message);
+            }
+          }
+        }
+      } catch (colCheckErr: any) {
+        console.warn('Column check warning:', colCheckErr.message);
+      }
+
       conn.release();
       this.isInitialized = true;
       console.log('✅ MySQL schema & tables verified successfully');
@@ -360,9 +395,9 @@ class MySqlDatabaseService {
           `INSERT INTO deals (
             id, title, description, store, category, originalPrice, dealPrice, 
             discountPercentage, couponCode, imageUrl, dealUrl, isLootDeal, 
-            isVerified, isActive, upvotes, downvotes, aiScore, aiVerdict, 
+            isVerified, isActive, upvotes, downvotes, aiScore, aiVerdict, aiPros, aiCons,
             postedAt, postedBy, viewsCount, commentsCount
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             newDeal.id,
             newDeal.title,
@@ -382,6 +417,8 @@ class MySqlDatabaseService {
             newDeal.downvotes,
             newDeal.aiScore,
             newDeal.aiVerdict || '',
+            JSON.stringify(newDeal.aiPros || []),
+            JSON.stringify(newDeal.aiCons || []),
             newDeal.postedAt,
             newDeal.postedBy,
             newDeal.viewsCount,
@@ -409,7 +446,8 @@ class MySqlDatabaseService {
             title = ?, description = ?, store = ?, category = ?, 
             originalPrice = ?, dealPrice = ?, discountPercentage = ?, 
             couponCode = ?, imageUrl = ?, dealUrl = ?, isLootDeal = ?, 
-            isVerified = ?, isActive = ?, aiScore = ?, aiVerdict = ?
+            isVerified = ?, isActive = ?, aiScore = ?, aiVerdict = ?,
+            aiPros = ?, aiCons = ?
           WHERE id = ?`,
           [
             updated.title,
@@ -427,6 +465,8 @@ class MySqlDatabaseService {
             updated.isActive !== false ? 1 : 0,
             updated.aiScore,
             updated.aiVerdict || '',
+            JSON.stringify(updated.aiPros || []),
+            JSON.stringify(updated.aiCons || []),
             id
           ]
         );
