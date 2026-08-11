@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Deal, StoreName } from '../types';
 import { StoreAffiliateConfig, DEFAULT_AFFILIATE_CONFIGS } from '../utils/affiliate';
-import { dbManager, UserRecord, LinkClickRecord, DealViewRecord, SiteBannerConfig, SocialLogRecord } from './dbManager';
+import { dbManager, UserRecord, LinkClickRecord, DealViewRecord, SiteBannerConfig, SocialLogRecord, SocialConfig } from './dbManager';
 
 export interface SupabaseStatus {
   isConnected: boolean;
@@ -10,6 +10,12 @@ export interface SupabaseStatus {
   error?: string;
   migratedDealsCount?: number;
   tables?: string[];
+  usersCount?: number;
+  dealsCount?: number;
+  clicksCount?: number;
+  viewsCount?: number;
+  affiliateConfigsCount?: number;
+  adminUsersCount?: number;
 }
 
 class SupabaseDatabaseService {
@@ -56,23 +62,43 @@ class SupabaseDatabaseService {
     }
 
     try {
-      // Test connectivity by querying deals
-      const { data, error } = await this.client.from('deals').select('id').limit(1);
+      // Test connectivity and fetch live table counts from Supabase
+      const [
+        { count: dealsCount, error: dealsErr },
+        { count: usersCount, error: usersErr },
+        { count: clicksCount, error: clicksErr },
+        { count: viewsCount, error: viewsErr },
+        { count: configsCount, error: configsErr },
+        { data: adminUsers }
+      ] = await Promise.all([
+        this.client.from('deals').select('*', { count: 'exact', head: true }),
+        this.client.from('users').select('*', { count: 'exact', head: true }),
+        this.client.from('link_clicks').select('*', { count: 'exact', head: true }),
+        this.client.from('deal_views').select('*', { count: 'exact', head: true }),
+        this.client.from('affiliate_configs').select('*', { count: 'exact', head: true }),
+        this.client.from('users').select('id, username, email, role').eq('role', 'admin')
+      ]);
 
-      if (error && error.code !== 'PGRST116') {
-        return {
-          isConnected: true,
-          engine: 'Supabase Cloud PostgreSQL',
-          url: this.supabaseUrl,
-          error: `Supabase ping note: ${error.message}`
-        };
-      }
+      const err = dealsErr || usersErr || clicksErr || viewsErr || configsErr;
+
+      const fallbackDeals = dealsCount !== null ? dealsCount : (await dbManager.getDeals()).length;
+      const fallbackUsers = usersCount !== null ? usersCount : (await dbManager.getUsers()).length;
+      const fallbackClicks = clicksCount !== null ? clicksCount : (await dbManager.getLinkClicks()).length;
+      const fallbackViews = viewsCount !== null ? viewsCount : (await dbManager.getDealViews()).length;
+      const fallbackConfigs = configsCount !== null ? configsCount : Object.keys(dbManager.getAffiliateConfigs()).length;
 
       return {
         isConnected: true,
         engine: 'Supabase Cloud PostgreSQL',
         url: this.supabaseUrl,
-        tables: ['deals', 'users', 'link_clicks', 'deal_views', 'affiliate_configs', 'site_config', 'social_logs']
+        tables: ['deals', 'users', 'link_clicks', 'deal_views', 'affiliate_configs', 'site_config', 'social_logs'],
+        dealsCount: fallbackDeals,
+        usersCount: fallbackUsers,
+        clicksCount: fallbackClicks,
+        viewsCount: fallbackViews,
+        affiliateConfigsCount: fallbackConfigs,
+        adminUsersCount: Array.isArray(adminUsers) ? adminUsers.length : (await dbManager.getUsers()).filter(u => u.role === 'admin').length,
+        ...(err ? { error: `Supabase query note: ${err.message}` } : {})
       };
     } catch (err: any) {
       return {
@@ -644,6 +670,96 @@ class SupabaseDatabaseService {
       } catch (e: any) {}
     }
     return updated;
+  }
+
+  // Get social config
+  public async getSocialConfig(): Promise<SocialConfig> {
+    if (this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('site_config')
+          .select('config_value')
+          .eq('config_key', 'social_config')
+          .single();
+        if (!error && data?.config_value) {
+          const parsed = typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
+          return { ...dbManager.getSocialConfig(), ...parsed };
+        }
+      } catch (e: any) {}
+    }
+    return dbManager.getSocialConfig();
+  }
+
+  // Save social config
+  public async saveSocialConfig(config: Partial<SocialConfig>): Promise<SocialConfig> {
+    const current = await this.getSocialConfig();
+    const updated = { ...current, ...config };
+    dbManager.updateSocialConfig(updated);
+    if (this.client) {
+      try {
+        await this.client.from('site_config').upsert({
+          config_key: 'social_config',
+          config_value: JSON.stringify(updated)
+        }, { onConflict: 'config_key' });
+      } catch (e: any) {}
+    }
+    return updated;
+  }
+
+  // Get social logs
+  public async getSocialLogs(): Promise<SocialLogRecord[]> {
+    if (this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('social_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (!error && Array.isArray(data) && data.length > 0) {
+          return data.map((l: any) => ({
+            id: l.id || `log_${Date.now()}`,
+            platform: l.platform || 'facebook',
+            dealId: l.deal_id || '',
+            dealTitle: l.deal_title || 'Loot Deal',
+            status: l.status || 'SUCCESS',
+            postUrl: l.post_url,
+            message: l.message || '',
+            postedAt: l.created_at || l.posted_at || new Date().toISOString()
+          }));
+        }
+      } catch (e: any) {}
+    }
+    return dbManager.getSocialLogs();
+  }
+
+  // Add social log
+  public async addSocialLog(logData: Partial<SocialLogRecord>): Promise<SocialLogRecord> {
+    const log = dbManager.addSocialLog(logData);
+    if (this.client) {
+      try {
+        await this.client.from('social_logs').upsert({
+          id: log.id,
+          platform: log.platform,
+          deal_id: log.dealId,
+          deal_title: log.dealTitle,
+          status: log.status,
+          post_url: log.postUrl || null,
+          message: log.message
+        });
+      } catch (e: any) {}
+    }
+    return log;
+  }
+
+  // Clear social logs
+  public async clearSocialLogs(): Promise<boolean> {
+    dbManager.clearSocialLogs();
+    if (this.client) {
+      try {
+        await this.client.from('social_logs').delete().neq('id', '000');
+      } catch (e: any) {}
+    }
+    return true;
   }
 }
 

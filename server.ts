@@ -642,7 +642,7 @@ async function publishToInstagramFeed(igAccountId: string, accessToken: string, 
 
 // Background Auto-Post Trigger Handler
 async function triggerAutoPostForDeal(deal: any) {
-  const config = dbManager.getSocialConfig();
+  const config = await supabaseDb.getSocialConfig();
   if (!config.autoPostOnNewDeal) return;
 
   // Check Loot filter
@@ -658,7 +658,7 @@ async function triggerAutoPostForDeal(deal: any) {
     if (config.facebookPageId && config.facebookAccessToken) {
       try {
         const fbRes = await publishToFacebookPage(config.facebookPageId, config.facebookAccessToken, caption, deal.imageUrl);
-        dbManager.addSocialLog({
+        await supabaseDb.addSocialLog({
           platform: 'facebook',
           dealId: deal.id,
           dealTitle: deal.title,
@@ -667,7 +667,7 @@ async function triggerAutoPostForDeal(deal: any) {
           message: `Auto-posted to Facebook Page Feed successfully (Post ID: ${fbRes.postId})`
         });
       } catch (err: any) {
-        dbManager.addSocialLog({
+        await supabaseDb.addSocialLog({
           platform: 'facebook',
           dealId: deal.id,
           dealTitle: deal.title,
@@ -677,7 +677,7 @@ async function triggerAutoPostForDeal(deal: any) {
       }
     } else {
       // Demo / Test Mode Log
-      dbManager.addSocialLog({
+      await supabaseDb.addSocialLog({
         platform: 'facebook',
         dealId: deal.id,
         dealTitle: deal.title,
@@ -692,7 +692,7 @@ async function triggerAutoPostForDeal(deal: any) {
     if (config.instagramAccountId && config.instagramAccessToken) {
       try {
         const igRes = await publishToInstagramFeed(config.instagramAccountId, config.instagramAccessToken, caption, deal.imageUrl);
-        dbManager.addSocialLog({
+        await supabaseDb.addSocialLog({
           platform: 'instagram',
           dealId: deal.id,
           dealTitle: deal.title,
@@ -701,7 +701,7 @@ async function triggerAutoPostForDeal(deal: any) {
           message: `Auto-posted to Instagram Business Feed successfully (Media ID: ${igRes.mediaId})`
         });
       } catch (err: any) {
-        dbManager.addSocialLog({
+        await supabaseDb.addSocialLog({
           platform: 'instagram',
           dealId: deal.id,
           dealTitle: deal.title,
@@ -711,7 +711,7 @@ async function triggerAutoPostForDeal(deal: any) {
       }
     } else {
       // Demo / Test Mode Log
-      dbManager.addSocialLog({
+      await supabaseDb.addSocialLog({
         platform: 'instagram',
         dealId: deal.id,
         dealTitle: deal.title,
@@ -722,41 +722,41 @@ async function triggerAutoPostForDeal(deal: any) {
   }
 }
 
-// GET /api/social/config - Fetch social auto-posting config
-app.get("/api/social/config", (req, res) => {
+// GET /api/social/config - Fetch social auto-posting config from Supabase
+app.get("/api/social/config", async (req, res) => {
   try {
-    const config = dbManager.getSocialConfig();
+    const config = await supabaseDb.getSocialConfig();
     res.json({ success: true, config });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// POST /api/social/config - Save social auto-posting config
-app.post("/api/social/config", (req, res) => {
+// POST /api/social/config - Save social auto-posting config to Supabase
+app.post("/api/social/config", async (req, res) => {
   try {
-    const updated = dbManager.updateSocialConfig(req.body);
-    res.json({ success: true, config: updated, message: "Facebook & Instagram settings saved successfully!" });
+    const updated = await supabaseDb.saveSocialConfig(req.body);
+    res.json({ success: true, config: updated, message: "Facebook & Instagram settings saved successfully to Supabase!" });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// GET /api/social/logs - Get auto-post history logs
-app.get("/api/social/logs", (req, res) => {
+// GET /api/social/logs - Get auto-post history logs from Supabase
+app.get("/api/social/logs", async (req, res) => {
   try {
-    const logs = dbManager.getSocialLogs();
+    const logs = await supabaseDb.getSocialLogs();
     res.json({ success: true, count: logs.length, logs });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// DELETE /api/social/logs - Clear auto-post history logs
-app.delete("/api/social/logs", (req, res) => {
+// DELETE /api/social/logs - Clear auto-post history logs in Supabase
+app.delete("/api/social/logs", async (req, res) => {
   try {
-    dbManager.clearSocialLogs();
-    res.json({ success: true, message: "Social auto-posting logs cleared successfully" });
+    await supabaseDb.clearSocialLogs();
+    res.json({ success: true, message: "Social auto-posting logs cleared successfully in Supabase" });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -770,12 +770,12 @@ app.post("/api/social/post-facebook", async (req, res) => {
       return res.status(400).json({ success: false, error: "Deal object is required" });
     }
 
-    const config = dbManager.getSocialConfig();
+    const config = await supabaseDb.getSocialConfig();
     const message = customMessage || formatDealCaption(config.postTemplate, deal);
 
     if (!config.facebookPageId || !config.facebookAccessToken) {
       // Return clear simulated success with instructions
-      const log = dbManager.addSocialLog({
+      const log = await supabaseDb.addSocialLog({
         platform: 'facebook',
         dealId: deal.id,
         dealTitle: deal.title,
@@ -792,7 +792,7 @@ app.post("/api/social/post-facebook", async (req, res) => {
     }
 
     const fbRes = await publishToFacebookPage(config.facebookPageId, config.facebookAccessToken, message, deal.imageUrl);
-    const log = dbManager.addSocialLog({
+    const log = await supabaseDb.addSocialLog({
       platform: 'facebook',
       dealId: deal.id,
       dealTitle: deal.title,
@@ -810,7 +810,7 @@ app.post("/api/social/post-facebook", async (req, res) => {
     });
 
   } catch (err: any) {
-    const log = dbManager.addSocialLog({
+    const log = await supabaseDb.addSocialLog({
       platform: 'facebook',
       dealId: req.body?.deal?.id || '',
       dealTitle: req.body?.deal?.title || 'Deal',
@@ -829,12 +829,12 @@ app.post("/api/social/post-instagram", async (req, res) => {
       return res.status(400).json({ success: false, error: "Deal object is required" });
     }
 
-    const config = dbManager.getSocialConfig();
+    const config = await supabaseDb.getSocialConfig();
     const caption = customCaption || formatDealCaption(config.postTemplate, deal);
 
     if (!config.instagramAccountId || !config.instagramAccessToken) {
       // Return clear simulated success with instructions
-      const log = dbManager.addSocialLog({
+      const log = await supabaseDb.addSocialLog({
         platform: 'instagram',
         dealId: deal.id,
         dealTitle: deal.title,
@@ -851,7 +851,7 @@ app.post("/api/social/post-instagram", async (req, res) => {
     }
 
     const igRes = await publishToInstagramFeed(config.instagramAccountId, config.instagramAccessToken, caption, deal.imageUrl);
-    const log = dbManager.addSocialLog({
+    const log = await supabaseDb.addSocialLog({
       platform: 'instagram',
       dealId: deal.id,
       dealTitle: deal.title,
@@ -869,7 +869,7 @@ app.post("/api/social/post-instagram", async (req, res) => {
     });
 
   } catch (err: any) {
-    const log = dbManager.addSocialLog({
+    const log = await supabaseDb.addSocialLog({
       platform: 'instagram',
       dealId: req.body?.deal?.id || '',
       dealTitle: req.body?.deal?.title || 'Deal',
@@ -889,7 +889,7 @@ app.post("/api/social/auto-post-deal", async (req, res) => {
     }
 
     await triggerAutoPostForDeal(deal);
-    const logs = dbManager.getSocialLogs();
+    const logs = await supabaseDb.getSocialLogs();
 
     res.json({
       success: true,

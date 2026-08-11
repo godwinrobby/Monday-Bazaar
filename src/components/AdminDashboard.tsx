@@ -1615,7 +1615,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Supabase Project Endpoint</span>
-                  <p className="font-mono font-bold text-emerald-700 truncate">https://pmvnyxpyypifneqojlqq.supabase.co</p>
+                  <p className="font-mono font-bold text-emerald-700 truncate">{dbInfo?.url || 'https://pmvnyxpyypifneqojlqq.supabase.co'}</p>
                 </div>
 
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
@@ -1641,7 +1641,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
 
               <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl text-xs font-mono space-y-2 border border-slate-800">
                 <p className="text-emerald-400 font-bold"># Supabase Database Configuration (.env)</p>
-                <p className="text-emerald-300 font-bold">SUPABASE_URL=https://pmvnyxpyypifneqojlqq.supabase.co</p>
+                <p className="text-emerald-300 font-bold">SUPABASE_URL={dbInfo?.url || 'https://pmvnyxpyypifneqojlqq.supabase.co'}</p>
                 <p className="text-emerald-300 font-bold">SUPABASE_KEY=sb_publishable_QdwxI3KvRW... (Configured)</p>
               </div>
             </div>
