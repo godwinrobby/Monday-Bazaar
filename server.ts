@@ -1,8 +1,15 @@
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+
+// Load environment variables from .env.production first if present, then fallback to .env
+const prodEnvPath = path.join(process.cwd(), ".env.production");
+if (fs.existsSync(prodEnvPath)) {
+  dotenv.config({ path: prodEnvPath });
+}
 dotenv.config();
 
 import express from "express";
-import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { dbManager } from "./src/db/dbManager";
