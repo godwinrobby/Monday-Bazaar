@@ -148,6 +148,15 @@ class SupabaseDatabaseService {
         };
       }
 
+      if (lastErrorMsg.includes('row-level security') || lastErrorMsg.includes('RLS') || lastErrorMsg.includes('violates row-level security policy')) {
+        return {
+          success: false,
+          migratedDealsCount: 0,
+          migratedConfigsCount: 0,
+          message: `Supabase RLS Policy Notice: Your Supabase table is blocking write access due to Row-Level Security (RLS). Please open Admin Dashboard -> 📋 SQL Schema, copy the SQL script, run it in Supabase SQL Editor to enable public permissions, and click Sync again.`
+        };
+      }
+
       // 2. Sync Affiliate Configs
       const configs = dbManager.getAffiliateConfigs();
       for (const [key, cfg] of Object.entries(configs)) {

@@ -24,8 +24,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
   // Check saved admin session token on mount
   useEffect(() => {
-    const token = localStorage.getItem('admin_token');
-    const savedUser = localStorage.getItem('admin_user');
+    // Clear legacy localStorage keys
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+
+    const token = sessionStorage.getItem('admin_token');
+    const savedUser = sessionStorage.getItem('admin_user');
 
     if (!token) {
       setIsCheckingAuth(false);
@@ -50,8 +54,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           setAdminUser(data.user);
           setIsAuthenticated(true);
         } else {
-          localStorage.removeItem('admin_token');
-          localStorage.removeItem('admin_user');
+          sessionStorage.removeItem('admin_token');
+          sessionStorage.removeItem('admin_user');
           setIsAuthenticated(false);
         }
       })
@@ -69,6 +73,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   }, []);
 
   const handleLogout = () => {
+    sessionStorage.removeItem('admin_token');
+    sessionStorage.removeItem('admin_user');
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
     setAdminUser(null);

@@ -267,7 +267,26 @@ ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.affiliate_configs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_config DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.link_clicks DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.deal_views DISABLE ROW LEVEL SECURITY;`;
+ALTER TABLE public.deal_views DISABLE ROW LEVEL SECURITY;
+
+-- Fallback permissive RLS policies
+DROP POLICY IF EXISTS "Public deals access" ON public.deals;
+CREATE POLICY "Public deals access" ON public.deals FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public users access" ON public.users;
+CREATE POLICY "Public users access" ON public.users FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public affiliate_configs access" ON public.affiliate_configs;
+CREATE POLICY "Public affiliate_configs access" ON public.affiliate_configs FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public site_config access" ON public.site_config;
+CREATE POLICY "Public site_config access" ON public.site_config FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public link_clicks access" ON public.link_clicks;
+CREATE POLICY "Public link_clicks access" ON public.link_clicks FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public deal_views access" ON public.deal_views;
+CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (true) WITH CHECK (true);`;
 
   const fetchDbData = async () => {
     try {
