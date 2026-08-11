@@ -125,17 +125,17 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
                   key={cat.name}
                   id={`cat-btn-${cat.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                   onClick={() => setFilters(prev => ({ ...prev, category: cat.name }))}
-                  className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border transition-all shrink-0 ${
+                  className={`px-3.5 py-1.5 rounded-2xl text-xs font-bold flex items-center gap-1.5 border transition-all shrink-0 cursor-pointer ${
                     isSelected
                       ? 'bg-orange-500 text-white border-orange-600 shadow-sm shadow-orange-500/20'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+                      : 'bg-white text-slate-700 border-slate-200/90 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >
                   <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-white' : 'text-slate-500'}`} />
                   <span className="whitespace-nowrap">{cat.name}</span>
                   {count > 0 && (
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                      isSelected ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
                     }`}>
                       {count}
                     </span>
@@ -149,7 +149,7 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
           {canScrollRight && (
             <button
               onClick={() => scroll('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/90 shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-white hover:scale-105 transition-all"
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-white/95 shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-white hover:scale-105 transition-all cursor-pointer"
               aria-label="Scroll right"
             >
               <ChevronRight className="w-4 h-4" />
@@ -165,13 +165,13 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
             <button
               onClick={() => setFilters(prev => ({ ...prev, onlyLootDeals: !prev.onlyLootDeals }))}
               id="toggle-loot-deals-btn"
-              className={`px-2.5 sm:px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 border transition-all shrink-0 text-[11px] sm:text-xs ${
+              className={`px-3 py-1.5 rounded-2xl font-black flex items-center gap-1.5 border transition-all shrink-0 text-[11px] uppercase tracking-wider cursor-pointer ${
                 filters.onlyLootDeals
                   ? 'bg-red-500 text-white border-red-600 shadow-xs ring-2 ring-red-400/30'
-                  : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                  : 'bg-pink-50/80 text-red-600 border-red-200/80 hover:bg-red-100/80'
               }`}
             >
-              <Flame className="w-3.5 h-3.5 fill-current shrink-0" />
+              <Flame className={`w-3.5 h-3.5 shrink-0 ${filters.onlyLootDeals ? 'text-white fill-white' : 'text-red-500 fill-red-500'}`} />
               <span>LOOT DEALS ONLY</span>
               {filters.onlyLootDeals && <span className="ml-1 text-[10px]">✕</span>}
             </button>
@@ -179,13 +179,13 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
             <button
               onClick={() => setFilters(prev => ({ ...prev, onlyCoupons: !prev.onlyCoupons }))}
               id="toggle-coupons-btn"
-              className={`px-2.5 sm:px-3 py-1 rounded-lg font-medium flex items-center gap-1.5 border transition-all shrink-0 text-[11px] sm:text-xs ${
+              className={`px-3 py-1.5 rounded-2xl font-bold flex items-center gap-1.5 border transition-all shrink-0 text-[11px] cursor-pointer ${
                 filters.onlyCoupons
-                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
-                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs ring-2 ring-amber-400/30'
+                  : 'bg-amber-50/80 text-amber-800 border-amber-200/80 hover:bg-amber-100/80'
               }`}
             >
-              <Ticket className="w-3.5 h-3.5 shrink-0" />
+              <Ticket className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <span>With Coupon Codes</span>
               {filters.onlyCoupons && <span className="ml-1 text-[10px]">✕</span>}
             </button>
@@ -193,15 +193,15 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
 
           {/* Sort Selector */}
           <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
-            <span className="text-slate-500 font-medium flex items-center gap-1 text-[11px] sm:text-xs">
-              <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-slate-500 font-bold flex items-center gap-1 text-[11px] sm:text-xs">
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               Sort By:
             </span>
             <select
               id="sort-deals-select"
               value={filters.sortBy}
               onChange={(e) => setFilters(prev => ({ ...prev, sortBy: e.target.value as FilterOptions['sortBy'] }))}
-              className="bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-800 font-semibold rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+              className="bg-white border border-slate-200/90 hover:border-slate-300 text-slate-800 font-bold rounded-2xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 shadow-2xs cursor-pointer"
             >
               <option value="hot">🔥 Hot & Trending</option>
               <option value="discount">💥 Highest Discount %</option>

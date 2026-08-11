@@ -58,17 +58,19 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
 
   const scroll = (direction: 'left' | 'right') => {
     if (!scrollRef.current) return;
-    const amount = direction === 'left' ? -260 : 260;
+    const amount = direction === 'left' ? -220 : 220;
     scrollRef.current.scrollBy({ left: amount, behavior: 'smooth' });
     setTimeout(checkScroll, 300);
   };
 
   return (
-    <div id="store-filter-bar" className="bg-slate-50/80 border-b border-slate-200 py-2.5 sm:py-3 relative group/bar w-full max-w-full overflow-hidden">
+    <div id="store-filter-bar" className="bg-slate-50/80 border-b border-slate-200/90 py-2.5 sm:py-3 relative w-full max-w-full overflow-hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-2 mb-1.5 sm:mb-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500">
+        
+        {/* Header Label */}
+        <div className="flex items-center gap-1.5 mb-2 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
           <Store className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <span>Filter by E-Commerce Platform</span>
+          <span>FILTER BY E-COMMERCE PLATFORM</span>
         </div>
 
         <div className="relative">
@@ -76,7 +78,7 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
           {canScrollLeft && (
             <button
               onClick={() => scroll('left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/90 shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-white hover:scale-105 transition-all"
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-white/95 shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-white hover:scale-105 transition-all cursor-pointer"
               aria-label="Scroll left"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -91,21 +93,23 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
             onMouseLeave={handleMouseLeaveOrUp}
             onMouseUp={handleMouseLeaveOrUp}
             onMouseMove={handleMouseMove}
-            className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar scroll-smooth select-none cursor-grab active:cursor-grabbing"
+            className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar scroll-smooth select-none cursor-grab active:cursor-grabbing pr-8 sm:pr-0"
           >
             {/* All Stores option */}
             <button
               onClick={() => onSelectStore('All')}
               id="filter-store-all"
-              className={`px-3.5 py-1.5 rounded-full font-semibold text-xs border transition-all shrink-0 flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-full font-extrabold text-xs border transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
                 selectedStore === 'All'
                   ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/50'
+                  : 'bg-white text-slate-700 border-slate-200/90 hover:border-slate-300 hover:bg-slate-100/50'
               }`}
             >
-              <Tag className="w-3 h-3" />
+              <Tag className="w-3.5 h-3.5" />
               <span>All Stores</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedStore === 'All' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                selectedStore === 'All' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500'
+              }`}>
                 {(Object.values(dealsCountByStore) as number[]).reduce((a, b) => a + b, 0)}
               </span>
             </button>
@@ -121,18 +125,18 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
                   key={store}
                   id={`filter-store-${store.toLowerCase().replace(/\s+/g, '-')}`}
                   onClick={() => onSelectStore(store)}
-                  className={`px-3 py-1.5 rounded-full font-semibold text-xs border transition-all shrink-0 flex items-center gap-1.5 ${
+                  className={`px-3.5 py-1.5 rounded-full font-bold text-xs border transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
                     isSelected
-                      ? `${info.badgeBg} font-bold shadow-xs border-current ring-2 ring-orange-500/30`
-                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/50'
+                      ? `${info.badgeBg} border-current ring-2 ring-orange-500/30 shadow-xs`
+                      : 'bg-white text-slate-700 border-slate-200/90 hover:border-slate-300 hover:bg-slate-100/50'
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: info.accentColor }} />
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: info.accentColor }} />
                   <span>{store}</span>
                   {count > 0 && (
                     <span
-                      className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                        isSelected ? 'bg-black/10' : 'bg-slate-100 text-slate-500'
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                        isSelected ? 'bg-black/10 text-slate-900' : 'bg-slate-100 text-slate-500'
                       }`}
                     >
                       {count}
@@ -143,11 +147,11 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
             })}
           </div>
 
-          {/* Scroll Right Button */}
+          {/* Floating Scroll Right Arrow Button */}
           {canScrollRight && (
             <button
               onClick={() => scroll('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/90 shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-white hover:scale-105 transition-all"
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-white/95 shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-white hover:scale-105 transition-all cursor-pointer"
               aria-label="Scroll right"
             >
               <ChevronRight className="w-4 h-4" />
@@ -158,4 +162,5 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
     </div>
   );
 };
+
 

@@ -506,19 +506,38 @@ class SupabaseDatabaseService {
     if (this.client) {
       try {
         const { data, error } = await this.client.from('users').select('*');
-        if (!error && Array.isArray(data) && data.length > 0) {
-          return data.map((u: any) => ({
-            id: u.id,
-            username: u.username,
-            email: u.email,
-            password: u.password || 'admin123',
-            role: u.role || 'user',
-            avatarUrl: u.avatarurl || u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-            dealsPosted: u.dealsposted || u.dealsPosted || 0,
-            createdAt: u.created_at || u.createdAt || new Date().toISOString()
-          }));
+        if (!error && Array.isArray(data)) {
+          if (data.length > 0) {
+            return data.map((u: any) => ({
+              id: u.id,
+              username: u.username,
+              email: u.email,
+              password: u.password || 'admin123',
+              role: u.role || 'user',
+              avatarUrl: u.avatarurl || u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+              dealsPosted: u.dealsposted || u.dealsPosted || 0,
+              createdAt: u.created_at || u.createdAt || new Date().toISOString()
+            }));
+          } else {
+            // Table is connected but empty -> seed initial users directly to Supabase
+            const defaultUsers = dbManager.getUsers();
+            for (const user of defaultUsers) {
+              await this.client.from('users').upsert({
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                password: user.password || 'admin123',
+                role: user.role,
+                avatarurl: user.avatarUrl,
+                dealsposted: user.dealsPosted
+              });
+            }
+            return defaultUsers;
+          }
         }
-      } catch (e: any) {}
+      } catch (e: any) {
+        console.warn('Supabase getUsers error:', e.message);
+      }
     }
     return dbManager.getUsers();
   }
