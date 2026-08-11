@@ -1,24 +1,31 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Deal, FilterOptions, StoreName } from './types';
-import { INITIAL_DEALS, STORES_INFO } from './data/initialDeals';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { Deal, FilterOptions } from './types';
 import { TelegramBanner } from './components/TelegramBanner';
 import { StatsBar } from './components/StatsBar';
 import { Header } from './components/Header';
-import { StoreFilterBar } from './components/StoreFilterBar';
-import { CategoryNav } from './components/CategoryNav';
-import { DealCard } from './components/DealCard';
-import { DealDetailPage } from './components/DealDetailPage';
-import { DealModal } from './components/DealModal';
+import { Navbar } from './components/Navbar';
+import { DealsPage } from './pages/DealsPage';
+import { DealDetailsRoute } from './pages/DealDetailsRoute';
+import { LootDealsPage } from './pages/LootDealsPage';
+import { CategoriesPage } from './pages/CategoriesPage';
+import { StoresPage } from './pages/StoresPage';
+import { WatchlistPage } from './pages/WatchlistPage';
+import { AdminPage } from './pages/AdminPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+
 import { AiLinkAnalyzerModal } from './components/AiLinkAnalyzerModal';
 import { PostDealModal } from './components/PostDealModal';
 import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
-import { AdminDashboard } from './components/AdminDashboard';
 import { MobileLootAlertModal } from './components/MobileLootAlertModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
-import { Flame, Sparkles, Filter, RefreshCw, ShoppingBag, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Flame, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 export default function App() {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
   // Deals State fetched exclusively from MySQL Database API
   const [deals, setDeals] = useState<Deal[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -64,36 +71,11 @@ export default function App() {
   const handleDismissToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
-  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+
   const [dealForAlert, setDealForAlert] = useState<Deal | null>(null);
   const [isAiInspectorOpen, setIsAiInspectorOpen] = useState(false);
   const [isPostDealOpen, setIsPostDealOpen] = useState(false);
   const [isWatchlistOpen, setIsWatchlistOpen] = useState(false);
-  
-  // Admin Route State
-  const [isAdminOpen, setIsAdminOpen] = useState<boolean>(() => {
-    return window.location.hash === '#admin' || window.location.pathname === '/admin';
-  });
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      setIsAdminOpen(window.location.hash === '#admin' || window.location.pathname === '/admin');
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  const handleOpenAdmin = () => {
-    window.location.hash = 'admin';
-    setIsAdminOpen(true);
-  };
-
-  const handleCloseAdmin = () => {
-    if (window.location.hash === '#admin') {
-      window.location.hash = '';
-    }
-    setIsAdminOpen(false);
-  };
 
   // Voting Handler
   const handleVote = (dealId: string, type: 'up' | 'down') => {
@@ -107,7 +89,6 @@ export default function App() {
         let newVote: 'up' | 'down' | undefined = type;
 
         if (currentVote === type) {
-          // Toggle off
           newVote = undefined;
           if (type === 'up') newUpvotes -= 1;
           else newDownvotes -= 1;
@@ -161,9 +142,6 @@ export default function App() {
           comments: updatedComments,
           commentsCount: updatedComments.length,
         };
-        if (selectedDeal?.id === dealId) {
-          setSelectedDeal(updatedDeal);
-        }
 
         // Sync comment with Node.js Database backend
         fetch(`/api/deals/${dealId}`, {
@@ -210,7 +188,6 @@ export default function App() {
 
   // Add New Deal Handler with Duplicate Check
   const handleAddDeal = async (newDealData: Partial<Deal>): Promise<{ success: boolean; error?: string; deal?: Deal }> => {
-    // 1. Client-side duplicate check
     const titleLower = (newDealData.title || '').trim().toLowerCase();
     const urlLower = (newDealData.dealUrl || '').trim().toLowerCase();
 
@@ -298,25 +275,15 @@ export default function App() {
     }
   };
 
-  // Filter & Sort Calculations
+  // Filter & Sort Calculations for DealsPage
   const filteredDeals = useMemo(() => {
     return deals.filter(deal => {
-      // Inactive filter - hide inactive deals from storefront
       if (deal.isActive === false) return false;
-
-      // Category filter
       if (filters.category !== 'All' && deal.category !== filters.category) return false;
-
-      // Store filter
       if (filters.store !== 'All' && deal.store !== filters.store) return false;
-
-      // Loot Deals filter
       if (filters.onlyLootDeals && !deal.isLootDeal) return false;
-
-      // Coupon Codes filter
       if (filters.onlyCoupons && !deal.couponCode) return false;
 
-      // Search Query filter
       if (filters.searchQuery.trim()) {
         const query = filters.searchQuery.toLowerCase();
         const matchTitle = deal.title.toLowerCase().includes(query);
@@ -375,257 +342,196 @@ export default function App() {
     return deals.filter(d => savedDealIds.includes(d.id));
   }, [deals, savedDealIds]);
 
-  // Render Standalone Admin Module
-  if (isAdminOpen) {
-    return (
-      <div className="min-h-screen bg-slate-100 font-sans text-slate-900 selection:bg-orange-500 selection:text-white">
-        <AdminDashboard
-          deals={deals}
-          onAddDeal={handleAddDeal}
-          onUpdateDeal={handleUpdateDeal}
-          onDeleteDeal={handleDeleteDeal}
-          onCloseAdmin={handleCloseAdmin}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-900 flex flex-col selection:bg-orange-500 selection:text-white max-w-full overflow-x-hidden">
       
-      {/* Top Banner & Stats */}
-      <TelegramBanner />
-      <StatsBar />
-
-      {/* Main Header Navbar */}
-      <Header
-        filters={filters}
-        setFilters={setFilters}
-        savedDealsCount={savedDealIds.length}
-        onOpenSavedDeals={() => setIsWatchlistOpen(true)}
-        onOpenPostDeal={() => setIsPostDealOpen(true)}
-        onOpenAiInspector={() => setIsAiInspectorOpen(true)}
-        onOpenAdmin={handleOpenAdmin}
-        totalDealsCount={deals.length}
-        onLogoClick={() => {
-          setSelectedDeal(null);
-          handleCloseAdmin();
-        }}
-      />
-
-      {selectedDeal ? (
-        /* Dedicated Full-Page View for Selected Deal */
-        <main className="flex-1 max-w-full overflow-x-hidden">
-          <DealDetailPage
-            deal={selectedDeal}
-            onBack={() => setSelectedDeal(null)}
-            onVote={handleVote}
-            onAddComment={handleAddComment}
-            onOpenPriceAlert={(d) => setDealForAlert(d)}
-            isSaved={savedDealIds.includes(selectedDeal.id)}
-            onToggleSave={handleToggleSave}
-            allDeals={deals}
-            onSelectDeal={(d) => {
-              setSelectedDeal(d);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-          />
-        </main>
-      ) : (
-        /* Main Catalog Feed View */
+      {/* Show Banners, Header & Navbar on non-admin routes */}
+      {!isAdminRoute && (
         <>
-          {/* E-Commerce Store Selector */}
-          <StoreFilterBar
-            selectedStore={filters.store}
-            onSelectStore={(store) => setFilters(prev => ({ ...prev, store }))}
-            dealsCountByStore={storeCounts}
-          />
-
-          {/* Categories & Sorting Toolbar */}
-          <CategoryNav
+          <TelegramBanner />
+          <StatsBar />
+          <Header
             filters={filters}
             setFilters={setFilters}
-            categoryCounts={categoryCounts}
+            savedDealsCount={savedDealIds.length}
+            onOpenSavedDeals={() => setIsWatchlistOpen(true)}
+            onOpenPostDeal={() => setIsPostDealOpen(true)}
+            onOpenAiInspector={() => setIsAiInspectorOpen(true)}
+            totalDealsCount={deals.length}
           />
-
-          {/* Main Container Content */}
-          <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6 overflow-x-hidden">
-            
-            {/* Active Filter Indicators Bar */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-700">
-                <span className="text-slate-500">Showing</span>
-                <span className="px-2 py-0.5 bg-orange-100 text-orange-800 font-extrabold rounded-md">
-                  {filteredDeals.length} Deals
-                </span>
-                {filters.store !== 'All' && (
-                  <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md">
-                    Store: {filters.store}
-                  </span>
-                )}
-                {filters.category !== 'All' && (
-                  <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded-md">
-                    Category: {filters.category}
-                  </span>
-                )}
-                {filters.searchQuery && (
-                  <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md">
-                    Search: "{filters.searchQuery}"
-                  </span>
-                )}
-              </div>
-
-              <button
-                onClick={() => setFilters({
-                  category: 'All',
-                  store: 'All',
-                  searchQuery: '',
-                  sortBy: 'hot',
-                  onlyLootDeals: false,
-                  onlyCoupons: false,
-                })}
-                className="text-xs text-orange-600 font-bold hover:underline flex items-center gap-1"
-              >
-                <RefreshCw className="w-3 h-3" />
-                Reset Filters
-              </button>
-            </div>
-
-            {/* Deals Cards Grid */}
-            {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                  <div key={i} className="bg-white rounded-3xl p-5 border border-slate-200 animate-pulse space-y-4">
-                    <div className="w-full h-44 bg-slate-100 rounded-2xl"></div>
-                    <div className="h-4 bg-slate-100 rounded w-3/4"></div>
-                    <div className="h-3 bg-slate-100 rounded w-1/2"></div>
-                    <div className="flex justify-between items-center pt-2">
-                      <div className="h-6 bg-slate-100 rounded w-20"></div>
-                      <div className="h-8 bg-slate-100 rounded-xl w-24"></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : filteredDeals.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {filteredDeals.map((deal) => (
-                  <DealCard
-                    key={deal.id}
-                    deal={deal}
-                    onSelectDeal={(d) => {
-                      setSelectedDeal(d);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    onVote={handleVote}
-                    isSaved={savedDealIds.includes(deal.id)}
-                    onToggleSave={handleToggleSave}
-                    onOpenPriceAlert={(d) => setDealForAlert(d)}
-                  />
-                ))}
-              </div>
-            ) : deals.length === 0 ? (
-              /* Database Empty State */
-              <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
-                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
-                  <ShoppingBag className="w-8 h-8" />
-                </div>
-                <h3 className="font-bold text-slate-900 text-lg">No Live Deals in Database</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Your MySQL database is connected and active. Import live deals directly from Amazon, Flipkart, or Myntra using our Admin Importer or post your first deal!
-                </p>
-                <div className="flex flex-wrap justify-center gap-3 pt-2">
-                  <button
-                    onClick={handleOpenAdmin}
-                    className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition-colors"
-                  >
-                    Open Admin & Import Deals
-                  </button>
-                  <button
-                    onClick={() => setIsPostDealOpen(true)}
-                    className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors"
-                  >
-                    Post a Deal
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* Filter Empty State */
-              <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
-                <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto">
-                  <ShoppingBag className="w-8 h-8" />
-                </div>
-                <h3 className="font-bold text-slate-900 text-lg">No Deals Match Your Filters</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Try adjusting your search terms or store filters, or paste a deal link directly into our AI Inspector!
-                </p>
-                <div className="flex justify-center gap-3 pt-2">
-                  <button
-                    onClick={() => setFilters({
-                      category: 'All',
-                      store: 'All',
-                      searchQuery: '',
-                      sortBy: 'hot',
-                      onlyLootDeals: false,
-                      onlyCoupons: false,
-                    })}
-                    className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors"
-                  >
-                    Clear All Filters
-                  </button>
-
-                  <button
-                    onClick={() => setIsAiInspectorOpen(true)}
-                    className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors flex items-center gap-1.5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                    Inspect Any Link with AI
-                  </button>
-                </div>
-              </div>
-            )}
-
-          </main>
+          <Navbar savedCount={savedDealIds.length} />
         </>
       )}
 
+      {/* Primary Router Views */}
+      <div className="flex-1">
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <DealsPage
+                deals={deals}
+                isLoading={isLoading}
+                filters={filters}
+                setFilters={setFilters}
+                filteredDeals={filteredDeals}
+                storeCounts={storeCounts}
+                categoryCounts={categoryCounts}
+                savedDealIds={savedDealIds}
+                onVote={handleVote}
+                onToggleSave={handleToggleSave}
+                onOpenPriceAlert={(d) => setDealForAlert(d)}
+                onOpenPostDeal={() => setIsPostDealOpen(true)}
+                onOpenAiInspector={() => setIsAiInspectorOpen(true)}
+              />
+            }
+          />
+          <Route
+            path="/deal/:id"
+            element={
+              <DealDetailsRoute
+                deals={deals}
+                onVote={handleVote}
+                onAddComment={handleAddComment}
+                onOpenPriceAlert={(d) => setDealForAlert(d)}
+                savedDealIds={savedDealIds}
+                onToggleSave={handleToggleSave}
+              />
+            }
+          />
+          <Route
+            path="/loot"
+            element={
+              <LootDealsPage
+                deals={deals}
+                isLoading={isLoading}
+                savedDealIds={savedDealIds}
+                onVote={handleVote}
+                onToggleSave={handleToggleSave}
+                onOpenPriceAlert={(d) => setDealForAlert(d)}
+              />
+            }
+          />
+          <Route
+            path="/categories"
+            element={
+              <CategoriesPage
+                deals={deals}
+                isLoading={isLoading}
+                savedDealIds={savedDealIds}
+                onVote={handleVote}
+                onToggleSave={handleToggleSave}
+                onOpenPriceAlert={(d) => setDealForAlert(d)}
+              />
+            }
+          />
+          <Route
+            path="/category/:categoryName"
+            element={
+              <CategoriesPage
+                deals={deals}
+                isLoading={isLoading}
+                savedDealIds={savedDealIds}
+                onVote={handleVote}
+                onToggleSave={handleToggleSave}
+                onOpenPriceAlert={(d) => setDealForAlert(d)}
+              />
+            }
+          />
+          <Route
+            path="/stores"
+            element={
+              <StoresPage
+                deals={deals}
+                isLoading={isLoading}
+                savedDealIds={savedDealIds}
+                onVote={handleVote}
+                onToggleSave={handleToggleSave}
+                onOpenPriceAlert={(d) => setDealForAlert(d)}
+              />
+            }
+          />
+          <Route
+            path="/store/:storeName"
+            element={
+              <StoresPage
+                deals={deals}
+                isLoading={isLoading}
+                savedDealIds={savedDealIds}
+                onVote={handleVote}
+                onToggleSave={handleToggleSave}
+                onOpenPriceAlert={(d) => setDealForAlert(d)}
+              />
+            }
+          />
+          <Route
+            path="/watchlist"
+            element={
+              <WatchlistPage
+                deals={deals}
+                savedDealIds={savedDealIds}
+                onVote={handleVote}
+                onToggleSave={handleToggleSave}
+                onOpenPriceAlert={(d) => setDealForAlert(d)}
+                onClearWatchlist={() => setSavedDealIds([])}
+              />
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AdminPage
+                deals={deals}
+                onAddDeal={handleAddDeal}
+                onUpdateDeal={handleUpdateDeal}
+                onDeleteDeal={handleDeleteDeal}
+              />
+            }
+          />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </div>
+
       {/* Footer */}
-      <footer className="bg-slate-950 text-slate-400 border-t border-slate-800 py-10 mt-12 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-800">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center text-white font-black">
-                <Flame className="w-5 h-5 fill-white" />
+      {!isAdminRoute && (
+        <footer className="bg-slate-950 text-slate-400 border-t border-slate-800 py-10 mt-12 text-xs">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center text-white font-black">
+                  <Flame className="w-5 h-5 fill-white" />
+                </div>
+                <span className="text-lg font-black text-white tracking-tight">
+                  Monday <span className="text-orange-500">Bazaar</span>
+                </span>
               </div>
-              <span className="text-lg font-black text-white tracking-tight">
-                Monday <span className="text-orange-500">Bazaar</span>
-              </span>
+
+              <p className="text-center md:text-right text-slate-400 max-w-md">
+                Aggregating verified daily price drops, promotional coupons, and loot deals across Amazon, Flipkart, Myntra, Ajio, Croma, and 10+ top e-commerce platforms.
+              </p>
             </div>
 
-            <p className="text-center md:text-right text-slate-400 max-w-md">
-              Aggregating verified daily price drops, promotional coupons, and loot deals across Amazon, Flipkart, Myntra, Ajio, Croma, and 10+ top e-commerce platforms.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-500">
-            <p>© {new Date().getFullYear()} Monday Bazaar. All rights reserved. E-Commerce deals & coupons aggregator.</p>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleOpenAdmin}
-                className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold hover:underline transition-colors"
-              >
-                <ShieldAlert className="w-4 h-4 text-orange-500" />
-                <span>Admin Console</span>
-              </button>
-              <span>•</span>
-              <span className="flex items-center gap-1 text-slate-400">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" /> Verified Deal Links
-              </span>
-              <span>•</span>
-              <span className="text-slate-400">Powered by Gemini AI</span>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-500">
+              <p>© {new Date().getFullYear()} Monday Bazaar. All rights reserved. E-Commerce deals & coupons aggregator.</p>
+              <div className="flex items-center gap-4">
+                <a
+                  href="/admin"
+                  className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold hover:underline transition-colors"
+                >
+                  <ShieldAlert className="w-4 h-4 text-orange-500" />
+                  <span>Admin Console</span>
+                </a>
+                <span>•</span>
+                <span className="flex items-center gap-1 text-slate-400">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" /> Verified Deal Links
+                </span>
+                <span>•</span>
+                <span className="text-slate-400">Powered by Gemini AI</span>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {/* Modals & Drawers */}
       <AiLinkAnalyzerModal
@@ -649,7 +555,9 @@ export default function App() {
         isOpen={isWatchlistOpen}
         onClose={() => setIsWatchlistOpen(false)}
         savedDeals={savedDeals}
-        onSelectDeal={(d) => setSelectedDeal(d)}
+        onSelectDeal={(d) => {
+          setIsWatchlistOpen(false);
+        }}
         onRemoveSave={(id) => setSavedDealIds(prev => prev.filter(i => i !== id))}
       />
 

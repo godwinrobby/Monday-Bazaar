@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Search, Flame, Plus, Heart, Sparkles, X, ShieldAlert } from 'lucide-react';
 import { FilterOptions } from '../types';
 
@@ -25,6 +26,8 @@ export const Header: React.FC<HeaderProps> = ({
   totalDealsCount,
   onLogoClick,
 }) => {
+  const navigate = useNavigate();
+
   return (
     <header id="main-header-navbar" className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 space-y-2 sm:space-y-0">
@@ -33,24 +36,23 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           
           {/* Logo */}
-          <div 
+          <Link 
+            to="/"
             onClick={onLogoClick} 
             className="flex items-center gap-2 sm:gap-3 shrink-0 cursor-pointer group"
           >
-            <a href="#" className="flex items-center gap-2 group">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-orange-500 to-red-600 flex items-center justify-center text-white shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform shrink-0">
-                <Flame className="w-5 h-5 sm:w-6 sm:h-6 fill-amber-200 text-white" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 leading-none">
-                  Monday <span className="text-orange-600">Bazaar</span>
-                </span>
-                <span className="hidden xs:inline-block text-[9px] sm:text-[10px] font-medium text-slate-500 tracking-wide uppercase mt-0.5">
-                  Amazon • Flipkart • Multi-Store
-                </span>
-              </div>
-            </a>
-          </div>
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-orange-500 to-red-600 flex items-center justify-center text-white shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform shrink-0">
+              <Flame className="w-5 h-5 sm:w-6 sm:h-6 fill-amber-200 text-white" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 leading-none">
+                Monday <span className="text-orange-600">Bazaar</span>
+              </span>
+              <span className="hidden xs:inline-block text-[9px] sm:text-[10px] font-medium text-slate-500 tracking-wide uppercase mt-0.5">
+                Amazon • Flipkart • Multi-Store
+              </span>
+            </div>
+          </Link>
 
           {/* Search Bar - Desktop Only in Row 1 */}
           <div className="hidden sm:block flex-1 max-w-2xl min-w-0 relative">
@@ -78,23 +80,21 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Right Action Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Admin Panel Button */}
-            {onOpenAdmin && (
-              <button
-                onClick={onOpenAdmin}
-                id="admin-panel-header-btn"
-                className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 rounded-full font-bold text-xs transition-all shadow-2xs"
-                title="Manage Deals & Affiliation Rules"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                <span className="hidden md:inline">Admin</span>
-              </button>
-            )}
+            <button
+              onClick={() => navigate('/admin')}
+              id="admin-panel-header-btn"
+              className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 rounded-full font-bold text-xs transition-all shadow-2xs cursor-pointer"
+              title="Manage Deals & Affiliation Rules"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+              <span className="hidden md:inline">Admin</span>
+            </button>
 
             {/* AI Link Inspector */}
             <button
               onClick={onOpenAiInspector}
               id="ai-inspector-header-btn"
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 text-indigo-700 border border-indigo-200/80 rounded-full font-semibold text-xs transition-all shadow-xs"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 text-indigo-700 border border-indigo-200/80 rounded-full font-semibold text-xs transition-all shadow-xs cursor-pointer"
               title="Paste any product URL to inspect with Gemini AI"
             >
               <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-spin-slow shrink-0" />
@@ -106,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenPostDeal}
               id="post-deal-header-btn"
-              className="inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-semibold text-xs transition-all shadow-sm shrink-0"
+              className="inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-semibold text-xs transition-all shadow-sm shrink-0 cursor-pointer"
             >
               <Plus className="w-4 h-4 text-orange-400 shrink-0" />
               <span className="hidden sm:inline">Post Deal</span>
@@ -114,9 +114,9 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Saved Deals Watchlist */}
             <button
-              onClick={onOpenSavedDeals}
+              onClick={() => navigate('/watchlist')}
               id="saved-watchlist-btn"
-              className="relative p-1.5 sm:p-2 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-full transition-colors shrink-0"
+              className="relative p-1.5 sm:p-2 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-full transition-colors shrink-0 cursor-pointer"
               title="View Watchlist"
             >
               <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${savedDealsCount > 0 ? 'text-red-500 fill-red-500' : ''}`} />
