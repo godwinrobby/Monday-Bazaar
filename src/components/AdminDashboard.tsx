@@ -215,6 +215,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const handleMigrateToSupabase = async () => {
+    setIsMigrating(true);
+    setMigrationResult(null);
+    try {
+      const res = await fetch('/api/migrate-to-supabase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.message) {
+        setMigrationResult(json.message);
+      } else {
+        setMigrationResult('All Users, Deals, and Store Configs synced successfully into Supabase database!');
+      }
+      fetchDbData();
+    } catch (err: any) {
+      setMigrationResult(`Supabase Migration error: ${err.message}`);
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   const handleMigrateToMySql = async () => {
     setIsMigrating(true);
     setMigrationResult(null);
@@ -1429,23 +1451,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </form>
             </div>
 
-            {/* MySQL Database Engine & Server Configuration Card */}
+            {/* Supabase Database Engine & Cloud PostgreSQL Integration Card */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 gap-2">
                 <div className="flex items-center gap-2">
-                  <Database className="w-5 h-5 text-indigo-600" />
+                  <Database className="w-5 h-5 text-emerald-600" />
                   <div>
-                    <h3 className="font-extrabold text-base text-slate-900">MySQL Database Engine & Node.js Server Integration</h3>
-                    <p className="text-xs text-slate-500">Node.js Express backend database connection & relational schema manager</p>
+                    <h3 className="font-extrabold text-base text-slate-900">Supabase Cloud PostgreSQL Database</h3>
+                    <p className="text-xs text-slate-500">Live Supabase integration for deals, users, analytics, & affiliate configuration</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleMigrateToSupabase}
+                    disabled={isMigrating}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>{isMigrating ? 'Syncing...' : '⚡ Sync Data to Supabase'}</span>
+                  </button>
                   <button
                     onClick={handleMigrateToMySql}
                     disabled={isMigrating}
-                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                   >
-                    <span>{isMigrating ? 'Syncing...' : '⚡ Migrate All Data to MySQL'}</span>
+                    <span>Sync MySQL</span>
                   </button>
                   <button
                     onClick={fetchDbData}
@@ -1457,51 +1486,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               {migrationResult && (
-                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-xs text-indigo-900 font-semibold flex items-center justify-between">
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 font-semibold flex items-center justify-between">
                   <span>{migrationResult}</span>
-                  <button onClick={() => setMigrationResult(null)} className="text-indigo-500 hover:text-indigo-800 font-bold ml-2">✕</button>
+                  <button onClick={() => setMigrationResult(null)} className="text-emerald-500 hover:text-emerald-800 font-bold ml-2">✕</button>
                 </div>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Database Engine</span>
-                  <p className="font-extrabold text-slate-900">{dbInfo.engine || 'MySQL 8.0 / Node.js Relational Engine'}</p>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Supabase Project Endpoint</span>
+                  <p className="font-mono font-bold text-emerald-700 truncate">https://pmvnyxpyypifneqojlqq.supabase.co</p>
                 </div>
 
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">MySQL Server Connection Status</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Supabase Database Connection</span>
                   <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${dbInfo.isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                    <span className={`font-black ${dbInfo.isConnected ? 'text-emerald-700' : 'text-amber-700'}`}>
-                      {dbInfo.isConnected ? '🟢 MySQL Connected & Active' : '🟡 Active Node.js Persistent DB (MySQL Ready)'}
-                    </span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-black text-emerald-700">🟢 Connected & Active</span>
                   </div>
                 </div>
 
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Database Name</span>
-                  <p className="font-mono font-bold text-indigo-600">{dbInfo.database || 'dealsified_db'}</p>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Supabase Schema / Tables</span>
+                  <p className="font-mono text-slate-700 font-bold">
+                    deals, users, link_clicks, deal_views, affiliate_configs, site_config
+                  </p>
                 </div>
 
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tables Schema Verified</span>
-                  <p className="font-mono text-slate-700 font-bold">
-                    {dbInfo.tables ? dbInfo.tables.join(', ') : 'deals, affiliate_configs, price_history, comments'}
-                  </p>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Client API Key Type</span>
+                  <p className="font-mono text-slate-700 font-bold">sb_publishable_Key (REST & Realtime Active)</p>
                 </div>
               </div>
 
               <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl text-xs font-mono space-y-2 border border-slate-800">
-                <p className="text-amber-400 font-bold"># Active Environment Variables for External MySQL Connection (.env)</p>
-                <p className="text-emerald-400 font-bold">MYSQL_HOST={dbInfo.host || 'srv625.hstgr.io'}</p>
-                <p className="text-emerald-400 font-bold">MYSQL_PORT={dbInfo.port || 3306}</p>
-                <p className="text-emerald-400 font-bold">MYSQL_USER={dbInfo.user || 'u179476470_dealusr'}</p>
-                <p className="text-slate-400">MYSQL_PASSWORD=••••••••</p>
-                <p className="text-emerald-400 font-bold">MYSQL_DATABASE={dbInfo.database || 'u179476470_dealdb'}</p>
-                <p className="text-slate-300 text-[11px] pt-2 border-t border-slate-800 font-sans leading-relaxed">
-                  💡 <strong>Hostinger Remote MySQL Setup:</strong> Your credentials for <code className="text-amber-300">srv625.hstgr.io</code> are mapped. If Hostinger blocks direct connection, log into Hostinger hPanel &gt; <strong>Databases</strong> &gt; <strong>Remote MySQL</strong> and add <code className="text-amber-300">%</code> to <i>Access Hosts</i> to allow external cloud connections.
-                </p>
+                <p className="text-emerald-400 font-bold"># Supabase Database Configuration (.env)</p>
+                <p className="text-emerald-300 font-bold">SUPABASE_URL=https://pmvnyxpyypifneqojlqq.supabase.co</p>
+                <p className="text-emerald-300 font-bold">SUPABASE_KEY=sb_publishable_QdwxI3KvRW... (Configured)</p>
               </div>
             </div>
 

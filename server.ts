@@ -14,6 +14,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { dbManager } from "./src/db/dbManager";
 import { mySqlDb } from "./src/db/mysqlDb";
+import { supabaseDb } from "./src/db/supabaseDb";
 
 const app = express();
 const PORT = 3000;
@@ -46,25 +47,39 @@ function getGeminiClient() {
   });
 }
 
-// Health route with MySQL status
+// Health route with Supabase status
 app.get("/api/health", async (req, res) => {
-  const status = await mySqlDb.getStatus();
+  const supabaseStatus = await supabaseDb.getStatus();
+  const mysqlStatus = await mySqlDb.getStatus();
   res.json({
     status: "ok",
-    app: "Dealsified",
-    dbEngine: status.engine,
-    isMySqlConnected: status.isConnected,
+    app: "Monday Bazaar",
+    dbEngine: supabaseStatus.engine,
+    supabaseUrl: supabaseStatus.url,
+    isSupabaseConnected: supabaseStatus.isConnected,
+    isMySqlConnected: mysqlStatus.isConnected,
     time: new Date().toISOString()
   });
 });
 
-// GET /api/db-status - Detail MySQL Database Engine Status
+// GET /api/db-status - Detail Database Engine Status (Supabase & MySQL)
 app.get("/api/db-status", async (req, res) => {
   try {
-    const status = await mySqlDb.getStatus();
-    res.json({ success: true, db: status });
+    const supabaseStatus = await supabaseDb.getStatus();
+    const mysqlStatus = await mySqlDb.getStatus();
+    res.json({ success: true, db: supabaseStatus, supabase: supabaseStatus, mysql: mysqlStatus });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/migrate-to-supabase - Migrate all catalog deals, users, & store configs into Supabase
+app.post("/api/migrate-to-supabase", async (req, res) => {
+  try {
+    const result = await supabaseDb.syncAllDataToSupabase();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -122,10 +137,10 @@ app.post("/api/migrate-localstorage", async (req, res) => {
 
 // ================= DATABASE API ROUTES =================
 
-// GET /api/deals - Fetch all deals from MySQL / Node.js database with query parameter filtering
+// GET /api/deals - Fetch all deals from Supabase / Database with query parameter filtering
 app.get("/api/deals", async (req, res) => {
   try {
-    let deals = await mySqlDb.getDeals();
+    let deals = await supabaseDb.getDeals();
     
     // Optional Query Filtering (e.g. /api/deals?category=Electronics&store=Amazon&search=iPhone&isLoot=true)
     const { category, store, search, isLoot } = req.query;
@@ -158,7 +173,7 @@ app.get("/api/deals", async (req, res) => {
 // GET /api/deals/:id - Fetch a single deal by ID from database
 app.get("/api/deals/:id", async (req, res) => {
   try {
-    const deal = await mySqlDb.getDealById(req.params.id);
+    const deal = await supabaseDb.getDealById(req.params.id);
     if (!deal) {
       return res.status(404).json({ success: false, error: "Deal not found" });
     }
@@ -168,10 +183,10 @@ app.get("/api/deals/:id", async (req, res) => {
   }
 });
 
-// POST /api/deals - Add new deal to MySQL database
+// POST /api/deals - Add new deal to Supabase database
 app.post("/api/deals", async (req, res) => {
   try {
-    const newDeal = await mySqlDb.addDeal(req.body);
+    const newDeal = await supabaseDb.addDeal(req.body);
     
     // Automatically trigger Facebook & Instagram Auto-Post if enabled
     try {
@@ -189,10 +204,10 @@ app.post("/api/deals", async (req, res) => {
   }
 });
 
-// PUT /api/deals/:id - Update deal in MySQL database
+// PUT /api/deals/:id - Update deal in Supabase database
 app.put("/api/deals/:id", async (req, res) => {
   try {
-    const updated = await mySqlDb.updateDeal(req.params.id, req.body);
+    const updated = await supabaseDb.updateDeal(req.params.id, req.body);
     if (!updated) {
       return res.status(404).json({ success: false, error: "Deal not found" });
     }
@@ -202,10 +217,10 @@ app.put("/api/deals/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/deals/:id - Remove deal from MySQL database
+// DELETE /api/deals/:id - Remove deal from Supabase database
 app.delete("/api/deals/:id", async (req, res) => {
   try {
-    const deleted = await mySqlDb.deleteDeal(req.params.id);
+    const deleted = await supabaseDb.deleteDeal(req.params.id);
     if (!deleted) {
       return res.status(404).json({ success: false, error: "Deal not found" });
     }
@@ -222,7 +237,7 @@ app.post("/api/deals/:id/vote", async (req, res) => {
     if (type !== 'up' && type !== 'down') {
       return res.status(400).json({ success: false, error: "Invalid vote type" });
     }
-    const updated = await mySqlDb.voteDeal(req.params.id, type);
+    const updated = await supabaseDb.voteDeal(req.params.id, type);
     if (!updated) {
       return res.status(404).json({ success: false, error: "Deal not found" });
     }
@@ -958,6 +973,15 @@ Provide honest buyer advice pros, cons, AI score (0-100), and buy recommendation
 });
 
 async function startServer() {
+  // Sync data to Supabase PostgreSQL database
+  supabaseDb.syncAllDataToSupabase().then(res => {
+    if (res.success) {
+      console.log(`✅ Supabase database initialized and synced (${res.migratedDealsCount} deals).`);
+    }
+  }).catch(err => {
+    console.warn('Supabase initial sync notice:', err.message);
+  });
+
   // Initialize MySQL Database Tables if configured
   await mySqlDb.setupTables().catch(err => {
     console.warn('MySQL initialization notice:', err.message);
