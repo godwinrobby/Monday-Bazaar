@@ -440,6 +440,16 @@ class DatabaseManager {
     return newUser;
   }
 
+  public deleteUser(id: string): boolean {
+    const initialLen = this.db.users.length;
+    this.db.users = this.db.users.filter(u => u.id !== id && u.email !== id && u.username !== id);
+    if (this.db.users.length < initialLen) {
+      this.saveDatabase(this.db);
+      return true;
+    }
+    return false;
+  }
+
   // --- LINK CLICK TRACKING ---
   public getLinkClicks(): LinkClickRecord[] {
     return this.db.linkClicks || INITIAL_CLICKS_SEED;

@@ -383,6 +383,71 @@ app.post("/api/admin/change-password", async (req, res) => {
   }
 });
 
+// POST /api/admin/register - Create and map a new Admin account to database
+app.post("/api/admin/register", async (req, res) => {
+  try {
+    const { username, email, password, avatarUrl, removeDemoUsers } = req.body;
+    if (!username || !email || !password) {
+      return res.status(400).json({ success: false, error: 'Username, Email, and Password are required to create an Admin account.' });
+    }
+
+    if (password.length < 4) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 4 characters long.' });
+    }
+
+    const existingUsers = await supabaseDb.getUsers();
+    const duplicate = existingUsers.find(u => 
+      u.username.toLowerCase() === username.trim().toLowerCase() || 
+      u.email.toLowerCase() === email.trim().toLowerCase()
+    );
+
+    if (duplicate) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Account with username '${username}' or email '${email}' already exists. Please sign in or use another username/email.` 
+      });
+    }
+
+    const newAdmin = await supabaseDb.addUser({
+      id: `admin_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      username: username.trim(),
+      email: email.trim().toLowerCase(),
+      password: password,
+      role: 'admin',
+      avatarUrl: avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      dealsPosted: 0,
+      createdAt: new Date().toISOString()
+    });
+
+    // Optionally remove default demo admin accounts if requested
+    if (removeDemoUsers) {
+      const demoUsers = existingUsers.filter(u => u.email === 'admin@dealsified.com' || u.id === 'user_1');
+      for (const demo of demoUsers) {
+        await supabaseDb.deleteUser(demo.id);
+      }
+    }
+
+    const token = `admin_sess_${Date.now()}_${Buffer.from(newAdmin.id).toString('hex')}`;
+    const safeUser = {
+      id: newAdmin.id,
+      username: newAdmin.username,
+      email: newAdmin.email,
+      role: newAdmin.role,
+      avatarUrl: newAdmin.avatarUrl,
+      createdAt: newAdmin.createdAt
+    };
+
+    res.status(201).json({
+      success: true,
+      message: 'Admin user created and mapped to Supabase database successfully!',
+      user: safeUser,
+      token
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/users - Fetch all users from database
 app.get("/api/users", async (req, res) => {
   try {
@@ -398,6 +463,17 @@ app.post("/api/users", async (req, res) => {
   try {
     const user = await supabaseDb.addUser(req.body);
     res.status(201).json({ success: true, user });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/users/:id - Delete user account by ID or email
+app.delete("/api/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await supabaseDb.deleteUser(id);
+    res.json({ success: true, deleted, message: `User account '${id}' removed from database.` });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

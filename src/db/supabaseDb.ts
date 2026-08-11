@@ -542,6 +542,17 @@ class SupabaseDatabaseService {
     return user;
   }
 
+  // Delete user
+  public async deleteUser(id: string): Promise<boolean> {
+    const deleted = dbManager.deleteUser(id);
+    if (this.client) {
+      try {
+        await this.client.from('users').delete().or(`id.eq.${id},email.eq.${id},username.eq.${id}`);
+      } catch (e: any) {}
+    }
+    return deleted;
+  }
+
   // Get affiliate configs
   public async getAffiliateConfigs(): Promise<Record<string, StoreAffiliateConfig>> {
     if (this.client) {
