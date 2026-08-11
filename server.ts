@@ -21,6 +21,17 @@ const PORT = 3000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Enable CORS for live production APIs and cross-origin access (e.g., mondaybazaar.in)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // Helper to initialize Gemini server-side safely
 function getGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -111,11 +122,47 @@ app.post("/api/migrate-localstorage", async (req, res) => {
 
 // ================= DATABASE API ROUTES =================
 
-// GET /api/deals - Fetch all deals from MySQL / Node.js database
+// GET /api/deals - Fetch all deals from MySQL / Node.js database with query parameter filtering
 app.get("/api/deals", async (req, res) => {
   try {
-    const deals = await mySqlDb.getDeals();
+    let deals = await mySqlDb.getDeals();
+    
+    // Optional Query Filtering (e.g. /api/deals?category=Electronics&store=Amazon&search=iPhone&isLoot=true)
+    const { category, store, search, isLoot } = req.query;
+    
+    if (category && typeof category === 'string' && category !== 'All') {
+      deals = deals.filter(d => d.category.toLowerCase() === category.toLowerCase());
+    }
+    if (store && typeof store === 'string' && store !== 'All') {
+      deals = deals.filter(d => d.store.toLowerCase() === store.toLowerCase());
+    }
+    if (isLoot === 'true' || isLoot === '1') {
+      deals = deals.filter(d => d.isLootDeal);
+    }
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim().toLowerCase();
+      deals = deals.filter(d => 
+        d.title.toLowerCase().includes(q) ||
+        d.store.toLowerCase().includes(q) ||
+        d.category.toLowerCase().includes(q) ||
+        d.description.toLowerCase().includes(q)
+      );
+    }
+
     res.json({ success: true, count: deals.length, deals });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/deals/:id - Fetch a single deal by ID from database
+app.get("/api/deals/:id", async (req, res) => {
+  try {
+    const deal = await mySqlDb.getDealById(req.params.id);
+    if (!deal) {
+      return res.status(404).json({ success: false, error: "Deal not found" });
+    }
+    res.json({ success: true, deal });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -916,23 +963,46 @@ async function startServer() {
     console.warn('MySQL initialization notice:', err.message);
   });
 
-  // Vite middleware for development
+  // Vite middleware for development vs Production static serving
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
+
+    // SPA fallback in development mode for non-API routes
+    app.use('*', async (req, res, next) => {
+      const url = req.originalUrl;
+      if (url.startsWith('/api/')) {
+        return res.status(404).json({ success: false, error: `API endpoint not found: ${req.method} ${url}` });
+      }
+      try {
+        let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e: any) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
+
+    // Express JSON 404 handler for missing API endpoints
+    app.use('/api/*', (req, res) => {
+      res.status(404).json({ success: false, error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
+    });
+
+    // SPA fallback for production mode
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Dealsified server running on http://0.0.0.0:${PORT}`);
+    console.log(`Monday Bazaar server running on http://0.0.0.0:${PORT}`);
   });
 }
 

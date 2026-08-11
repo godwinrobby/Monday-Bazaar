@@ -33,12 +33,21 @@ export const DealDetailsRoute: React.FC<DealDetailsRouteProps> = ({
       setLoading(false);
     } else {
       // Fetch directly from database if opened directly or refreshed
-      fetch('/api/deals')
+      fetch(`/api/deals/${id}`)
         .then(res => res.json())
         .then(data => {
-          if (data.success && Array.isArray(data.deals)) {
-            const fetched = data.deals.find((d: Deal) => d.id === id);
-            setDeal(fetched || null);
+          if (data.success && data.deal) {
+            setDeal(data.deal);
+          } else {
+            // Fallback to full catalog fetch
+            return fetch('/api/deals')
+              .then(res => res.json())
+              .then(allData => {
+                if (allData.success && Array.isArray(allData.deals)) {
+                  const fetched = allData.deals.find((d: Deal) => d.id === id);
+                  setDeal(fetched || null);
+                }
+              });
           }
         })
         .catch(err => console.error('Error fetching deal route detail:', err))

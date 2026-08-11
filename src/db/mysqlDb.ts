@@ -393,6 +393,12 @@ class MySqlDatabaseService {
     return dbManager.getDeals();
   }
 
+  // Fetch single deal by ID from MySQL or fallback
+  public async getDealById(id: string): Promise<Deal | null> {
+    const deals = await this.getDeals();
+    return deals.find(d => d.id === id) || null;
+  }
+
   // Insert deal into MySQL & DB Manager
   public async addDeal(dealData: Partial<Deal>, allowDuplicate: boolean = false): Promise<Deal> {
     const newDeal = dbManager.addDeal(dealData, allowDuplicate);
