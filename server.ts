@@ -227,6 +227,99 @@ app.post("/api/site-banner", (req, res) => {
 
 // ================= USER MANAGEMENT API ROUTES =================
 
+// POST /api/admin/login - Authenticate admin credentials against MySQL database
+app.post("/api/admin/login", async (req, res) => {
+  try {
+    const { usernameOrEmail, password } = req.body;
+    if (!usernameOrEmail || !password) {
+      return res.status(400).json({ success: false, error: 'Username/Email and Password are required.' });
+    }
+
+    const adminUser = await mySqlDb.verifyAdminLogin(usernameOrEmail, password);
+    if (!adminUser) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid username/email or password, or account does not have Admin privileges.'
+      });
+    }
+
+    // Generate authenticated admin session token
+    const token = `admin_sess_${Date.now()}_${Buffer.from(adminUser.id).toString('hex')}`;
+    const safeUser = {
+      id: adminUser.id,
+      username: adminUser.username,
+      email: adminUser.email,
+      role: adminUser.role,
+      avatarUrl: adminUser.avatarUrl,
+      createdAt: adminUser.createdAt
+    };
+
+    res.json({
+      success: true,
+      message: 'Admin authentication successful.',
+      user: safeUser,
+      token
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/admin/verify - Verify admin session token
+app.post("/api/admin/verify", async (req, res) => {
+  try {
+    const { token, userId } = req.body;
+    if (!token && !userId) {
+      return res.status(400).json({ success: false, error: 'Token or UserId required.' });
+    }
+
+    const users = await mySqlDb.getUsers();
+    const admin = users.find(u => u.role === 'admin' && (u.id === userId || (token && token.includes(Buffer.from(u.id).toString('hex')))));
+
+    if (!admin) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired admin session token.' });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role,
+        avatarUrl: admin.avatarUrl
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/admin/change-password - Update admin password in database
+app.post("/api/admin/change-password", async (req, res) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, error: 'UserId, current password, and new password are required.' });
+    }
+
+    const users = await mySqlDb.getUsers();
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: 'Admin user not found.' });
+    }
+
+    if ((targetUser.password || 'admin123') !== currentPassword) {
+      return res.status(401).json({ success: false, error: 'Current password does not match.' });
+    }
+
+    await mySqlDb.updateUserPassword(userId, newPassword);
+    res.json({ success: true, message: 'Admin password updated successfully in MySQL database!' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/users - Fetch all users from database
 app.get("/api/users", async (req, res) => {
   try {

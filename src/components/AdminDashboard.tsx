@@ -41,7 +41,11 @@ import {
   ShoppingBag,
   Database,
   Share2,
-  Send
+  Send,
+  LogOut,
+  KeyRound,
+  Lock,
+  User
 } from 'lucide-react';
 import { AmazonAffiliateImporter } from './AmazonAffiliateImporter';
 import { SocialAutoPoster } from './SocialAutoPoster';
@@ -54,6 +58,8 @@ interface AdminDashboardProps {
   onUpdateDeal: (updatedDeal: Deal) => void;
   onDeleteDeal: (dealId: string) => void;
   onCloseAdmin: () => void;
+  adminUser?: any;
+  onLogout?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -62,6 +68,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onUpdateDeal,
   onDeleteDeal,
   onCloseAdmin,
+  adminUser,
+  onLogout,
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'amazon-import' | 'deals' | 'social-autopost' | 'affiliation' | 'pending' | 'settings'>('overview');
 
@@ -95,6 +103,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     text: '🔥 Monday Bazaar Super Sale is LIVE! Grab exclusive coupons & loot deals across Amazon, Flipkart & Myntra.',
     badge: 'FLASH LOOT SALE'
   });
+
+  // Password Change State
+  const [currPass, setCurrPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [passChangeMsg, setPassChangeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isUpdatingPass, setIsUpdatingPass] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminUser?.id) return;
+    setIsUpdatingPass(true);
+    setPassChangeMsg(null);
+
+    try {
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: adminUser.id,
+          currentPassword: currPass,
+          newPassword: newPass
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPassChangeMsg({ type: 'success', text: 'Admin password updated successfully in MySQL database!' });
+        setCurrPass('');
+        setNewPass('');
+      } else {
+        setPassChangeMsg({ type: 'error', text: data.error || 'Failed to change password.' });
+      }
+    } catch (err: any) {
+      setPassChangeMsg({ type: 'error', text: 'Network error updating password.' });
+    } finally {
+      setIsUpdatingPass(false);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/site-banner')
@@ -506,11 +551,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {adminUser && (
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 border border-slate-700/80 rounded-xl text-xs text-slate-300">
+                <img
+                  src={adminUser.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"}
+                  alt={adminUser.username}
+                  className="w-5 h-5 rounded-full object-cover border border-orange-500/50"
+                />
+                <div className="flex flex-col leading-tight">
+                  <span className="font-bold text-white text-[11px] truncate max-w-[120px]">{adminUser.username}</span>
+                  <span className="text-[9px] text-emerald-400 font-extrabold uppercase">DB Admin</span>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={handleOpenAddModal}
               id="admin-add-deal-btn"
-              className="px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
+              className="px-3 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add New Deal</span>
@@ -519,11 +578,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               onClick={onCloseAdmin}
               id="back-to-storefront-btn"
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5"
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4 text-orange-400" />
-              <span>Exit Admin / View Website</span>
+              <span className="hidden sm:inline">Storefront</span>
             </button>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                id="admin-logout-btn"
+                title="Sign out of Admin Portal"
+                className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 font-bold text-xs rounded-xl border border-red-500/30 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+            )}
           </div>
 
         </div>
@@ -1281,6 +1352,81 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Admin Password & Database Authentication Card */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900">Admin Account & Database Password Security</h3>
+                    <p className="text-xs text-slate-500">Update your MySQL authenticated admin portal password</p>
+                  </div>
+                </div>
+                {adminUser && (
+                  <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 font-bold text-xs rounded-xl flex items-center gap-1">
+                    <User className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{adminUser.email}</span>
+                  </span>
+                )}
+              </div>
+
+              {passChangeMsg && (
+                <div className={`p-3 rounded-2xl text-xs font-semibold flex items-center justify-between ${
+                  passChangeMsg.type === 'success' 
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+                    : 'bg-red-50 border border-red-200 text-red-800'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {passChangeMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-red-600" />}
+                    <span>{passChangeMsg.text}</span>
+                  </div>
+                  <button onClick={() => setPassChangeMsg(null)} className="font-bold text-xs text-slate-500 hover:text-slate-800">✕</button>
+                </div>
+              )}
+
+              <form onSubmit={handleChangePassword} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Current Admin Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={currPass}
+                    onChange={(e) => setCurrPass(e.target.value)}
+                    placeholder="Enter current password"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">New Admin Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={newPass}
+                    onChange={(e) => setNewPass(e.target.value)}
+                    placeholder="Enter new strong password"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 flex items-center justify-between pt-2">
+                  <span className="text-[11px] text-slate-500">
+                    Default Passwords: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-800 font-mono">admin123</code>
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={isUpdatingPass}
+                    className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>{isUpdatingPass ? 'Updating Password...' : 'Update Admin Password'}</span>
+                  </button>
+                </div>
+              </form>
             </div>
 
             {/* MySQL Database Engine & Server Configuration Card */}

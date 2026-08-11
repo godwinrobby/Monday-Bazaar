@@ -81,12 +81,20 @@ class MySqlDatabaseService {
           id VARCHAR(128) PRIMARY KEY,
           username VARCHAR(128) NOT NULL,
           email VARCHAR(256) NOT NULL,
+          password VARCHAR(256) DEFAULT 'admin123',
           role VARCHAR(64) DEFAULT 'user',
           avatarUrl TEXT,
           dealsPosted INT DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+
+      // Ensure password column exists if table was created previously
+      try {
+        await conn.query(`ALTER TABLE users ADD COLUMN password VARCHAR(256) DEFAULT 'admin123'`);
+      } catch (err) {
+        // Ignore if column already exists
+      }
 
       // 2. Create Deals Table
       await conn.query(`
@@ -522,6 +530,7 @@ class MySqlDatabaseService {
             id: r.id,
             username: r.username,
             email: r.email,
+            password: r.password || 'admin123',
             role: r.role || 'user',
             avatarUrl: r.avatarUrl,
             dealsPosted: r.dealsPosted || 0,
@@ -535,15 +544,48 @@ class MySqlDatabaseService {
     return dbManager.getUsers();
   }
 
+  public async verifyAdminLogin(identifier: string, pass: string): Promise<UserRecord | null> {
+    const users = await this.getUsers();
+    const input = identifier.trim().toLowerCase();
+    const found = users.find(u => 
+      (u.email.toLowerCase() === input || u.username.toLowerCase() === input)
+    );
+
+    if (!found) return null;
+    if (found.role !== 'admin') return null;
+
+    const expectedPass = found.password || 'admin123';
+    if (pass === expectedPass) {
+      return found;
+    }
+    return null;
+  }
+
+  public async updateUserPassword(userId: string, newPass: string): Promise<boolean> {
+    dbManager.updateUserPassword(userId, newPass);
+    if (this.pool && this.isInitialized) {
+      try {
+        await this.pool.execute(
+          `UPDATE users SET password = ? WHERE id = ?`,
+          [newPass, userId]
+        );
+        return true;
+      } catch (err: any) {
+        console.warn('⚠️ Could not update user password in MySQL:', err.message);
+      }
+    }
+    return true;
+  }
+
   public async addUser(userData: Partial<UserRecord>): Promise<UserRecord> {
     const saved = dbManager.addUser(userData);
     if (this.pool) {
       try {
         await this.pool.execute(
-          `INSERT INTO users (id, username, email, role, avatarUrl, dealsPosted)
-           VALUES (?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE username=VALUES(username), avatarUrl=VALUES(avatarUrl), dealsPosted=VALUES(dealsPosted)`,
-          [saved.id, saved.username, saved.email, saved.role, saved.avatarUrl, saved.dealsPosted]
+          `INSERT INTO users (id, username, email, password, role, avatarUrl, dealsPosted)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE username=VALUES(username), password=VALUES(password), avatarUrl=VALUES(avatarUrl), dealsPosted=VALUES(dealsPosted)`,
+          [saved.id, saved.username, saved.email, saved.password || 'admin123', saved.role, saved.avatarUrl, saved.dealsPosted]
         );
       } catch (err: any) {
         console.warn('⚠️ Could not insert user into MySQL:', err.message);
@@ -692,10 +734,10 @@ class MySqlDatabaseService {
       let usersSynced = 0;
       for (const u of allUsers) {
         await this.pool.execute(
-          `INSERT INTO users (id, username, email, role, avatarUrl, dealsPosted)
-           VALUES (?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE username=VALUES(username), avatarUrl=VALUES(avatarUrl), dealsPosted=VALUES(dealsPosted)`,
-          [u.id, u.username, u.email, u.role, u.avatarUrl, u.dealsPosted || 0]
+          `INSERT INTO users (id, username, email, password, role, avatarUrl, dealsPosted)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE username=VALUES(username), password=VALUES(password), avatarUrl=VALUES(avatarUrl), dealsPosted=VALUES(dealsPosted)`,
+          [u.id, u.username, u.email, u.password || 'admin123', u.role, u.avatarUrl, u.dealsPosted || 0]
         );
         usersSynced++;
       }

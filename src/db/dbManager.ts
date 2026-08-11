@@ -8,6 +8,7 @@ export interface UserRecord {
   id: string;
   username: string;
   email: string;
+  password?: string;
   role: 'admin' | 'user' | 'moderator';
   avatarUrl: string;
   dealsPosted: number;
@@ -87,6 +88,7 @@ export const INITIAL_USERS_SEED: UserRecord[] = [
     id: 'user_1',
     username: 'DealMaster_Pro',
     email: 'admin@dealsified.com',
+    password: 'admin123',
     role: 'admin',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     dealsPosted: 14,
@@ -96,6 +98,7 @@ export const INITIAL_USERS_SEED: UserRecord[] = [
     id: 'user_2',
     username: 'AudioLover99',
     email: 'audio@dealsified.com',
+    password: 'user123',
     role: 'user',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     dealsPosted: 8,
@@ -105,6 +108,7 @@ export const INITIAL_USERS_SEED: UserRecord[] = [
     id: 'user_3',
     username: 'TechGeek_IN',
     email: 'techgeek@dealsified.com',
+    password: 'user123',
     role: 'user',
     avatarUrl: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
     dealsPosted: 12,
@@ -114,6 +118,7 @@ export const INITIAL_USERS_SEED: UserRecord[] = [
     id: 'user_4',
     username: 'LootHunter_Raj',
     email: 'raj.loot@dealsified.com',
+    password: 'user123',
     role: 'user',
     avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     dealsPosted: 23,
@@ -123,6 +128,7 @@ export const INITIAL_USERS_SEED: UserRecord[] = [
     id: 'user_demo',
     username: 'You (Demo Member)',
     email: 'godwinrobby@gmail.com',
+    password: 'admin123',
     role: 'admin',
     avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
     dealsPosted: 5,
@@ -357,6 +363,34 @@ class DatabaseManager {
   // --- USER MANAGEMENT ---
   public getUsers(): UserRecord[] {
     return this.db.users || INITIAL_USERS_SEED;
+  }
+
+  public verifyAdminLogin(identifier: string, pass: string): UserRecord | null {
+    const input = identifier.trim().toLowerCase();
+    const users = this.getUsers();
+    const found = users.find(u => 
+      (u.email.toLowerCase() === input || u.username.toLowerCase() === input)
+    );
+
+    if (!found) return null;
+    if (found.role !== 'admin') return null;
+
+    const expectedPass = found.password || 'admin123';
+    if (pass === expectedPass) {
+      return found;
+    }
+    return null;
+  }
+
+  public updateUserPassword(userId: string, newPass: string): boolean {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx >= 0) {
+      this.db.users[idx].password = newPass;
+      this.saveDatabase(this.db);
+      return true;
+    }
+    return false;
   }
 
   public addUser(userData: Partial<UserRecord>): UserRecord {
