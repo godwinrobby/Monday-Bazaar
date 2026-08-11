@@ -96,6 +96,9 @@ class SupabaseDatabaseService {
     try {
       // 1. Sync Deals
       const localDeals = dbManager.getDeals();
+      let tableMissing = false;
+      let lastErrorMsg = '';
+
       for (const deal of localDeals) {
         const payload = {
           id: deal.id,
@@ -128,8 +131,21 @@ class SupabaseDatabaseService {
         if (!error) {
           dealsCount++;
         } else {
+          lastErrorMsg = error.message;
+          if (error.code === 'PGRST205' || error.message.includes('Could not find the table') || error.message.includes('relation') || error.message.includes('does not exist')) {
+            tableMissing = true;
+          }
           console.warn(`Supabase deal upsert note (${deal.id}):`, error.message);
         }
+      }
+
+      if (tableMissing && dealsCount === 0) {
+        return {
+          success: false,
+          migratedDealsCount: 0,
+          migratedConfigsCount: 0,
+          message: `Supabase Table Notice: The 'deals' table does not exist in your Supabase project yet. Please run the SQL schema script in your Supabase Dashboard -> SQL Editor to create tables, then click Sync again.`
+        };
       }
 
       // 2. Sync Affiliate Configs

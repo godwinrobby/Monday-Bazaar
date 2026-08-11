@@ -178,6 +178,96 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<string | null>(null);
+  const [showSqlModal, setShowSqlModal] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const supabaseSqlSchema = `-- 1. Create deals table
+CREATE TABLE IF NOT EXISTS public.deals (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    store TEXT,
+    category TEXT,
+    originalprice NUMERIC,
+    dealprice NUMERIC,
+    discountpercentage NUMERIC,
+    couponcode TEXT,
+    imageurl TEXT,
+    dealurl TEXT,
+    islootdeal BOOLEAN DEFAULT false,
+    isverified BOOLEAN DEFAULT true,
+    isactive BOOLEAN DEFAULT true,
+    upvotes INT DEFAULT 0,
+    downvotes INT DEFAULT 0,
+    aiscore INT DEFAULT 85,
+    aiverdict TEXT,
+    aipros JSONB DEFAULT '[]'::jsonb,
+    aicons JSONB DEFAULT '[]'::jsonb,
+    postedat TEXT,
+    postedby TEXT,
+    viewscount INT DEFAULT 0,
+    commentscount INT DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. Create users table
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    email TEXT,
+    password TEXT,
+    role TEXT DEFAULT 'user',
+    avatarurl TEXT,
+    dealsposted INT DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Create affiliate_configs table
+CREATE TABLE IF NOT EXISTS public.affiliate_configs (
+    store_key TEXT PRIMARY KEY,
+    store_name TEXT,
+    tag TEXT,
+    parameter_name TEXT,
+    commission_rate NUMERIC DEFAULT 5.0,
+    is_active BOOLEAN DEFAULT true,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 4. Create site_config table
+CREATE TABLE IF NOT EXISTS public.site_config (
+    config_key TEXT PRIMARY KEY,
+    config_value JSONB,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. Create link_clicks table
+CREATE TABLE IF NOT EXISTS public.link_clicks (
+    id BIGSERIAL PRIMARY KEY,
+    deal_id TEXT,
+    deal_title TEXT,
+    store TEXT,
+    affiliate_url TEXT,
+    user_id TEXT,
+    ip_address TEXT,
+    clicked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 6. Create deal_views table
+CREATE TABLE IF NOT EXISTS public.deal_views (
+    id BIGSERIAL PRIMARY KEY,
+    deal_id TEXT,
+    user_id TEXT,
+    ip_address TEXT,
+    viewedAt TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Disable Row Level Security (RLS) for public access
+ALTER TABLE public.deals DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.affiliate_configs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.site_config DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.link_clicks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.deal_views DISABLE ROW LEVEL SECURITY;`;
 
   const fetchDbData = async () => {
     try {
@@ -1470,6 +1560,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <span>{isMigrating ? 'Syncing...' : '⚡ Sync Data to Supabase'}</span>
                   </button>
                   <button
+                    onClick={() => setShowSqlModal(true)}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <span>📋 SQL Schema</span>
+                  </button>
+                  <button
                     onClick={handleMigrateToMySql}
                     disabled={isMigrating}
                     className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
@@ -1803,6 +1899,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* Supabase SQL Schema Modal */}
+      {showSqlModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">Supabase SQL Table Schema Setup</h3>
+                  <p className="text-xs text-slate-500">Run this script in Supabase Dashboard -&gt; SQL Editor to create tables</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSqlModal(false)}
+                className="text-slate-400 hover:text-slate-700 font-bold p-1 rounded-lg hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              If your Supabase project is new, open your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline font-bold">Supabase Dashboard</a>, navigate to <strong>SQL Editor</strong>, paste the script below, and click <strong>Run</strong>. Then return here and click <strong>⚡ Sync Data to Supabase</strong>.
+            </p>
+
+            <div className="relative flex-1 bg-slate-900 text-slate-100 rounded-2xl p-4 overflow-auto font-mono text-[11px] leading-relaxed border border-slate-800">
+              <pre>{supabaseSqlSchema}</pre>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(supabaseSqlSchema);
+                  setCopiedSql(true);
+                  setTimeout(() => setCopiedSql(false), 2500);
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>{copiedSql ? '✓ Copied to Clipboard!' : '📋 Copy SQL Script'}</span>
+              </button>
+              <button
+                onClick={() => setShowSqlModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
