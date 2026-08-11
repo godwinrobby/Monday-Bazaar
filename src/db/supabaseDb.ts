@@ -240,8 +240,8 @@ class SupabaseDatabaseService {
             downvotes: Number(r.downvotes || 0),
             aiScore: Number(r.aiscore ?? r.aiScore ?? 85),
             aiVerdict: r.aiverdict ?? r.aiVerdict ?? '',
-            aiPros: r.aipros ? (typeof r.aipros === 'string' ? JSON.parse(r.aipros) : r.aipros) : ['Verified price savings', 'Great seller discount'],
-            aiCons: r.aicons ? (typeof r.aicons === 'string' ? JSON.parse(r.aicons) : r.aicons) : ['Limited time deal availability'],
+            aiPros: r.aipros ? (typeof r.aipros === 'string' ? (r.aipros.startsWith('[') ? JSON.parse(r.aipros) : [r.aipros]) : r.aipros) : ['Verified price savings', 'Great seller discount'],
+            aiCons: r.aicons ? (typeof r.aicons === 'string' ? (r.aicons.startsWith('[') ? JSON.parse(r.aicons) : [r.aicons]) : r.aicons) : ['Limited time deal availability'],
             postedAt: r.postedat ?? r.postedAt ?? 'Recently',
             postedBy: r.postedby ?? r.postedBy ?? 'Community Member',
             viewsCount: Number(r.viewscount ?? r.viewsCount ?? 0),
@@ -253,8 +253,8 @@ class SupabaseDatabaseService {
             comments: []
           }));
         } else if (!error && Array.isArray(data) && data.length === 0) {
-          console.log('🌱 Supabase deals table empty, auto-migrating local dataset...');
-          await this.syncAllDataToSupabase();
+          console.log('🌱 Supabase deals table empty, triggering sync attempt...');
+          this.syncAllDataToSupabase().catch(e => console.warn('Background sync note:', e.message));
           return dbManager.getDeals();
         }
       } catch (err: any) {
