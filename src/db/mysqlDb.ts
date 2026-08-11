@@ -495,6 +495,23 @@ class MySqlDatabaseService {
     return deleted;
   }
 
+  // Vote deal in MySQL & DB Manager
+  public async voteDeal(id: string, type: 'up' | 'down'): Promise<Deal | null> {
+    const updated = dbManager.voteDeal(id, type);
+    if (this.pool && updated) {
+      try {
+        await this.pool.execute(
+          `UPDATE deals SET upvotes = ?, downvotes = ? WHERE id = ?`,
+          [updated.upvotes, updated.downvotes, id]
+        );
+        console.log(`✅ Vote '${type}' for deal ${id} saved in MySQL database`);
+      } catch (err: any) {
+        console.warn('⚠️ Could not update vote in MySQL:', err.message);
+      }
+    }
+    return updated;
+  }
+
   // --- USERS MANAGEMENT ---
   public async getUsers(): Promise<UserRecord[]> {
     if (this.pool && this.isInitialized) {

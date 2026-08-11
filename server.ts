@@ -162,13 +162,13 @@ app.delete("/api/deals/:id", async (req, res) => {
 });
 
 // POST /api/deals/:id/vote - Upvote / Downvote deal in database
-app.post("/api/deals/:id/vote", (req, res) => {
+app.post("/api/deals/:id/vote", async (req, res) => {
   try {
     const { type } = req.body;
     if (type !== 'up' && type !== 'down') {
       return res.status(400).json({ success: false, error: "Invalid vote type" });
     }
-    const updated = dbManager.voteDeal(req.params.id, type);
+    const updated = await mySqlDb.voteDeal(req.params.id, type);
     if (!updated) {
       return res.status(404).json({ success: false, error: "Deal not found" });
     }
