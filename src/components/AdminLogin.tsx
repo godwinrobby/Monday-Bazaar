@@ -189,36 +189,37 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
           </button>
         </form>
 
-        {/* Quick Select Admin Credentials */}
+        {/* Quick Select Admin Credentials mapped from Supabase */}
         <div className="pt-2 border-t border-slate-800/80 space-y-2">
           <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-            <span>Quick Select Mapped Admin Account:</span>
+            <span>Supabase Mapped Admin Accounts:</span>
+            <span className="text-orange-400 font-bold">{adminUsers.length} Mapped</span>
           </p>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickFill('godwinrobby@gmail.com', 'admin123')}
-              className="p-2.5 bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl text-left transition-all text-xs group cursor-pointer"
-            >
-              <div className="font-bold text-white group-hover:text-orange-400 transition-colors flex items-center gap-1 text-[11px]">
-                <Flame className="w-3 h-3 text-orange-500 shrink-0" />
-                godwinrobby@...
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-0.5">
+            {adminUsers.map((usr: any) => (
+              <button
+                key={usr.id}
+                type="button"
+                onClick={() => handleQuickFill(usr.email || usr.username, usr.password || 'admin123')}
+                className="p-2.5 bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl text-left transition-all text-xs group cursor-pointer flex items-center gap-2"
+              >
+                <div className="w-7 h-7 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-400 flex items-center justify-center text-[11px] font-black shrink-0">
+                  {usr.username ? usr.username.charAt(0).toUpperCase() : 'A'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold text-white group-hover:text-orange-400 transition-colors truncate text-[11px]">
+                    {usr.username}
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate">{usr.email}</div>
+                </div>
+              </button>
+            ))}
+            {adminUsers.length === 0 && (
+              <div className="col-span-2 text-center p-2 text-xs text-slate-500">
+                Loading mapped admin accounts from database...
               </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Pass: admin123</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill('admin@dealsified.com', 'admin123')}
-              className="p-2.5 bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl text-left transition-all text-xs group cursor-pointer"
-            >
-              <div className="font-bold text-white group-hover:text-amber-400 transition-colors flex items-center gap-1 text-[11px]">
-                <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
-                admin@dealsified...
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Pass: admin123</div>
-            </button>
+            )}
           </div>
         </div>
 
