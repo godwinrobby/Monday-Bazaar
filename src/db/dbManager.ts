@@ -80,7 +80,15 @@ interface DatabaseSchema {
   };
 }
 
-const DB_FILE_PATH = path.join(process.cwd(), 'data', 'database.json');
+function getDbFilePath(): string {
+  if (typeof window !== 'undefined') return '';
+  try {
+    if (typeof process !== 'undefined' && process.cwd && path && typeof path.join === 'function') {
+      return path.join(process.cwd(), 'data', 'database.json');
+    }
+  } catch (e) {}
+  return '';
+}
 
 // Initial Users Seed Data
 export const INITIAL_USERS_SEED: UserRecord[] = [
@@ -189,28 +197,41 @@ class DatabaseManager {
   }
 
   private loadDatabase(): DatabaseSchema {
+    if (typeof window !== 'undefined') {
+      return {
+        deals: INITIAL_DEALS,
+        users: INITIAL_USERS_SEED,
+        linkClicks: INITIAL_CLICKS_SEED,
+        dealViews: INITIAL_VIEWS_SEED,
+        affiliateConfigs: DEFAULT_AFFILIATE_CONFIGS,
+        stats: { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
+      };
+    }
     try {
-      const dir = path.dirname(DB_FILE_PATH);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
-      if (fs.existsSync(DB_FILE_PATH)) {
-        const fileContent = fs.readFileSync(DB_FILE_PATH, 'utf-8');
-        const parsed = JSON.parse(fileContent);
-        const deals = Array.isArray(parsed.deals) && parsed.deals.length > 0 ? parsed.deals : INITIAL_DEALS;
-        const loadedDb = {
-          deals,
-          users: Array.isArray(parsed.users) ? parsed.users : INITIAL_USERS_SEED,
-          linkClicks: Array.isArray(parsed.linkClicks) ? parsed.linkClicks : INITIAL_CLICKS_SEED,
-          dealViews: Array.isArray(parsed.dealViews) ? parsed.dealViews : INITIAL_VIEWS_SEED,
-          affiliateConfigs: parsed.affiliateConfigs || DEFAULT_AFFILIATE_CONFIGS,
-          stats: parsed.stats || { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
-        };
-        if (!Array.isArray(parsed.deals) || parsed.deals.length === 0) {
-          this.saveDatabase(loadedDb);
+      const dbPath = getDbFilePath();
+      if (dbPath && fs && typeof fs.existsSync === 'function') {
+        const dir = path.dirname ? path.dirname(dbPath) : dbPath.substring(0, dbPath.lastIndexOf('/'));
+        if (dir && !fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
         }
-        return loadedDb;
+
+        if (fs.existsSync(dbPath)) {
+          const fileContent = fs.readFileSync(dbPath, 'utf-8');
+          const parsed = JSON.parse(fileContent);
+          const deals = Array.isArray(parsed.deals) && parsed.deals.length > 0 ? parsed.deals : INITIAL_DEALS;
+          const loadedDb = {
+            deals,
+            users: Array.isArray(parsed.users) ? parsed.users : INITIAL_USERS_SEED,
+            linkClicks: Array.isArray(parsed.linkClicks) ? parsed.linkClicks : INITIAL_CLICKS_SEED,
+            dealViews: Array.isArray(parsed.dealViews) ? parsed.dealViews : INITIAL_VIEWS_SEED,
+            affiliateConfigs: parsed.affiliateConfigs || DEFAULT_AFFILIATE_CONFIGS,
+            stats: parsed.stats || { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
+          };
+          if (!Array.isArray(parsed.deals) || parsed.deals.length === 0) {
+            this.saveDatabase(loadedDb);
+          }
+          return loadedDb;
+        }
       }
     } catch (err) {
       console.error('Failed reading database file, initializing new DB instance:', err);
@@ -230,12 +251,16 @@ class DatabaseManager {
   }
 
   private saveDatabase(data: DatabaseSchema): void {
+    if (typeof window !== 'undefined') return;
     try {
-      const dir = path.dirname(DB_FILE_PATH);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+      const dbPath = getDbFilePath();
+      if (dbPath && fs && typeof fs.writeFileSync === 'function') {
+        const dir = path.dirname ? path.dirname(dbPath) : dbPath.substring(0, dbPath.lastIndexOf('/'));
+        if (dir && !fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(dbPath, JSON.stringify(data, null, 2), 'utf-8');
       }
-      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
     } catch (err) {
       console.error('Failed writing database file:', err);
     }

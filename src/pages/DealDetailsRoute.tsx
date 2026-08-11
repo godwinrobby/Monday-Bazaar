@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Deal } from '../types';
+import { supabaseDb } from '../db/supabaseDb';
 import { DealDetailPage } from '../components/DealDetailPage';
 
 interface DealDetailsRouteProps {
@@ -32,22 +33,16 @@ export const DealDetailsRoute: React.FC<DealDetailsRouteProps> = ({
       setDeal(found);
       setLoading(false);
     } else {
-      // Fetch directly from database if opened directly or refreshed
-      fetch(`/api/deals/${id}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.deal) {
-            setDeal(data.deal);
+      // Fetch directly from Supabase database if opened directly or refreshed
+      supabaseDb.getDealById(id)
+        .then(fetched => {
+          if (fetched) {
+            setDeal(fetched);
           } else {
-            // Fallback to full catalog fetch
-            return fetch('/api/deals')
-              .then(res => res.json())
-              .then(allData => {
-                if (allData.success && Array.isArray(allData.deals)) {
-                  const fetched = allData.deals.find((d: Deal) => d.id === id);
-                  setDeal(fetched || null);
-                }
-              });
+            return supabaseDb.getDeals().then(allDeals => {
+              const matched = allDeals.find(d => d.id === id);
+              setDeal(matched || null);
+            });
           }
         })
         .catch(err => console.error('Error fetching deal route detail:', err))

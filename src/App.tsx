@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { Deal, FilterOptions } from './types';
+import { supabaseDb } from './db/supabaseDb';
 import { TelegramBanner } from './components/TelegramBanner';
 import { StatsBar } from './components/StatsBar';
 import { Header } from './components/Header';
@@ -26,21 +27,20 @@ export default function App() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
 
-  // Deals State fetched exclusively from MySQL Database API
+  // Deals State fetched directly from Supabase Database
   const [deals, setDeals] = useState<Deal[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Fetch initial deals from Node.js database endpoint on mount
+  // Fetch initial deals from Supabase database on mount
   useEffect(() => {
     setIsLoading(true);
-    fetch('/api/deals')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.deals)) {
-          setDeals(data.deals);
+    supabaseDb.getDeals()
+      .then(fetchedDeals => {
+        if (Array.isArray(fetchedDeals)) {
+          setDeals(fetchedDeals);
         }
       })
-      .catch(err => console.error('Database fetch error:', err))
+      .catch(err => console.error('Supabase deals fetch error:', err))
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -109,12 +109,8 @@ export default function App() {
       })
     );
 
-    // Sync vote with Node.js Database backend
-    fetch(`/api/deals/${dealId}/vote`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type })
-    }).catch(err => console.error('Failed to sync vote to DB:', err));
+    // Sync vote with Supabase Database
+    supabaseDb.voteDeal(dealId, type).catch(err => console.error('Failed to sync vote to Supabase:', err));
   };
 
   // Toggle Save Watchlist
@@ -143,12 +139,9 @@ export default function App() {
           commentsCount: updatedComments.length,
         };
 
-        // Sync comment with Node.js Database backend
-        fetch(`/api/deals/${dealId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ comments: updatedComments, commentsCount: updatedComments.length })
-        }).catch(err => console.error('Failed to update deal comments in DB:', err));
+        // Sync comment with Supabase Database
+        supabaseDb.updateDeal(dealId, { comments: updatedComments, commentsCount: updatedComments.length })
+          .catch(err => console.error('Failed to update deal comments in Supabase:', err));
 
         return updatedDeal;
       })
@@ -159,12 +152,9 @@ export default function App() {
   const handleUpdateDeal = (updatedDeal: Deal) => {
     setDeals(prev => prev.map(d => d.id === updatedDeal.id ? updatedDeal : d));
 
-    // Sync update to Node.js Database backend
-    fetch(`/api/deals/${updatedDeal.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedDeal)
-    }).catch(err => console.error('Failed to update deal in DB:', err));
+    // Sync update to Supabase Database
+    supabaseDb.updateDeal(updatedDeal.id, updatedDeal)
+      .catch(err => console.error('Failed to update deal in Supabase:', err));
   };
 
   // Delete Deal Handler
@@ -172,18 +162,18 @@ export default function App() {
     const targetDeal = deals.find(d => d.id === dealId);
     setDeals(prev => prev.filter(d => d.id !== dealId));
 
-    // Sync deletion to Node.js Database backend
-    fetch(`/api/deals/${dealId}`, {
-      method: 'DELETE'
-    }).then(res => res.json()).then(data => {
-      addToast({
-        type: 'success',
-        title: 'Deal Deleted',
-        message: targetDeal ? `"${targetDeal.title}" was removed from database.` : 'Deal removed from database.'
+    // Sync deletion to Supabase Database
+    supabaseDb.deleteDeal(dealId)
+      .then(() => {
+        addToast({
+          type: 'success',
+          title: 'Deal Deleted',
+          message: targetDeal ? `"${targetDeal.title}" was removed from database.` : 'Deal removed from database.'
+        });
+      })
+      .catch(err => {
+        console.error('Failed to delete deal from Supabase:', err);
       });
-    }).catch(err => {
-      console.error('Failed to delete deal from DB:', err);
-    });
   };
 
   // Add New Deal Handler with Duplicate Check
@@ -238,24 +228,8 @@ export default function App() {
     };
 
     try {
-      const res = await fetch('/api/deals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fullDeal)
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        const errMsg = data.error || data.message || 'Duplicate deal detected in database.';
-        addToast({
-          type: 'error',
-          title: 'Duplicate Deal Blocked',
-          message: errMsg
-        });
-        return { success: false, error: errMsg };
-      }
-
-      setDeals(prev => [data.deal || fullDeal, ...prev]);
+      const addedDeal = await supabaseDb.addDeal(fullDeal);
+      setDeals(prev => [addedDeal || fullDeal, ...prev]);
 
       addToast({
         type: 'success',
@@ -263,7 +237,7 @@ export default function App() {
         message: `"${fullDeal.title}" has been added to the live catalog.`
       });
 
-      return { success: true, deal: data.deal || fullDeal };
+      return { success: true, deal: addedDeal || fullDeal };
     } catch (err: any) {
       setDeals(prev => [fullDeal, ...prev]);
       addToast({
