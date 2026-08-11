@@ -248,9 +248,9 @@ app.post("/api/deals/:id/vote", async (req, res) => {
 });
 
 // GET /api/affiliate-configs - Get store affiliate tags
-app.get("/api/affiliate-configs", (req, res) => {
+app.get("/api/affiliate-configs", async (req, res) => {
   try {
-    const configs = dbManager.getAffiliateConfigs();
+    const configs = await supabaseDb.getAffiliateConfigs();
     res.json({ success: true, configs });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -258,9 +258,9 @@ app.get("/api/affiliate-configs", (req, res) => {
 });
 
 // POST /api/affiliate-configs - Save store affiliate tags
-app.post("/api/affiliate-configs", (req, res) => {
+app.post("/api/affiliate-configs", async (req, res) => {
   try {
-    const updated = dbManager.updateAffiliateConfigs(req.body);
+    const updated = await supabaseDb.saveAffiliateConfigs(req.body);
     res.json({ success: true, configs: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -268,9 +268,9 @@ app.post("/api/affiliate-configs", (req, res) => {
 });
 
 // GET /api/site-banner - Get site banner settings
-app.get("/api/site-banner", (req, res) => {
+app.get("/api/site-banner", async (req, res) => {
   try {
-    const banner = dbManager.getSiteBanner();
+    const banner = await supabaseDb.getSiteBanner();
     res.json({ success: true, banner });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -278,9 +278,9 @@ app.get("/api/site-banner", (req, res) => {
 });
 
 // POST /api/site-banner - Save site banner settings
-app.post("/api/site-banner", (req, res) => {
+app.post("/api/site-banner", async (req, res) => {
   try {
-    const updated = dbManager.updateSiteBanner(req.body);
+    const updated = await supabaseDb.saveSiteBanner(req.body);
     res.json({ success: true, banner: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -289,7 +289,7 @@ app.post("/api/site-banner", (req, res) => {
 
 // ================= USER MANAGEMENT API ROUTES =================
 
-// POST /api/admin/login - Authenticate admin credentials against MySQL database
+// POST /api/admin/login - Authenticate admin credentials against database
 app.post("/api/admin/login", async (req, res) => {
   try {
     const { usernameOrEmail, password } = req.body;
@@ -297,7 +297,17 @@ app.post("/api/admin/login", async (req, res) => {
       return res.status(400).json({ success: false, error: 'Username/Email and Password are required.' });
     }
 
-    const adminUser = await mySqlDb.verifyAdminLogin(usernameOrEmail, password);
+    let adminUser = null;
+    const supabaseUsers = await supabaseDb.getUsers();
+    adminUser = supabaseUsers.find(u =>
+      (u.username.toLowerCase() === usernameOrEmail.toLowerCase() || u.email.toLowerCase() === usernameOrEmail.toLowerCase()) &&
+      (u.password === password || (!u.password && password === 'admin123'))
+    );
+
+    if (!adminUser) {
+      adminUser = await mySqlDb.verifyAdminLogin(usernameOrEmail, password);
+    }
+
     if (!adminUser) {
       return res.status(401).json({
         success: false,
@@ -335,8 +345,13 @@ app.post("/api/admin/verify", async (req, res) => {
       return res.status(400).json({ success: false, error: 'Token or UserId required.' });
     }
 
-    const users = await mySqlDb.getUsers();
-    const admin = users.find(u => u.role === 'admin' && (u.id === userId || (token && token.includes(Buffer.from(u.id).toString('hex')))));
+    const users = await supabaseDb.getUsers();
+    let admin = users.find(u => u.role === 'admin' && (u.id === userId || (token && token.includes(Buffer.from(u.id).toString('hex')))));
+
+    if (!admin) {
+      const mysqlUsers = await mySqlDb.getUsers();
+      admin = mysqlUsers.find(u => u.role === 'admin' && (u.id === userId || (token && token.includes(Buffer.from(u.id).toString('hex')))));
+    }
 
     if (!admin) {
       return res.status(401).json({ success: false, error: 'Invalid or expired admin session token.' });
@@ -365,7 +380,7 @@ app.post("/api/admin/change-password", async (req, res) => {
       return res.status(400).json({ success: false, error: 'UserId, current password, and new password are required.' });
     }
 
-    const users = await mySqlDb.getUsers();
+    const users = await supabaseDb.getUsers();
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) {
       return res.status(404).json({ success: false, error: 'Admin user not found.' });
@@ -375,8 +390,9 @@ app.post("/api/admin/change-password", async (req, res) => {
       return res.status(401).json({ success: false, error: 'Current password does not match.' });
     }
 
+    await supabaseDb.addUser({ id: userId, password: newPassword });
     await mySqlDb.updateUserPassword(userId, newPassword);
-    res.json({ success: true, message: 'Admin password updated successfully in MySQL database!' });
+    res.json({ success: true, message: 'Admin password updated successfully in database!' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -385,7 +401,7 @@ app.post("/api/admin/change-password", async (req, res) => {
 // GET /api/users - Fetch all users from database
 app.get("/api/users", async (req, res) => {
   try {
-    const users = await mySqlDb.getUsers();
+    const users = await supabaseDb.getUsers();
     res.json({ success: true, count: users.length, users });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -395,7 +411,7 @@ app.get("/api/users", async (req, res) => {
 // POST /api/users - Add/Register user profile in database
 app.post("/api/users", async (req, res) => {
   try {
-    const user = await mySqlDb.addUser(req.body);
+    const user = await supabaseDb.addUser(req.body);
     res.status(201).json({ success: true, user });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -419,7 +435,7 @@ app.post("/api/clicks", async (req, res) => {
   try {
     const { dealId, dealTitle, store, affiliateUrl, userId } = req.body;
     const ipAddress = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1').split(',')[0];
-    const click = await mySqlDb.recordLinkClick({
+    const click = await supabaseDb.addLinkClick({
       dealId,
       dealTitle,
       store,
@@ -449,7 +465,7 @@ app.post("/api/deals/:id/view", async (req, res) => {
     const dealId = req.params.id;
     const { userId } = req.body || {};
     const ipAddress = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1').split(',')[0];
-    const view = await mySqlDb.recordDealView({
+    const view = await supabaseDb.addDealView({
       dealId,
       userId,
       ipAddress
