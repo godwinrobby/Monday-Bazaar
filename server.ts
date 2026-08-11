@@ -13,7 +13,6 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { dbManager } from "./src/db/dbManager";
-import { mySqlDb } from "./src/db/mysqlDb";
 import { supabaseDb } from "./src/db/supabaseDb";
 
 const app = express();
@@ -50,24 +49,21 @@ function getGeminiClient() {
 // Health route with Supabase status
 app.get("/api/health", async (req, res) => {
   const supabaseStatus = await supabaseDb.getStatus();
-  const mysqlStatus = await mySqlDb.getStatus();
   res.json({
     status: "ok",
     app: "Monday Bazaar",
     dbEngine: supabaseStatus.engine,
     supabaseUrl: supabaseStatus.url,
     isSupabaseConnected: supabaseStatus.isConnected,
-    isMySqlConnected: mysqlStatus.isConnected,
     time: new Date().toISOString()
   });
 });
 
-// GET /api/db-status - Detail Database Engine Status (Supabase & MySQL)
+// GET /api/db-status - Detail Database Engine Status (Supabase)
 app.get("/api/db-status", async (req, res) => {
   try {
     const supabaseStatus = await supabaseDb.getStatus();
-    const mysqlStatus = await mySqlDb.getStatus();
-    res.json({ success: true, db: supabaseStatus, supabase: supabaseStatus, mysql: mysqlStatus });
+    res.json({ success: true, db: supabaseStatus, supabase: supabaseStatus });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -83,10 +79,10 @@ app.post("/api/migrate-to-supabase", async (req, res) => {
   }
 });
 
-// POST /api/migrate-to-mysql - Migrate all catalog deals & store configs into MySQL
+// POST /api/migrate-to-mysql - Legacy redirect to Supabase migration
 app.post("/api/migrate-to-mysql", async (req, res) => {
   try {
-    const result = await mySqlDb.syncAllDataToMySql();
+    const result = await supabaseDb.syncAllDataToSupabase();
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
@@ -304,10 +300,6 @@ app.post("/api/admin/login", async (req, res) => {
     );
 
     if (!adminUser) {
-      adminUser = await mySqlDb.verifyAdminLogin(usernameOrEmail, password);
-    }
-
-    if (!adminUser) {
       return res.status(401).json({
         success: false,
         error: 'Invalid username/email or password, or account does not have Admin privileges.'
@@ -348,11 +340,6 @@ app.post("/api/admin/verify", async (req, res) => {
     let admin = users.find(u => u.role === 'admin' && (u.id === userId || (token && token.includes(Buffer.from(u.id).toString('hex')))));
 
     if (!admin) {
-      const mysqlUsers = await mySqlDb.getUsers();
-      admin = mysqlUsers.find(u => u.role === 'admin' && (u.id === userId || (token && token.includes(Buffer.from(u.id).toString('hex')))));
-    }
-
-    if (!admin) {
       return res.status(401).json({ success: false, error: 'Invalid or expired admin session token.' });
     }
 
@@ -390,7 +377,6 @@ app.post("/api/admin/change-password", async (req, res) => {
     }
 
     await supabaseDb.addUser({ id: userId, password: newPassword });
-    await mySqlDb.updateUserPassword(userId, newPassword);
     res.json({ success: true, message: 'Admin password updated successfully in database!' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -995,11 +981,6 @@ async function startServer() {
     }
   }).catch(err => {
     console.warn('Supabase initial sync notice:', err.message);
-  });
-
-  // Initialize MySQL Database Tables if configured
-  await mySqlDb.setupTables().catch(err => {
-    console.warn('MySQL initialization notice:', err.message);
   });
 
   // Vite middleware for development vs Production static serving

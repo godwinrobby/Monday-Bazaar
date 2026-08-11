@@ -145,7 +145,7 @@ export const DealsPage: React.FC<DealsPageProps> = ({
             </div>
             <h3 className="font-bold text-slate-900 text-lg">No Live Deals in Database</h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Your MySQL database is connected and active. Import live deals directly from Amazon, Flipkart, or Myntra using our Admin Importer or post your first deal!
+              Your Supabase database is connected and active. Import live deals directly from Amazon, Flipkart, or Myntra using our Admin Importer or post your first deal!
             </p>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
               <button

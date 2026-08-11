@@ -128,7 +128,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setPassChangeMsg({ type: 'success', text: 'Admin password updated successfully in MySQL database!' });
+        setPassChangeMsg({ type: 'success', text: 'Admin password updated successfully in database!' });
         setCurrPass('');
         setNewPass('');
       } else {
@@ -161,7 +161,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }).catch(err => console.error('Failed syncing site banner to DB:', err));
   };
 
-  // MySQL Database Status State & Entity Collections
+  // Supabase Database Status State & Entity Collections
   const [dbInfo, setDbInfo] = useState<{
     engine?: string;
     isConnected?: boolean;
@@ -269,6 +269,37 @@ ALTER TABLE public.site_config DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.link_clicks DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deal_views DISABLE ROW LEVEL SECURITY;
 
+-- Grant full access to anon, authenticated, and service_role
+GRANT ALL ON TABLE public.deals TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.users TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.affiliate_configs TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.site_config TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.link_clicks TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.deal_views TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+
+-- Public permissive policies (in case RLS is re-enabled)
+DO $$ 
+BEGIN
+    EXECUTE 'DROP POLICY IF EXISTS "Allow public all on deals" ON public.deals';
+    EXECUTE 'CREATE POLICY "Allow public all on deals" ON public.deals FOR ALL USING (true) WITH CHECK (true)';
+
+    EXECUTE 'DROP POLICY IF EXISTS "Allow public all on users" ON public.users';
+    EXECUTE 'CREATE POLICY "Allow public all on users" ON public.users FOR ALL USING (true) WITH CHECK (true)';
+
+    EXECUTE 'DROP POLICY IF EXISTS "Allow public all on affiliate_configs" ON public.affiliate_configs';
+    EXECUTE 'CREATE POLICY "Allow public all on affiliate_configs" ON public.affiliate_configs FOR ALL USING (true) WITH CHECK (true)';
+
+    EXECUTE 'DROP POLICY IF EXISTS "Allow public all on site_config" ON public.site_config';
+    EXECUTE 'CREATE POLICY "Allow public all on site_config" ON public.site_config FOR ALL USING (true) WITH CHECK (true)';
+
+    EXECUTE 'DROP POLICY IF EXISTS "Allow public all on link_clicks" ON public.link_clicks';
+    EXECUTE 'CREATE POLICY "Allow public all on link_clicks" ON public.link_clicks FOR ALL USING (true) WITH CHECK (true)';
+
+    EXECUTE 'DROP POLICY IF EXISTS "Allow public all on deal_views" ON public.deal_views';
+    EXECUTE 'CREATE POLICY "Allow public all on deal_views" ON public.deal_views FOR ALL USING (true) WITH CHECK (true)';
+END $$;
+
 -- Fallback permissive RLS policies
 DROP POLICY IF EXISTS "Public deals access" ON public.deals;
 CREATE POLICY "Public deals access" ON public.deals FOR ALL USING (true) WITH CHECK (true);
@@ -341,32 +372,6 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
       fetchDbData();
     } catch (err: any) {
       setMigrationResult(`Supabase Migration error: ${err.message}`);
-    } finally {
-      setIsMigrating(false);
-    }
-  };
-
-  const handleMigrateToMySql = async () => {
-    setIsMigrating(true);
-    setMigrationResult(null);
-    try {
-      const res = await fetch('/api/migrate-localstorage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          localDeals: [],
-          affiliateConfigs: affiliateConfigs
-        })
-      });
-      const json = await res.json();
-      if (json.message) {
-        setMigrationResult(json.message);
-      } else {
-        setMigrationResult('All Users, Deals, Link Clicks, and Views verified and synced successfully into MySQL database!');
-      }
-      fetchDbData();
-    } catch (err: any) {
-      setMigrationResult(`Migration error: ${err.message}`);
     } finally {
       setIsMigrating(false);
     }
@@ -904,13 +909,13 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                       </span>
                     </div>
                     <p className="text-xs text-slate-400">
-                      Sync and persist Users, Deals, Link Clicks, Views, and Affiliate Configs into MySQL database.
+                      Sync and persist Users, Deals, Link Clicks, Views, and Affiliate Configs into Supabase database.
                     </p>
                   </div>
                 </div>
 
                 <button
-                  onClick={handleMigrateToMySql}
+                  onClick={handleMigrateToSupabase}
                   disabled={isMigrating}
                   className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 disabled:opacity-50 text-white font-extrabold text-xs rounded-2xl shadow-sm transition-all flex items-center gap-2 shrink-0"
                 >
@@ -1494,7 +1499,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                   </div>
                   <div>
                     <h3 className="font-extrabold text-base text-slate-900">Admin Account & Database Password Security</h3>
-                    <p className="text-xs text-slate-500">Update your MySQL authenticated admin portal password</p>
+                    <p className="text-xs text-slate-500">Update your authenticated admin portal password</p>
                   </div>
                 </div>
                 {adminUser && (
@@ -1585,11 +1590,11 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                     <span>📋 SQL Schema</span>
                   </button>
                   <button
-                    onClick={handleMigrateToMySql}
+                    onClick={handleMigrateToSupabase}
                     disabled={isMigrating}
                     className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                   >
-                    <span>Sync MySQL</span>
+                    <span>Sync Supabase</span>
                   </button>
                   <button
                     onClick={fetchDbData}

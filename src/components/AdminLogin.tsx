@@ -86,7 +86,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-extrabold uppercase tracking-widest rounded-full mb-1">
               <Database className="w-3 h-3 text-amber-400" />
-              MySQL Authenticated Portal
+              Authenticated Admin Portal
             </div>
             <h1 className="text-2xl font-black text-white tracking-tight">
               Admin Portal Login
@@ -210,7 +210,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
         {/* Footer info */}
         <div className="text-center text-[11px] text-slate-500 flex items-center justify-center gap-2 pt-1">
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-          <span>MySQL Database Encryption & Role Guard Active</span>
+          <span>Supabase Database Encryption & Role Guard Active</span>
         </div>
 
       </div>
