@@ -460,6 +460,47 @@ class SupabaseDatabaseService {
     return view;
   }
 
+  // Get link clicks
+  public async getLinkClicks(): Promise<LinkClickRecord[]> {
+    if (this.client) {
+      try {
+        const { data, error } = await this.client.from('link_clicks').select('*').order('created_at', { ascending: false });
+        if (!error && Array.isArray(data) && data.length > 0) {
+          return data.map((c: any) => ({
+            id: Number(c.id) || 1,
+            dealId: c.deal_id,
+            dealTitle: c.deal_title || '',
+            store: c.store || '',
+            affiliateUrl: c.affiliate_url || '',
+            userId: c.user_id,
+            ipAddress: c.ip_address,
+            clickedAt: c.created_at || c.clicked_at || new Date().toISOString()
+          }));
+        }
+      } catch (e: any) {}
+    }
+    return dbManager.getLinkClicks();
+  }
+
+  // Get deal views
+  public async getDealViews(): Promise<DealViewRecord[]> {
+    if (this.client) {
+      try {
+        const { data, error } = await this.client.from('deal_views').select('*').order('created_at', { ascending: false });
+        if (!error && Array.isArray(data) && data.length > 0) {
+          return data.map((v: any) => ({
+            id: Number(v.id) || 1,
+            dealId: v.deal_id,
+            userId: v.user_id,
+            ipAddress: v.ip_address,
+            viewedAt: v.created_at || v.viewed_at || new Date().toISOString()
+          }));
+        }
+      } catch (e: any) {}
+    }
+    return dbManager.getDealViews();
+  }
+
   // Get users
   public async getUsers(): Promise<UserRecord[]> {
     if (this.client) {

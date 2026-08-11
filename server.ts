@@ -96,14 +96,14 @@ app.post("/api/migrate-to-mysql", async (req, res) => {
 // POST /api/migrate-localstorage - Migrate all Users, Deals, Link Clicks, and Views into database
 app.post("/api/migrate-localstorage", async (req, res) => {
   try {
-    const { localDeals, affiliateConfigs } = req.body || {};
+    const { localDeals } = req.body || {};
     let migratedDealsCount = 0;
 
     if (Array.isArray(localDeals) && localDeals.length > 0) {
       for (const deal of localDeals) {
         if (deal && deal.title) {
           try {
-            await mySqlDb.addDeal(deal, true);
+            await supabaseDb.addDeal(deal, true);
             migratedDealsCount++;
           } catch (e) {
             // Ignore duplicate errors during migration
@@ -112,13 +112,12 @@ app.post("/api/migrate-localstorage", async (req, res) => {
       }
     }
 
-    // Ensure all Users, Deals, Link Clicks, Deal Views, and Store Configs are synced into MySQL or persistent database
-    const mysqlSyncResult = await mySqlDb.syncAllDataToMySql();
+    const syncResult = await supabaseDb.syncAllDataToSupabase();
 
-    const users = await mySqlDb.getUsers();
-    const deals = await mySqlDb.getDeals();
-    const clicks = await mySqlDb.getLinkClicks();
-    const views = await mySqlDb.getDealViews();
+    const users = await supabaseDb.getUsers();
+    const deals = await supabaseDb.getDeals();
+    const clicks = await supabaseDb.getLinkClicks();
+    const views = await supabaseDb.getDealViews();
 
     res.json({
       success: true,
@@ -127,8 +126,8 @@ app.post("/api/migrate-localstorage", async (req, res) => {
       dealsCount: deals.length,
       clicksCount: clicks.length,
       viewsCount: views.length,
-      mysqlStatus: mysqlSyncResult.message,
-      message: `Successfully migrated all Users (${users.length}), Deals (${deals.length}), Link Clicks (${clicks.length}), and Views (${views.length}) into database!`
+      supabaseStatus: syncResult.message,
+      message: `Successfully migrated all Users (${users.length}), Deals (${deals.length}), Link Clicks (${clicks.length}), and Views (${views.length}) into Supabase database!`
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: `Migration error: ${err.message}` });
@@ -423,7 +422,7 @@ app.post("/api/users", async (req, res) => {
 // GET /api/clicks - Fetch link click tracking records
 app.get("/api/clicks", async (req, res) => {
   try {
-    const clicks = await mySqlDb.getLinkClicks();
+    const clicks = await supabaseDb.getLinkClicks();
     res.json({ success: true, count: clicks.length, clicks });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -452,7 +451,7 @@ app.post("/api/clicks", async (req, res) => {
 // GET /api/views - Fetch deal view tracking logs
 app.get("/api/views", async (req, res) => {
   try {
-    const views = await mySqlDb.getDealViews();
+    const views = await supabaseDb.getDealViews();
     res.json({ success: true, count: views.length, views });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
