@@ -284,7 +284,7 @@ app.post("/api/site-banner", async (req, res) => {
 
 // ================= USER MANAGEMENT API ROUTES =================
 
-// POST /api/admin/login - Authenticate admin credentials against database
+// POST /api/admin/login - Authenticate admin credentials against Supabase database
 app.post("/api/admin/login", async (req, res) => {
   try {
     const { usernameOrEmail, password } = req.body;
@@ -292,12 +292,8 @@ app.post("/api/admin/login", async (req, res) => {
       return res.status(400).json({ success: false, error: 'Username/Email and Password are required.' });
     }
 
-    let adminUser = null;
-    const supabaseUsers = await supabaseDb.getUsers();
-    adminUser = supabaseUsers.find(u =>
-      (u.username.toLowerCase() === usernameOrEmail.toLowerCase() || u.email.toLowerCase() === usernameOrEmail.toLowerCase()) &&
-      (u.password === password || (!u.password && password === 'admin123'))
-    );
+    // Verify admin credentials directly against Supabase users table
+    const adminUser = await supabaseDb.verifyAdminLogin(usernameOrEmail, password);
 
     if (!adminUser) {
       return res.status(401).json({
@@ -328,7 +324,7 @@ app.post("/api/admin/login", async (req, res) => {
   }
 });
 
-// POST /api/admin/verify - Verify admin session token
+// POST /api/admin/verify - Verify admin session token against Supabase database
 app.post("/api/admin/verify", async (req, res) => {
   try {
     const { token, userId } = req.body;
@@ -336,6 +332,7 @@ app.post("/api/admin/verify", async (req, res) => {
       return res.status(400).json({ success: false, error: 'Token or UserId required.' });
     }
 
+    // Fetch users from Supabase (this will seed if empty)
     const users = await supabaseDb.getUsers();
     let admin = users.find(u => u.role === 'admin' && (u.id === userId || (token && token.includes(Buffer.from(u.id).toString('hex')))));
 

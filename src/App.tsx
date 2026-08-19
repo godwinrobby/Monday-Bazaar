@@ -21,7 +21,7 @@ import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
 import { MobileLootAlertModal } from './components/MobileLootAlertModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
-import { Flame, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Flame, ShieldCheck } from 'lucide-react';
 
 export default function App() {
   const location = useLocation();
@@ -488,14 +488,6 @@ export default function App() {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-500">
               <p>© {new Date().getFullYear()} Monday Bazaar. All rights reserved. E-Commerce deals & coupons aggregator.</p>
               <div className="flex items-center gap-4">
-                <a
-                  href="/admin"
-                  className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold hover:underline transition-colors"
-                >
-                  <ShieldAlert className="w-4 h-4 text-orange-500" />
-                  <span>Admin Console</span>
-                </a>
-                <span>•</span>
                 <span className="flex items-center gap-1 text-slate-400">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" /> Verified Deal Links
                 </span>

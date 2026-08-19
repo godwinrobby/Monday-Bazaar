@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Flame, Tag, Store, Heart, ShieldAlert, Sparkles, ShoppingBag } from 'lucide-react';
+import { Flame, Tag, Store, Heart, Sparkles, ShoppingBag } from 'lucide-react';
 
 interface NavbarProps {
   savedCount: number;
@@ -35,11 +35,6 @@ export const Navbar: React.FC<NavbarProps> = ({ savedCount }) => {
       label: 'Watchlist',
       icon: <Heart className="w-4 h-4 text-rose-500 fill-rose-500" />,
       count: savedCount,
-    },
-    {
-      to: '/admin',
-      label: 'Admin',
-      icon: <ShieldAlert className="w-4 h-4 text-amber-600" />,
     },
   ];
 

@@ -235,15 +235,9 @@ export const DealsPage: React.FC<DealsPageProps> = ({
             </div>
             <h3 className="font-bold text-slate-900 text-lg">No Live Deals in Database</h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Your Supabase database is connected and active. Import live deals directly from Amazon, Flipkart, or Myntra using our Admin Importer or post your first deal!
+              Your Supabase database is connected and active. Post your first deal to get started!
             </p>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
-              <button
-                onClick={() => navigate('/admin')}
-                className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition-colors"
-              >
-                Open Admin & Import Deals
-              </button>
               <button
                 onClick={onOpenPostDeal}
                 className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors"

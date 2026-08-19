@@ -558,6 +558,20 @@ class SupabaseDatabaseService {
                 dealsposted: user.dealsPosted
               });
             }
+            // Re-fetch from Supabase to ensure we return the actual Supabase-mapped users
+            const { data: seededData, error: seededError } = await this.client.from('users').select('*');
+            if (!seededError && Array.isArray(seededData) && seededData.length > 0) {
+              return seededData.map((u: any) => ({
+                id: u.id,
+                username: u.username,
+                email: u.email,
+                password: u.password || 'admin123',
+                role: u.role || 'user',
+                avatarUrl: u.avatarurl || u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+                dealsPosted: u.dealsposted || u.dealsPosted || 0,
+                createdAt: u.created_at || u.createdAt || new Date().toISOString()
+              }));
+            }
             return defaultUsers;
           }
         }
@@ -566,6 +580,84 @@ class SupabaseDatabaseService {
       }
     }
     return dbManager.getUsers();
+  }
+
+  // Verify admin login directly against Supabase users table
+  public async verifyAdminLogin(identifier: string, password: string): Promise<UserRecord | null> {
+    const input = identifier.trim().toLowerCase();
+    
+    // 1. Try to fetch from Supabase directly using exact match on username or email
+    if (this.client) {
+      try {
+        // First try exact email match (use limit(1) without single to avoid PGRST116 error when no rows)
+        const { data: emailData, error: emailError } = await this.client
+          .from('users')
+          .select('*')
+          .eq('email', input)
+          .eq('role', 'admin')
+          .limit(1);
+
+        if (!emailError && Array.isArray(emailData) && emailData.length > 0) {
+          const user = emailData[0];
+          const expectedPass = user.password || 'admin123';
+          if (password === expectedPass) {
+            return {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              password: user.password || 'admin123',
+              role: user.role || 'admin',
+              avatarUrl: user.avatarurl || user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+              dealsPosted: user.dealsposted || user.dealsPosted || 0,
+              createdAt: user.created_at || user.createdAt || new Date().toISOString()
+            };
+          }
+          return null;
+        }
+
+        // Then try exact username match
+        const { data: usernameData, error: usernameError } = await this.client
+          .from('users')
+          .select('*')
+          .eq('username', input)
+          .eq('role', 'admin')
+          .limit(1);
+
+        if (!usernameError && Array.isArray(usernameData) && usernameData.length > 0) {
+          const user = usernameData[0];
+          const expectedPass = user.password || 'admin123';
+          if (password === expectedPass) {
+            return {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              password: user.password || 'admin123',
+              role: user.role || 'admin',
+              avatarUrl: user.avatarurl || user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+              dealsPosted: user.dealsposted || user.dealsPosted || 0,
+              createdAt: user.created_at || user.createdAt || new Date().toISOString()
+            };
+          }
+          return null;
+        }
+      } catch (e: any) {
+        console.warn('Supabase direct admin login query error:', e.message);
+      }
+    }
+
+    // 2. Fallback: ensure users are seeded to Supabase, then verify
+    const users = await this.getUsers();
+    const found = users.find(u => 
+      (u.username.toLowerCase() === input || u.email.toLowerCase() === input) &&
+      u.role === 'admin'
+    );
+
+    if (!found) return null;
+    const expectedPass = found.password || 'admin123';
+    if (password === expectedPass) {
+      return found;
+    }
+    return null;
   }
 
   // Add user
