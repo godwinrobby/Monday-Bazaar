@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Deal } from '../types';
 import { STORES_INFO } from '../data/initialDeals';
 import { recordLinkClick, recordDealView } from '../utils/analytics';
+import { shareDeal } from '../utils/shareUtils';
 import { 
   Flame, 
   ExternalLink, 
@@ -57,35 +58,10 @@ export const DealCard: React.FC<DealCardProps> = ({
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const shareUrl = window.location.origin + (window.location.pathname !== '/' ? window.location.pathname : '') + '?deal=' + deal.id;
-    const shareData = {
-      title: `Deal: ${deal.title}`,
-      text: `🔥 Check out this deal: ${deal.title} for ₹${deal.dealPrice.toLocaleString('en-IN')} (${deal.discountPercentage}% OFF) on ${deal.store}!`,
-      url: shareUrl,
-    };
-
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          try {
-            await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
-            setCopiedShare(true);
-            setTimeout(() => setCopiedShare(false), 2000);
-          } catch (clipErr) {
-            console.error('Clipboard copy failed:', clipErr);
-          }
-        }
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
-        setCopiedShare(true);
-        setTimeout(() => setCopiedShare(false), 2000);
-      } catch (clipErr) {
-        console.error('Clipboard copy failed:', clipErr);
-      }
+    const success = await shareDeal(deal);
+    if (!success) {
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2000);
     }
   };
 

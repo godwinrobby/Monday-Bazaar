@@ -1189,6 +1189,92 @@ Provide honest buyer advice pros, cons, AI score (0-100), and buy recommendation
   }
 });
 
+// ================= SOCIAL SHARE / OG META INJECTION =================
+
+/**
+ * Extracts a deal ID from URLs like /deal/:id or ?deal=:id
+ */
+function getDealIdFromUrl(url: string): string | null {
+  // Match /deal/{id} path (e.g. /deal/deal_123 or /deal/B0ABC123XYZ)
+  const pathMatch = url.match(/\/deal\/([^/?#]+)/);
+  if (pathMatch) return decodeURIComponent(pathMatch[1]);
+
+  // Match ?deal={id} query param
+  const queryMatch = url.match(/[?&]deal=([^&]+)/);
+  if (queryMatch) return decodeURIComponent(queryMatch[1]);
+
+  return null;
+}
+
+/**
+ * Escapes a string for safe use inside an HTML attribute value.
+ */
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&" + "amp;")
+    .replace(/"/g, "&" + "quot;")
+    .replace(/'/g, "&#" + "39;")
+    .replace(/</g, "&" + "lt;")
+    .replace(/>/g, "&" + "gt;");
+}
+
+/**
+ * Injects deal-specific Open Graph & Twitter meta tags into the served HTML
+ * so that social platforms (WhatsApp, Telegram, Facebook, Twitter/X) can
+ * scrape the correct product image preview when a deal link is shared.
+ */
+function injectDealOgMeta(html: string, deal: any): string {
+  const baseUrl = process.env.APP_URL || 'https://mondaybazaar.in';
+  const ogImage = deal.imageUrl || `${baseUrl}/og-image.png`;
+  const dealPrice = typeof deal.dealPrice === 'number' ? deal.dealPrice.toLocaleString('en-IN') : deal.dealPrice;
+  const ogTitle = `${deal.title} - ₹${dealPrice} (${deal.discountPercentage}% OFF) | Monday Bazaar`;
+  const ogDesc = `🔥 ${deal.title} - ₹${dealPrice} (${deal.discountPercentage}% OFF) on ${deal.store}. Verified deal with AI price analysis.`;
+  const dealPageUrl = `${baseUrl}/deal/${encodeURIComponent(deal.id)}`;
+
+  let updated = html;
+
+  // Update <title> tags (there are two in index.html)
+  updated = updated.replace(/<title>[^<]*<\/title>/g, `<title>${escapeHtmlAttr(ogTitle)}</title>`);
+
+  // Open Graph tags
+  updated = updated.replace(
+    /<meta property="og:title" content="[^"]*"\s*\/?>/i,
+    `<meta property="og:title" content="${escapeHtmlAttr(ogTitle)}" />`
+  );
+  updated = updated.replace(
+    /<meta property="og:description" content="[^"]*"\s*\/?>/i,
+    `<meta property="og:description" content="${escapeHtmlAttr(ogDesc)}" />`
+  );
+  updated = updated.replace(
+    /<meta property="og:image" content="[^"]*"\s*\/?>/i,
+    `<meta property="og:image" content="${escapeHtmlAttr(ogImage)}" />`
+  );
+  updated = updated.replace(
+    /<meta property="og:url" content="[^"]*"\s*\/?>/i,
+    `<meta property="og:url" content="${escapeHtmlAttr(dealPageUrl)}" />`
+  );
+
+  // Twitter tags
+  updated = updated.replace(
+    /<meta name="twitter:title" content="[^"]*"\s*\/?>/i,
+    `<meta name="twitter:title" content="${escapeHtmlAttr(ogTitle)}" />`
+  );
+  updated = updated.replace(
+    /<meta name="twitter:description" content="[^"]*"\s*\/?>/i,
+    `<meta name="twitter:description" content="${escapeHtmlAttr(ogDesc)}" />`
+  );
+  updated = updated.replace(
+    /<meta name="twitter:image" content="[^"]*"\s*\/?>/i,
+    `<meta name="twitter:image" content="${escapeHtmlAttr(ogImage)}" />`
+  );
+  updated = updated.replace(
+    /<meta name="twitter:card" content="[^"]*"\s*\/?>/i,
+    `<meta name="twitter:card" content="summary_large_image" />`
+  );
+
+  return updated;
+}
+
 async function startServer() {
   // Sync data to Supabase PostgreSQL database
   supabaseDb.syncAllDataToSupabase().then(res => {
@@ -1216,6 +1302,20 @@ async function startServer() {
       try {
         let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
         template = await vite.transformIndexHtml(url, template);
+
+        // Inject deal-specific OG meta tags for social share previews
+        const dealId = getDealIdFromUrl(url);
+        if (dealId) {
+          try {
+            const deal = await supabaseDb.getDealById(dealId);
+            if (deal) {
+              template = injectDealOgMeta(template, deal);
+            }
+          } catch (ogErr) {
+            console.warn('OG meta injection skipped:', ogErr);
+          }
+        }
+
         res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
       } catch (e: any) {
         vite.ssrFixStacktrace(e);
@@ -1232,7 +1332,24 @@ async function startServer() {
     });
 
     // SPA fallback for production mode
-    app.get('*', (req, res) => {
+    app.get('*', async (req, res) => {
+      const url = req.originalUrl;
+      const dealId = getDealIdFromUrl(url);
+
+      // If this is a deal page, inject deal-specific OG meta tags for social previews
+      if (dealId) {
+        try {
+          const deal = await supabaseDb.getDealById(dealId);
+          if (deal) {
+            let html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
+            html = injectDealOgMeta(html, deal);
+            return res.status(200).set({ 'Content-Type': 'text/html' }).send(html);
+          }
+        } catch (ogErr) {
+          console.warn('OG meta injection skipped:', ogErr);
+        }
+      }
+
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

@@ -153,7 +153,8 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
       .replace(/\{store\}/g, deal.store || '')
       .replace(/\{couponCodeText\}/g, couponText)
       .replace(/\{couponCode\}/g, deal.couponCode || '')
-      .replace(/\{dealUrl\}/g, deal.dealUrl || '');
+      .replace(/\{dealUrl\}/g, deal.dealUrl || '')
+      .replace(/\{imageUrl\}/g, deal.imageUrl || '');
   };
 
   // Insert Variable Token into Template
@@ -577,6 +578,7 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
                 { token: '{store}', label: 'Store Name' },
                 { token: '{couponCodeText}', label: 'Coupon Line' },
                 { token: '{dealUrl}', label: 'Affiliate URL' },
+                 { token: '{imageUrl}', label: 'Product Image URL' },
               ].map(item => (
                 <button
                   key={item.token}
