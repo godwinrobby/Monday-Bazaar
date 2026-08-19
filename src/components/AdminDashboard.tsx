@@ -705,158 +705,246 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
   }, 0);
 
   return (
-    <div id="admin-management-console" className="min-h-screen bg-slate-100 text-slate-800 pb-16">
+    <div id="admin-management-console" className="min-h-screen bg-slate-100 text-slate-800 pb-16 flex">
       
-      {/* Top Admin Navigation Header */}
-      <div className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
-          
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-600 rounded-xl text-white shadow-sm">
+      {/* Sidebar Navigation */}
+      <aside className="w-60 bg-slate-900 text-white border-r border-slate-800 sticky top-0 h-screen overflow-y-auto no-scrollbar shrink-0 hidden lg:block">
+        {/* Sidebar Header */}
+        <div className="p-4 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-orange-600 rounded-xl text-white shadow-sm shrink-0">
               <ShieldAlert className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-black tracking-tight text-white">
-                  Monday Bazaar <span className="text-orange-500 font-bold">Admin Console</span>
-                </h1>
-                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold text-[10px] uppercase rounded-md border border-emerald-500/30">
-                  LIVE CONTROLS
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">Deals, Affiliation Tracking & Catalog Management System</p>
+            <div className="min-w-0">
+              <h1 className="text-sm font-black tracking-tight text-white truncate">
+                Monday Bazaar <span className="text-orange-500 font-bold">Admin</span>
+              </h1>
+              <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold text-[9px] uppercase rounded-md border border-emerald-500/30 inline-block mt-0.5">
+                LIVE CONTROLS
+              </span>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            {adminUser && (
-              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 border border-slate-700/80 rounded-xl text-xs text-slate-300">
-                <img
-                  src={adminUser.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"}
-                  alt={adminUser.username}
-                  className="w-5 h-5 rounded-full object-cover border border-orange-500/50"
-                />
-                <div className="flex flex-col leading-tight">
-                  <span className="font-bold text-white text-[11px] truncate max-w-[120px]">{adminUser.username}</span>
-                  <span className="text-[9px] text-emerald-400 font-extrabold uppercase">DB Admin</span>
-                </div>
+          {adminUser && (
+            <div className="flex items-center gap-2 mt-3 px-2 py-1.5 bg-slate-800/90 border border-slate-700/80 rounded-xl text-xs text-slate-300">
+              <img
+                src={adminUser.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"}
+                alt={adminUser.username}
+                className="w-6 h-6 rounded-full object-cover border border-orange-500/50"
+              />
+              <div className="flex flex-col leading-tight min-w-0">
+                <span className="font-bold text-white text-[10px] truncate">{adminUser.username}</span>
+                <span className="text-[8px] text-emerald-400 font-extrabold uppercase">DB Admin</span>
               </div>
-            )}
-
-            <button
-              onClick={handleOpenAddModal}
-              id="admin-add-deal-btn"
-              className="px-3 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add New Deal</span>
-            </button>
-
-            <button
-              onClick={onCloseAdmin}
-              id="back-to-storefront-btn"
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4 text-orange-400" />
-              <span className="hidden sm:inline">Storefront</span>
-            </button>
-
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                id="admin-logout-btn"
-                title="Sign out of Admin Portal"
-                className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 font-bold text-xs rounded-xl border border-red-500/30 transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
-              </button>
-            )}
-          </div>
-
+            </div>
+          )}
         </div>
 
-        {/* Admin Navigation Tabs */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 overflow-x-auto no-scrollbar border-t border-slate-800/80 pt-1">
+        {/* Sidebar Menu */}
+        <nav className="p-3 space-y-1">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-all shrink-0 ${
+            className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
               activeTab === 'overview'
-                ? 'border-orange-500 text-orange-400 bg-slate-800/60'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
           >
-            <LayoutDashboard className="w-4 h-4" />
-            <span>Dashboard & Analytics</span>
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
+            <span className="text-left">Dashboard & Analytics</span>
           </button>
 
           <button
             onClick={() => setActiveTab('amazon-import')}
-            className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-all shrink-0 ${
+            className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
               activeTab === 'amazon-import'
-                ? 'border-amber-500 text-amber-400 bg-slate-800/60'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
           >
-            <ShoppingBag className="w-4 h-4 text-amber-400" />
-            <span>Amazon Affiliate Fetcher</span>
-            <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 font-extrabold rounded text-[10px]">Auto Import</span>
+            <ShoppingBag className="w-4 h-4 shrink-0 text-amber-400" />
+            <span className="text-left flex-1">Amazon Affiliate Fetcher</span>
+            <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 font-extrabold rounded text-[9px] shrink-0">Auto Import</span>
           </button>
 
           <button
             onClick={() => setActiveTab('deals')}
-            className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-all shrink-0 ${
+            className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
               activeTab === 'deals'
-                ? 'border-orange-500 text-orange-400 bg-slate-800/60'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
           >
-            <Tag className="w-4 h-4" />
-            <span>Deals Catalog ({deals.length})</span>
+            <Tag className="w-4 h-4 shrink-0" />
+            <span className="text-left">Deals Catalog ({deals.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('social-autopost')}
-            className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-all shrink-0 ${
+            className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
               activeTab === 'social-autopost'
-                ? 'border-blue-500 text-blue-400 bg-slate-800/60'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
           >
-            <Share2 className="w-4 h-4 text-blue-400" />
-            <span>FB & IG Auto-Poster</span>
-            <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 font-extrabold rounded text-[10px]">Meta API</span>
+            <Share2 className="w-4 h-4 shrink-0 text-blue-400" />
+            <span className="text-left flex-1">FB & IG Auto-Poster</span>
+            <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 font-extrabold rounded text-[9px] shrink-0">Meta API</span>
           </button>
 
           <button
             onClick={() => setActiveTab('affiliation')}
-            className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-all shrink-0 ${
+            className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
               activeTab === 'affiliation'
-                ? 'border-orange-500 text-orange-400 bg-slate-800/60'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                ? 'bg-emerald-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
           >
-            <Link2 className="w-4 h-4 text-emerald-400" />
-            <span>Affiliation & Store Rules</span>
-            <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded text-[10px]">Active</span>
+            <Link2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span className="text-left flex-1">Affiliation & Store Rules</span>
+            <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded text-[9px] shrink-0">Active</span>
           </button>
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2.5 font-bold text-xs flex items-center gap-2 border-b-2 transition-all shrink-0 ${
+            className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
               activeTab === 'settings'
-                ? 'border-orange-500 text-orange-400 bg-slate-800/60'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
           >
-            <Settings className="w-4 h-4" />
-            <span>Site Banners & Configuration</span>
+            <Settings className="w-4 h-4 shrink-0" />
+            <span className="text-left">Site Banners & Configuration</span>
+          </button>
+        </nav>
+
+        {/* Sidebar Footer Actions */}
+        <div className="p-3 border-t border-slate-800 space-y-2 mt-auto">
+          <button
+            onClick={handleOpenAddModal}
+            id="admin-add-deal-btn"
+            className="w-full px-3 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Deal</span>
+          </button>
+
+          <button
+            onClick={onCloseAdmin}
+            id="back-to-storefront-btn"
+            className="w-full px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 text-orange-400" />
+            <span>Storefront</span>
+          </button>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              id="admin-logout-btn"
+              title="Sign out of Admin Portal"
+              className="w-full px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 font-bold text-xs rounded-xl border border-red-500/30 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* Mobile Top Header (visible on smaller screens) */}
+      <div className="lg:hidden bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md w-full">
+        <div className="px-4 py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-orange-600 rounded-lg text-white shadow-sm">
+              <ShieldAlert className="w-4 h-4" />
+            </div>
+            <div>
+              <h1 className="text-sm font-black tracking-tight text-white">
+                Monday Bazaar <span className="text-orange-500 font-bold">Admin</span>
+              </h1>
+              <p className="text-[9px] text-slate-400">Deals, Affiliation & Catalog Management</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleOpenAddModal}
+              className="px-2.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold text-[10px] rounded-lg flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Add Deal</span>
+            </button>
+            <button
+              onClick={onCloseAdmin}
+              className="px-2.5 py-1.5 bg-slate-800 text-slate-200 font-bold text-[10px] rounded-lg border border-slate-700 flex items-center gap-1"
+            >
+              <ArrowLeft className="w-3 h-3 text-orange-400" />
+              <span>Store</span>
+            </button>
+          </div>
+        </div>
+        {/* Mobile Horizontal Scroll Menu */}
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar border-t border-slate-800/80 px-2 py-1.5">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
+              activeTab === 'overview' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <LayoutDashboard className="w-3 h-3" />
+            <span>Dashboard</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('amazon-import')}
+            className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
+              activeTab === 'amazon-import' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <ShoppingBag className="w-3 h-3" />
+            <span>Amazon Importer</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('deals')}
+            className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
+              activeTab === 'deals' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Tag className="w-3 h-3" />
+            <span>Deals ({deals.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('social-autopost')}
+            className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
+              activeTab === 'social-autopost' ? 'bg-blue-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Share2 className="w-3 h-3" />
+            <span>Auto-Poster</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('affiliation')}
+            className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
+              activeTab === 'affiliation' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Link2 className="w-3 h-3" />
+            <span>Affiliation</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
+              activeTab === 'settings' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Settings className="w-3 h-3" />
+            <span>Settings</span>
           </button>
         </div>
       </div>
 
-      {/* Main Admin Tab Body */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Main Content Area (full width next to sidebar) */}
+      <div className="flex-1 min-w-0">
+        {/* Main Admin Tab Body */}
+        <div className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-8 max-w-full">
         
         {/* ==================== TAB 1: OVERVIEW & ANALYTICS ==================== */}
         {activeTab === 'overview' && (
@@ -1790,6 +1878,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
           </div>
         )}
 
+        </div>
       </div>
 
       {/* Admin Dedicated Footer */}
@@ -2053,7 +2142,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                 <Database className="w-5 h-5 text-emerald-600" />
                 <div>
                   <h3 className="font-extrabold text-base text-slate-900">Supabase SQL Table Schema Setup</h3>
-                  <p className="text-xs text-slate-500">Run this script in Supabase Dashboard -&gt; SQL Editor to create tables</p>
+                  <p className="text-xs text-slate-500">Run this script in Supabase Dashboard -> SQL Editor to create tables</p>
                 </div>
               </div>
               <button
