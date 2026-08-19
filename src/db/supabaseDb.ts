@@ -527,28 +527,46 @@ class SupabaseDatabaseService {
     return dbManager.getDealViews();
   }
 
-  // Get users
+  // Get users - fetch directly from Supabase REST API
   public async getUsers(): Promise<UserRecord[]> {
-    if (this.client) {
-      try {
-        const { data, error } = await this.client.from('users').select('*');
-        if (!error && Array.isArray(data)) {
-          if (data.length > 0) {
-            return data.map((u: any) => ({
-              id: u.id,
-              username: u.username,
-              email: u.email,
-              password: u.password || 'admin123',
-              role: u.role || 'user',
-              avatarUrl: u.avatarurl || u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-              dealsPosted: u.dealsposted || u.dealsPosted || 0,
-              createdAt: u.created_at || u.createdAt || new Date().toISOString()
-            }));
-          } else {
-            // Table is connected but empty -> seed initial users directly to Supabase
-            const defaultUsers = dbManager.getUsers();
-            for (const user of defaultUsers) {
-              await this.client.from('users').upsert({
+    const restUrl = `${this.supabaseUrl}/rest/v1/users`;
+    
+    // 1. Try Supabase REST API first
+    try {
+      const res = await fetch(`${restUrl}?select=*`, {
+        headers: {
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return data.map((u: any) => ({
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            password: u.password || 'admin123',
+            role: u.role || 'user',
+            avatarUrl: u.avatarurl || u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+            dealsPosted: u.dealsposted || u.dealsPosted || 0,
+            createdAt: u.created_at || u.createdAt || new Date().toISOString()
+          }));
+        } else if (Array.isArray(data) && data.length === 0) {
+          // Table is connected but empty -> seed initial users directly to Supabase via REST API
+          const defaultUsers = dbManager.getUsers();
+          for (const user of defaultUsers) {
+            await fetch(restUrl, {
+              method: 'POST',
+              headers: {
+                'apikey': this.supabaseKey,
+                'Authorization': `Bearer ${this.supabaseKey}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'resolution=merge-duplicates'
+              },
+              body: JSON.stringify({
                 id: user.id,
                 username: user.username,
                 email: user.email,
@@ -556,11 +574,20 @@ class SupabaseDatabaseService {
                 role: user.role,
                 avatarurl: user.avatarUrl,
                 dealsposted: user.dealsPosted
-              });
+              })
+            });
+          }
+          // Re-fetch from Supabase to ensure we return the actual Supabase-mapped users
+          const seededRes = await fetch(`${restUrl}?select=*`, {
+            headers: {
+              'apikey': this.supabaseKey,
+              'Authorization': `Bearer ${this.supabaseKey}`,
+              'Content-Type': 'application/json'
             }
-            // Re-fetch from Supabase to ensure we return the actual Supabase-mapped users
-            const { data: seededData, error: seededError } = await this.client.from('users').select('*');
-            if (!seededError && Array.isArray(seededData) && seededData.length > 0) {
+          });
+          if (seededRes.ok) {
+            const seededData = await seededRes.json();
+            if (Array.isArray(seededData) && seededData.length > 0) {
               return seededData.map((u: any) => ({
                 id: u.id,
                 username: u.username,
@@ -572,13 +599,36 @@ class SupabaseDatabaseService {
                 createdAt: u.created_at || u.createdAt || new Date().toISOString()
               }));
             }
-            return defaultUsers;
           }
+          return defaultUsers;
+        }
+      }
+    } catch (e: any) {
+      console.warn('Supabase REST API getUsers error:', e.message);
+    }
+
+    // 2. Fallback to Supabase JS client
+    if (this.client) {
+      try {
+        const { data, error } = await this.client.from('users').select('*');
+        if (!error && Array.isArray(data) && data.length > 0) {
+          return data.map((u: any) => ({
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            password: u.password || 'admin123',
+            role: u.role || 'user',
+            avatarUrl: u.avatarurl || u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+            dealsPosted: u.dealsposted || u.dealsPosted || 0,
+            createdAt: u.created_at || u.createdAt || new Date().toISOString()
+          }));
         }
       } catch (e: any) {
-        console.warn('Supabase getUsers error:', e.message);
+        console.warn('Supabase client getUsers error:', e.message);
       }
     }
+
+    // 3. Final fallback to local dbManager
     return dbManager.getUsers();
   }
 
@@ -667,9 +717,36 @@ class SupabaseDatabaseService {
     return null;
   }
 
-  // Add user
+  // Add user - sync to Supabase REST API
   public async addUser(userData: Partial<UserRecord>): Promise<UserRecord> {
     const user = dbManager.addUser(userData);
+    const restUrl = `${this.supabaseUrl}/rest/v1/users`;
+    
+    // 1. Try Supabase REST API
+    try {
+      await fetch(restUrl, {
+        method: 'POST',
+        headers: {
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          password: user.password || 'admin123',
+          role: user.role,
+          avatarurl: user.avatarUrl,
+          dealsposted: user.dealsPosted
+        })
+      });
+    } catch (e: any) {
+      console.warn('Supabase REST API addUser error:', e.message);
+    }
+
+    // 2. Fallback to Supabase JS client
     if (this.client) {
       try {
         await this.client.from('users').upsert({
@@ -686,9 +763,26 @@ class SupabaseDatabaseService {
     return user;
   }
 
-  // Delete user
+  // Delete user - sync to Supabase REST API
   public async deleteUser(id: string): Promise<boolean> {
     const deleted = dbManager.deleteUser(id);
+    const restUrl = `${this.supabaseUrl}/rest/v1/users`;
+    
+    // 1. Try Supabase REST API
+    try {
+      await fetch(`${restUrl}?id=eq.${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (e: any) {
+      console.warn('Supabase REST API deleteUser error:', e.message);
+    }
+
+    // 2. Fallback to Supabase JS client
     if (this.client) {
       try {
         await this.client.from('users').delete().or(`id.eq.${id},email.eq.${id},username.eq.${id}`);
