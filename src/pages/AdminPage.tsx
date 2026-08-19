@@ -4,6 +4,11 @@ import { AdminDashboard } from '../components/AdminDashboard';
 import { AdminLogin } from '../components/AdminLogin';
 import { useNavigate } from 'react-router-dom';
 
+// Supabase REST API constants
+const SUPABASE_URL = 'https://pmvnyxpyypifneqojlqq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_QdwxI3KvRW5Ro-vY5XPuQg_Cg4mLVdD';
+const SUPABASE_REST_URL = `${SUPABASE_URL}/rest/v1`;
+
 interface AdminPageProps {
   deals: Deal[];
   onAddDeal: (newDealData: Partial<Deal>) => Promise<{ success: boolean; error?: string; deal?: Deal }>;
@@ -42,34 +47,53 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       if (savedUser) parsedUser = JSON.parse(savedUser);
     } catch (e) {}
 
-    // Verify token with server
-    fetch('/api/admin/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, userId: parsedUser?.id })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.user) {
-          setAdminUser(data.user);
-          setIsAuthenticated(true);
+    // Verify session directly against Supabase REST API
+    const verifySession = async () => {
+      try {
+        if (parsedUser?.id) {
+          // Fetch admin user directly from Supabase
+          const res = await fetch(`${SUPABASE_REST_URL}/users?select=*&id=eq.${encodeURIComponent(parsedUser.id)}&role=eq.admin&limit=1`, {
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          const data = await res.json();
+          if (res.ok && Array.isArray(data) && data.length > 0) {
+            const user = data[0];
+            const safeUser = {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              role: user.role,
+              avatarUrl: user.avatarurl || user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+              createdAt: user.created_at || user.createdAt || new Date().toISOString()
+            };
+            sessionStorage.setItem('admin_user', JSON.stringify(safeUser));
+            setAdminUser(safeUser);
+            setIsAuthenticated(true);
+          } else {
+            sessionStorage.removeItem('admin_token');
+            sessionStorage.removeItem('admin_user');
+            setIsAuthenticated(false);
+          }
         } else {
-          sessionStorage.removeItem('admin_token');
-          sessionStorage.removeItem('admin_user');
           setIsAuthenticated(false);
         }
-      })
-      .catch(() => {
+      } catch (e) {
+        // Fallback to cached session if Supabase is unreachable
         if (parsedUser && parsedUser.role === 'admin') {
           setAdminUser(parsedUser);
           setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);
         }
-      })
-      .finally(() => {
+      } finally {
         setIsCheckingAuth(false);
-      });
+      }
+    };
+    verifySession();
   }, []);
 
   const handleLogout = () => {

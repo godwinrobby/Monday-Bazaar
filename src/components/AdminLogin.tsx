@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, KeyRound, User, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, AlertCircle, Database, Flame, Sparkles } from 'lucide-react';
 
+// Supabase REST API constants
+const SUPABASE_URL = 'https://pmvnyxpyypifneqojlqq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_QdwxI3KvRW5Ro-vY5XPuQg_Cg4mLVdD';
+const SUPABASE_REST_URL = `${SUPABASE_URL}/rest/v1`;
+
 interface AdminLoginProps {
   onLoginSuccess: (user: any, token: string) => void;
   onBackToStore: () => void;
@@ -17,16 +22,23 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
 
-  // Fetch registered admin users on load for quick select
+  // Fetch registered admin users directly from Supabase REST API
   const fetchAdminUsers = async () => {
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch(`${SUPABASE_REST_URL}/users?select=*&role=eq.admin`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
       const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.users)) {
-        const admins = data.users.filter((u: any) => u.role === 'admin');
-        setAdminUsers(admins);
+      if (Array.isArray(data)) {
+        setAdminUsers(data);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Supabase fetch admin users error:', e);
+    }
   };
 
   useEffect(() => {
@@ -44,27 +56,77 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
     setErrorMsg(null);
 
     try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usernameOrEmail, password })
+      const input = usernameOrEmail.trim().toLowerCase();
+
+      // 1. Try exact email match against Supabase REST API
+      let userData = null;
+      const emailRes = await fetch(`${SUPABASE_REST_URL}/users?select=*&email=eq.${encodeURIComponent(input)}&role=eq.admin&limit=1`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json'
+        }
       });
 
-      const data = await res.json();
+      if (emailRes.ok) {
+        const emailData = await emailRes.json();
+        if (Array.isArray(emailData) && emailData.length > 0) {
+          userData = emailData[0];
+        }
+      }
 
-      if (!res.ok || !data.success) {
-        setErrorMsg(data.error || 'Authentication failed. Please check your credentials.');
+      // If no email match, try username match
+      if (!userData) {
+        const usernameRes = await fetch(`${SUPABASE_REST_URL}/users?select=*&username=eq.${encodeURIComponent(input)}&role=eq.admin&limit=1`, {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (usernameRes.ok) {
+          const usernameData = await usernameRes.json();
+          if (Array.isArray(usernameData) && usernameData.length > 0) {
+            userData = usernameData[0];
+          }
+        }
+      }
+
+      // Verify password
+      if (!userData) {
+        setErrorMsg('Invalid username/email. No matching admin account found in Supabase database.');
         setIsLoading(false);
         return;
       }
 
-      // Store session
-      sessionStorage.setItem('admin_token', data.token);
-      sessionStorage.setItem('admin_user', JSON.stringify(data.user));
+      const expectedPass = userData.password || 'admin123';
+      if (password !== expectedPass) {
+        setErrorMsg('Invalid password. Please check your credentials.');
+        setIsLoading(false);
+        return;
+      }
 
-      onLoginSuccess(data.user, data.token);
+      // Build safe user object
+      const safeUser = {
+        id: userData.id,
+        username: userData.username,
+        email: userData.email,
+        role: userData.role,
+        avatarUrl: userData.avatarurl || userData.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        createdAt: userData.created_at || userData.createdAt || new Date().toISOString()
+      };
+
+      // Generate session token
+      const token = `admin_sess_${Date.now()}_${Array.from(userData.id).map(c => c.charCodeAt(0).toString(16)).join('')}`;
+
+      // Store session
+      sessionStorage.setItem('admin_token', token);
+      sessionStorage.setItem('admin_user', JSON.stringify(safeUser));
+
+      onLoginSuccess(safeUser, token);
     } catch (err: any) {
-      setErrorMsg('Failed to connect to authentication server. Please try again.');
+      setErrorMsg('Failed to connect to Supabase database. Please try again.');
     } finally {
       setIsLoading(false);
     }
