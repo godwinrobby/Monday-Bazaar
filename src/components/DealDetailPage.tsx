@@ -90,7 +90,7 @@ export const DealDetailPage: React.FC<DealDetailPageProps> = ({
     .slice(0, 4);
 
   return (
-    <div id="deal-detail-page" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 sm:space-y-8 animate-in fade-in duration-300 w-full max-w-full overflow-hidden">
+    <div id="deal-detail-page" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 sm:space-y-8 animate-in fade-in duration-300 overflow-hidden">
       
       {/* Navigation & Action Header */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
