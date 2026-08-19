@@ -1637,7 +1637,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
 
         {/* ==================== TAB 4: SITE BANNERS & SETTINGS ==================== */}
         {activeTab === 'settings' && (
-          <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-200">
+          <div className="max-w-full space-y-6 animate-in fade-in duration-200">
             
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-6">
               <div className="border-b border-slate-100 pb-3">
@@ -1883,7 +1883,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
 
       {/* Admin Dedicated Footer */}
       <footer className="bg-slate-900 text-slate-400 border-t border-slate-800 py-6 mt-16 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="max-w-full px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-orange-500" />
             <span className="font-bold text-slate-200">Monday Bazaar Admin Control Portal</span>

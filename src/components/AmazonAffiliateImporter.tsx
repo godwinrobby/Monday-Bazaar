@@ -162,7 +162,7 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
       <div className="bg-gradient-to-br from-amber-900 via-slate-900 to-slate-950 p-6 sm:p-8 rounded-3xl border border-amber-500/30 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative z-10 max-w-3xl space-y-3">
+        <div className="relative z-10 max-w-full space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full text-xs font-bold border border-amber-500/40">
             <ShoppingBag className="w-3.5 h-3.5 text-amber-400" />
             <span>AMAZON AFFILIATE AUTO-PARSER & CATEGORIZER</span>
