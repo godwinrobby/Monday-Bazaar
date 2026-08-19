@@ -1,0 +1,11 @@
+# robots.txt for Monday Bazaar
+# https://mondaybazaar.in
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /watchlist
+
+# Sitemap
+Sitemap: https://mondaybazaar.in/sitemap.xml

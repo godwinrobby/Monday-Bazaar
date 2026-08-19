@@ -181,6 +181,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [showSqlModal, setShowSqlModal] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
 
+  // Sitemap Generator State
+  const [isGeneratingSitemap, setIsGeneratingSitemap] = useState(false);
+  const [sitemapResult, setSitemapResult] = useState<{ message: string; urlCount: number; sitemapUrl: string; xml: string } | null>(null);
+  const [showSitemapXml, setShowSitemapXml] = useState(false);
+
+  const handleGenerateSitemap = async () => {
+    setIsGeneratingSitemap(true);
+    setSitemapResult(null);
+    try {
+      const res = await fetch('/api/admin/generate-sitemap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const json = await res.json();
+      if (json.success) {
+        setSitemapResult({
+          message: json.message,
+          urlCount: json.urlCount,
+          sitemapUrl: json.sitemapUrl,
+          xml: json.xml
+        });
+      } else {
+        setSitemapResult({
+          message: json.error || 'Failed to generate sitemap.',
+          urlCount: 0,
+          sitemapUrl: '',
+          xml: ''
+        });
+      }
+    } catch (err: any) {
+      setSitemapResult({
+        message: `Sitemap generation error: ${err.message}`,
+        urlCount: 0,
+        sitemapUrl: '',
+        xml: ''
+      });
+    } finally {
+      setIsGeneratingSitemap(false);
+    }
+  };
+
   const supabaseSqlSchema = `-- 1. Create deals table
 CREATE TABLE IF NOT EXISTS public.deals (
     id TEXT PRIMARY KEY,
@@ -957,6 +998,82 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                   <p className="text-[10px] text-slate-400">Impression views in DB</p>
                 </div>
               </div>
+            </div>
+
+            {/* SEO Sitemap Generator Card */}
+            <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-md border border-slate-800 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-2xl">
+                    <FileSpreadsheet className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-lg text-white">SEO Sitemap Generator</h3>
+                    <p className="text-xs text-slate-400">
+                      Generate an XML sitemap with all static pages, stores, categories, and deal URLs for search engine indexing.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleGenerateSitemap}
+                  disabled={isGeneratingSitemap}
+                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 text-white font-extrabold text-xs rounded-2xl shadow-sm transition-all flex items-center gap-2 shrink-0"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isGeneratingSitemap ? 'animate-spin' : ''}`} />
+                  <span>{isGeneratingSitemap ? 'Generating Sitemap...' : 'Generate Sitemap.xml'}</span>
+                </button>
+              </div>
+
+              {sitemapResult && (
+                <div className="space-y-3">
+                  <div className="p-4 bg-emerald-950/60 border border-emerald-500/40 rounded-2xl text-emerald-200 text-xs font-semibold flex flex-wrap items-center gap-3">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>{sitemapResult.message}</span>
+                    {sitemapResult.urlCount > 0 && (
+                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold rounded-lg">
+                        {sitemapResult.urlCount} URLs
+                      </span>
+                    )}
+                  </div>
+
+                  {sitemapResult.sitemapUrl && (
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={sitemapResult.sitemapUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        <span>View /sitemap.xml</span>
+                      </a>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(sitemapResult.sitemapUrl);
+                          addToast({ type: 'success', title: 'Sitemap URL Copied', message: 'Sitemap URL copied to clipboard!' });
+                        }}
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all"
+                      >
+                        <Copy className="w-4 h-4" />
+                        <span>Copy URL</span>
+                      </button>
+                      <button
+                        onClick={() => setShowSitemapXml(!showSitemapXml)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl flex items-center gap-2 transition-all border border-slate-700"
+                      >
+                        <span>{showSitemapXml ? 'Hide XML' : 'View XML'}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {showSitemapXml && sitemapResult.xml && (
+                    <pre className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-[10px] text-emerald-300 font-mono overflow-auto max-h-64 whitespace-pre-wrap">
+                      {sitemapResult.xml}
+                    </pre>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Amazon Affiliate Quick Import Prompt Banner */}

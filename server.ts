@@ -59,6 +59,149 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
+// GET /robots.txt - Serve robots.txt
+app.get("/robots.txt", (req, res) => {
+  res.type('text/plain').send(`# robots.txt for Monday Bazaar
+# https://mondaybazaar.in
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /watchlist
+
+# Sitemap
+Sitemap: https://mondaybazaar.in/sitemap.xml
+`);
+});
+
+interface SitemapUrlItem {
+  loc: string;
+  changefreq: string;
+  priority: string;
+  lastmod?: string;
+}
+
+// GET /sitemap.xml - Generate and serve XML sitemap with all deals
+app.get("/sitemap.xml", async (req, res) => {
+  try {
+    const baseUrl = process.env.APP_URL || 'https://mondaybazaar.in';
+    const deals = await supabaseDb.getDeals();
+
+    // Static pages
+    const staticUrls: SitemapUrlItem[] = [
+      { loc: `${baseUrl}/`, priority: '1.0', changefreq: 'hourly' },
+      { loc: `${baseUrl}/loot`, priority: '0.9', changefreq: 'hourly' },
+      { loc: `${baseUrl}/categories`, priority: '0.8', changefreq: 'daily' },
+      { loc: `${baseUrl}/stores`, priority: '0.8', changefreq: 'daily' },
+    ];
+
+    // Unique stores and categories from deals
+    const stores = [...new Set(deals.map(d => d.store).filter(Boolean))];
+    const categories = [...new Set(deals.map(d => d.category).filter(Boolean))];
+
+    const storeUrls: SitemapUrlItem[] = stores.map(s => ({
+      loc: `${baseUrl}/store/${encodeURIComponent(s)}`,
+      priority: '0.7',
+      changefreq: 'daily'
+    }));
+
+    const categoryUrls: SitemapUrlItem[] = categories.map(c => ({
+      loc: `${baseUrl}/category/${encodeURIComponent(c)}`,
+      priority: '0.7',
+      changefreq: 'daily'
+    }));
+
+    // Deal URLs
+    const dealUrls: SitemapUrlItem[] = deals.map(d => ({
+      loc: `${baseUrl}/deal/${encodeURIComponent(d.id)}`,
+      priority: '0.6',
+      changefreq: 'daily',
+      lastmod: d.postedAt ? new Date(d.postedAt).toISOString().split('T')[0] : undefined
+    }));
+
+    const allUrls: SitemapUrlItem[] = [...staticUrls, ...storeUrls, ...categoryUrls, ...dealUrls];
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+${allUrls.map(u => `  <url>
+    <loc>${u.loc}</loc>
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+${u.lastmod ? `    <lastmod>${u.lastmod}</lastmod>\n` : ''}  </url>`).join('\n')}
+</urlset>`;
+
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err: any) {
+    console.warn('Sitemap generation error:', err.message);
+    res.status(500).send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`);
+  }
+});
+
+// POST /api/admin/generate-sitemap - Generate & return sitemap XML for admin dashboard
+app.post("/api/admin/generate-sitemap", async (req, res) => {
+  try {
+    const baseUrl = process.env.APP_URL || 'https://mondaybazaar.in';
+    const deals = await supabaseDb.getDeals();
+
+    const staticUrls: SitemapUrlItem[] = [
+      { loc: `${baseUrl}/`, priority: '1.0', changefreq: 'hourly' },
+      { loc: `${baseUrl}/loot`, priority: '0.9', changefreq: 'hourly' },
+      { loc: `${baseUrl}/categories`, priority: '0.8', changefreq: 'daily' },
+      { loc: `${baseUrl}/stores`, priority: '0.8', changefreq: 'daily' },
+    ];
+
+    const stores = [...new Set(deals.map(d => d.store).filter(Boolean))];
+    const categories = [...new Set(deals.map(d => d.category).filter(Boolean))];
+
+    const storeUrls: SitemapUrlItem[] = stores.map(s => ({
+      loc: `${baseUrl}/store/${encodeURIComponent(s)}`,
+      priority: '0.7',
+      changefreq: 'daily'
+    }));
+
+    const categoryUrls: SitemapUrlItem[] = categories.map(c => ({
+      loc: `${baseUrl}/category/${encodeURIComponent(c)}`,
+      priority: '0.7',
+      changefreq: 'daily'
+    }));
+
+    const dealUrls: SitemapUrlItem[] = deals.map(d => ({
+      loc: `${baseUrl}/deal/${encodeURIComponent(d.id)}`,
+      priority: '0.6',
+      changefreq: 'daily',
+      lastmod: d.postedAt ? new Date(d.postedAt).toISOString().split('T')[0] : undefined
+    }));
+
+    const allUrls: SitemapUrlItem[] = [...staticUrls, ...storeUrls, ...categoryUrls, ...dealUrls];
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${allUrls.map(u => `  <url>
+    <loc>${u.loc}</loc>
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+${u.lastmod ? `    <lastmod>${u.lastmod}</lastmod>\n` : ''}  </url>`).join('\n')}
+</urlset>`;
+
+    res.json({
+      success: true,
+      message: `Sitemap generated successfully with ${allUrls.length} URLs!`,
+      urlCount: allUrls.length,
+      sitemapUrl: `${baseUrl}/sitemap.xml`,
+      xml
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/db-status - Detail Database Engine Status (Supabase)
 app.get("/api/db-status", async (req, res) => {
   try {
