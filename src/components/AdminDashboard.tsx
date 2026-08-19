@@ -708,7 +708,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
     <div id="admin-management-console" className="min-h-screen bg-slate-100 text-slate-800 pb-16 flex flex-col lg:flex-row">
       
       {/* Sidebar Navigation */}
-      <aside className="w-60 bg-slate-900 text-white border-r border-slate-800 sticky top-0 h-screen overflow-y-auto no-scrollbar shrink-0 hidden lg:block">
+      <aside className="fixed top-0 left-0 w-60 h-screen bg-slate-900 text-white border-r border-slate-800 overflow-y-auto no-scrollbar z-30 hidden lg:block"><div className="flex flex-col h-full">
         {/* Sidebar Header */}
         <div className="p-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -849,6 +849,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
             </button>
           )}
         </div>
+      </div>
       </aside>
 
       {/* Mobile Top Header (visible on smaller screens) */}
@@ -951,7 +952,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
       </div>
 
       {/* Main Content Area (full width next to sidebar) */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 lg:ml-60">
         {/* Main Admin Tab Body */}
         <div className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-8 max-w-full">
         
