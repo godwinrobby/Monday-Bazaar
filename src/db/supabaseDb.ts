@@ -81,23 +81,17 @@ class SupabaseDatabaseService {
 
       const err = dealsErr || usersErr || clicksErr || viewsErr || configsErr;
 
-      const fallbackDeals = dealsCount !== null ? dealsCount : (await dbManager.getDeals()).length;
-      const fallbackUsers = usersCount !== null ? usersCount : (await dbManager.getUsers()).length;
-      const fallbackClicks = clicksCount !== null ? clicksCount : (await dbManager.getLinkClicks()).length;
-      const fallbackViews = viewsCount !== null ? viewsCount : (await dbManager.getDealViews()).length;
-      const fallbackConfigs = configsCount !== null ? configsCount : Object.keys(dbManager.getAffiliateConfigs()).length;
-
       return {
         isConnected: true,
         engine: 'Supabase Cloud PostgreSQL',
         url: this.supabaseUrl,
         tables: ['deals', 'users', 'link_clicks', 'deal_views', 'affiliate_configs', 'site_config', 'social_logs'],
-        dealsCount: fallbackDeals,
-        usersCount: fallbackUsers,
-        clicksCount: fallbackClicks,
-        viewsCount: fallbackViews,
-        affiliateConfigsCount: fallbackConfigs,
-        adminUsersCount: Array.isArray(adminUsers) ? adminUsers.length : (await dbManager.getUsers()).filter(u => u.role === 'admin').length,
+        dealsCount: dealsCount ?? 0,
+        usersCount: usersCount ?? 0,
+        clicksCount: clicksCount ?? 0,
+        viewsCount: viewsCount ?? 0,
+        affiliateConfigsCount: configsCount ?? 0,
+        adminUsersCount: Array.isArray(adminUsers) ? adminUsers.length : 0,
         ...(err ? { error: `Supabase query note: ${err.message}` } : {})
       };
     } catch (err: any) {
@@ -237,7 +231,7 @@ class SupabaseDatabaseService {
     }
   }
 
-  // Fetch all deals from Supabase with memory fallback
+  // Fetch all deals from Supabase only (no demo data fallback)
   public async getDeals(): Promise<Deal[]> {
     if (this.client) {
       try {
@@ -246,7 +240,7 @@ class SupabaseDatabaseService {
           .select('*')
           .order('id', { ascending: false });
 
-        if (!error && Array.isArray(data) && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           return data.map((r: any) => ({
             id: r.id,
             title: r.title,
@@ -266,8 +260,8 @@ class SupabaseDatabaseService {
             downvotes: Number(r.downvotes || 0),
             aiScore: Number(r.aiscore ?? r.aiScore ?? 85),
             aiVerdict: r.aiverdict ?? r.aiVerdict ?? '',
-            aiPros: Array.isArray(r.aipros) ? r.aipros : (r.aipros ? (typeof r.aipros === 'string' ? (r.aipros.startsWith('[') ? JSON.parse(r.aipros) : [r.aipros]) : r.aipros) : ['Verified price savings', 'Great seller discount']),
-            aiCons: Array.isArray(r.aicons) ? r.aicons : (r.aicons ? (typeof r.aicons === 'string' ? (r.aicons.startsWith('[') ? JSON.parse(r.aicons) : [r.aicons]) : r.aicons) : ['Limited time deal availability']),
+            aiPros: Array.isArray(r.aipros) ? r.aipros : (r.aipros ? (typeof r.aipros === 'string' ? (r.aipros.startsWith('[') ? JSON.parse(r.aipros) : [r.aipros]) : r.aipros) : []),
+            aiCons: Array.isArray(r.aicons) ? r.aicons : (r.aicons ? (typeof r.aicons === 'string' ? (r.aicons.startsWith('[') ? JSON.parse(r.aicons) : [r.aicons]) : r.aicons) : []),
             postedAt: r.postedat ?? r.postedAt ?? 'Recently',
             postedBy: r.postedby ?? r.postedBy ?? 'Community Member',
             viewsCount: Number(r.viewscount ?? r.viewsCount ?? 0),
@@ -278,16 +272,12 @@ class SupabaseDatabaseService {
             ],
             comments: []
           }));
-        } else if (!error && Array.isArray(data) && data.length === 0) {
-          console.log('🌱 Supabase deals table empty, triggering sync attempt...');
-          this.syncAllDataToSupabase().catch(e => console.warn('Background sync note:', e.message));
-          return dbManager.getDeals();
         }
       } catch (err: any) {
-        console.warn('⚠️ Supabase deal fetch note, falling back to local storage:', err.message);
+        console.warn('⚠️ Supabase deal fetch error:', err.message);
       }
     }
-    return dbManager.getDeals();
+    return [];
   }
 
   // Fetch single deal by ID
@@ -486,12 +476,12 @@ class SupabaseDatabaseService {
     return view;
   }
 
-  // Get link clicks
+  // Get link clicks - Supabase only (no demo data)
   public async getLinkClicks(): Promise<LinkClickRecord[]> {
     if (this.client) {
       try {
         const { data, error } = await this.client.from('link_clicks').select('*').order('created_at', { ascending: false });
-        if (!error && Array.isArray(data) && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           return data.map((c: any) => ({
             id: Number(c.id) || 1,
             dealId: c.deal_id,
@@ -505,15 +495,15 @@ class SupabaseDatabaseService {
         }
       } catch (e: any) {}
     }
-    return dbManager.getLinkClicks();
+    return [];
   }
 
-  // Get deal views
+  // Get deal views - Supabase only (no demo data)
   public async getDealViews(): Promise<DealViewRecord[]> {
     if (this.client) {
       try {
         const { data, error } = await this.client.from('deal_views').select('*').order('created_at', { ascending: false });
-        if (!error && Array.isArray(data) && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           return data.map((v: any) => ({
             id: Number(v.id) || 1,
             dealId: v.deal_id,
@@ -524,10 +514,10 @@ class SupabaseDatabaseService {
         }
       } catch (e: any) {}
     }
-    return dbManager.getDealViews();
+    return [];
   }
 
-  // Get users - fetch directly from Supabase REST API
+  // Get users - fetch directly from Supabase REST API only (no demo data)
   public async getUsers(): Promise<UserRecord[]> {
     const restUrl = `${this.supabaseUrl}/rest/v1/users`;
     
@@ -543,7 +533,7 @@ class SupabaseDatabaseService {
 
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           return data.map((u: any) => ({
             id: u.id,
             username: u.username,
@@ -554,53 +544,6 @@ class SupabaseDatabaseService {
             dealsPosted: u.dealsposted || u.dealsPosted || 0,
             createdAt: u.created_at || u.createdAt || new Date().toISOString()
           }));
-        } else if (Array.isArray(data) && data.length === 0) {
-          // Table is connected but empty -> seed initial users directly to Supabase via REST API
-          const defaultUsers = dbManager.getUsers();
-          for (const user of defaultUsers) {
-            await fetch(restUrl, {
-              method: 'POST',
-              headers: {
-                'apikey': this.supabaseKey,
-                'Authorization': `Bearer ${this.supabaseKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'resolution=merge-duplicates'
-              },
-              body: JSON.stringify({
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                password: user.password || 'admin123',
-                role: user.role,
-                avatarurl: user.avatarUrl,
-                dealsposted: user.dealsPosted
-              })
-            });
-          }
-          // Re-fetch from Supabase to ensure we return the actual Supabase-mapped users
-          const seededRes = await fetch(`${restUrl}?select=*`, {
-            headers: {
-              'apikey': this.supabaseKey,
-              'Authorization': `Bearer ${this.supabaseKey}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          if (seededRes.ok) {
-            const seededData = await seededRes.json();
-            if (Array.isArray(seededData) && seededData.length > 0) {
-              return seededData.map((u: any) => ({
-                id: u.id,
-                username: u.username,
-                email: u.email,
-                password: u.password || 'admin123',
-                role: u.role || 'user',
-                avatarUrl: u.avatarurl || u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-                dealsPosted: u.dealsposted || u.dealsPosted || 0,
-                createdAt: u.created_at || u.createdAt || new Date().toISOString()
-              }));
-            }
-          }
-          return defaultUsers;
         }
       }
     } catch (e: any) {
@@ -611,7 +554,7 @@ class SupabaseDatabaseService {
     if (this.client) {
       try {
         const { data, error } = await this.client.from('users').select('*');
-        if (!error && Array.isArray(data) && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           return data.map((u: any) => ({
             id: u.id,
             username: u.username,
@@ -628,8 +571,8 @@ class SupabaseDatabaseService {
       }
     }
 
-    // 3. Final fallback to local dbManager
-    return dbManager.getUsers();
+    // 3. No demo data - return empty array
+    return [];
   }
 
   // Verify admin login directly against Supabase REST API
@@ -702,18 +645,38 @@ class SupabaseDatabaseService {
       console.warn('Supabase REST API admin login query error:', e.message);
     }
 
-    // 2. Fallback: ensure users are seeded to Supabase, then verify
-    const users = await this.getUsers();
-    const found = users.find(u => 
-      (u.username.toLowerCase() === input || u.email.toLowerCase() === input) &&
-      u.role === 'admin'
-    );
+    // 2. Fallback: try Supabase JS client for exact match
+    if (this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('users')
+          .select('*')
+          .or(`email.eq.${input},username.eq.${input}`)
+          .eq('role', 'admin')
+          .limit(1);
 
-    if (!found) return null;
-    const expectedPass = found.password || 'admin123';
-    if (password === expectedPass) {
-      return found;
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const user = data[0];
+          const expectedPass = user.password || 'admin123';
+          if (password === expectedPass) {
+            return {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              password: user.password || 'admin123',
+              role: user.role || 'admin',
+              avatarUrl: user.avatarurl || user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+              dealsPosted: user.dealsposted || user.dealsPosted || 0,
+              createdAt: user.created_at || user.createdAt || new Date().toISOString()
+            };
+          }
+          return null;
+        }
+      } catch (e: any) {
+        console.warn('Supabase client admin login fallback error:', e.message);
+      }
     }
+
     return null;
   }
 
@@ -791,12 +754,12 @@ class SupabaseDatabaseService {
     return deleted;
   }
 
-  // Get affiliate configs
+  // Get affiliate configs - Supabase only (no demo data)
   public async getAffiliateConfigs(): Promise<Record<string, StoreAffiliateConfig>> {
     if (this.client) {
       try {
         const { data, error } = await this.client.from('affiliate_configs').select('*');
-        if (!error && Array.isArray(data) && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           const res: Record<string, StoreAffiliateConfig> = {};
           data.forEach((r: any) => {
             res[r.store_key] = {
@@ -811,7 +774,7 @@ class SupabaseDatabaseService {
         }
       } catch (e: any) {}
     }
-    return dbManager.getAffiliateConfigs();
+    return {};
   }
 
   // Save affiliate configs
@@ -834,7 +797,7 @@ class SupabaseDatabaseService {
     return updated;
   }
 
-  // Get site banner
+  // Get site banner - Supabase only (no demo data)
   public async getSiteBanner(): Promise<SiteBannerConfig> {
     if (this.client) {
       try {
@@ -848,7 +811,7 @@ class SupabaseDatabaseService {
         }
       } catch (e: any) {}
     }
-    return dbManager.getSiteBanner();
+    return { enabled: false, text: '', badge: '' };
   }
 
   // Save site banner
@@ -865,7 +828,7 @@ class SupabaseDatabaseService {
     return updated;
   }
 
-  // Get social config
+  // Get social config - Supabase only (no demo data)
   public async getSocialConfig(): Promise<SocialConfig> {
     if (this.client) {
       try {
@@ -876,11 +839,32 @@ class SupabaseDatabaseService {
           .single();
         if (!error && data?.config_value) {
           const parsed = typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
-          return { ...dbManager.getSocialConfig(), ...parsed };
+          return {
+            facebookEnabled: false,
+            facebookPageId: '',
+            facebookAccessToken: '',
+            instagramEnabled: false,
+            instagramAccountId: '',
+            instagramAccessToken: '',
+            autoPostOnNewDeal: false,
+            autoPostLootOnly: false,
+            postTemplate: '',
+            ...parsed
+          };
         }
       } catch (e: any) {}
     }
-    return dbManager.getSocialConfig();
+    return {
+      facebookEnabled: false,
+      facebookPageId: '',
+      facebookAccessToken: '',
+      instagramEnabled: false,
+      instagramAccountId: '',
+      instagramAccessToken: '',
+      autoPostOnNewDeal: false,
+      autoPostLootOnly: false,
+      postTemplate: ''
+    };
   }
 
   // Save social config
@@ -899,7 +883,7 @@ class SupabaseDatabaseService {
     return updated;
   }
 
-  // Get social logs
+  // Get social logs - Supabase only (no demo data)
   public async getSocialLogs(): Promise<SocialLogRecord[]> {
     if (this.client) {
       try {
@@ -908,7 +892,7 @@ class SupabaseDatabaseService {
           .select('*')
           .order('created_at', { ascending: false })
           .limit(100);
-        if (!error && Array.isArray(data) && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           return data.map((l: any) => ({
             id: l.id || `log_${Date.now()}`,
             platform: l.platform || 'facebook',
@@ -922,7 +906,7 @@ class SupabaseDatabaseService {
         }
       } catch (e: any) {}
     }
-    return dbManager.getSocialLogs();
+    return [];
   }
 
   // Add social log
