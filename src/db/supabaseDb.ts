@@ -582,22 +582,25 @@ class SupabaseDatabaseService {
     return dbManager.getUsers();
   }
 
-  // Verify admin login directly against Supabase users table
+  // Verify admin login directly against Supabase REST API
   public async verifyAdminLogin(identifier: string, password: string): Promise<UserRecord | null> {
     const input = identifier.trim().toLowerCase();
+    const restUrl = `${this.supabaseUrl}/rest/v1/users`;
     
-    // 1. Try to fetch from Supabase directly using exact match on username or email
-    if (this.client) {
-      try {
-        // First try exact email match (use limit(1) without single to avoid PGRST116 error when no rows)
-        const { data: emailData, error: emailError } = await this.client
-          .from('users')
-          .select('*')
-          .eq('email', input)
-          .eq('role', 'admin')
-          .limit(1);
+    // 1. Try to fetch from Supabase REST API directly using exact match on username or email
+    try {
+      // First try exact email match
+      const emailRes = await fetch(`${restUrl}?select=*&email=eq.${encodeURIComponent(input)}&role=eq.admin&limit=1`, {
+        headers: {
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-        if (!emailError && Array.isArray(emailData) && emailData.length > 0) {
+      if (emailRes.ok) {
+        const emailData = await emailRes.json();
+        if (Array.isArray(emailData) && emailData.length > 0) {
           const user = emailData[0];
           const expectedPass = user.password || 'admin123';
           if (password === expectedPass) {
@@ -614,16 +617,20 @@ class SupabaseDatabaseService {
           }
           return null;
         }
+      }
 
-        // Then try exact username match
-        const { data: usernameData, error: usernameError } = await this.client
-          .from('users')
-          .select('*')
-          .eq('username', input)
-          .eq('role', 'admin')
-          .limit(1);
+      // Then try exact username match
+      const usernameRes = await fetch(`${restUrl}?select=*&username=eq.${encodeURIComponent(input)}&role=eq.admin&limit=1`, {
+        headers: {
+          'apikey': this.supabaseKey,
+          'Authorization': `Bearer ${this.supabaseKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-        if (!usernameError && Array.isArray(usernameData) && usernameData.length > 0) {
+      if (usernameRes.ok) {
+        const usernameData = await usernameRes.json();
+        if (Array.isArray(usernameData) && usernameData.length > 0) {
           const user = usernameData[0];
           const expectedPass = user.password || 'admin123';
           if (password === expectedPass) {
@@ -640,9 +647,9 @@ class SupabaseDatabaseService {
           }
           return null;
         }
-      } catch (e: any) {
-        console.warn('Supabase direct admin login query error:', e.message);
       }
+    } catch (e: any) {
+      console.warn('Supabase REST API admin login query error:', e.message);
     }
 
     // 2. Fallback: ensure users are seeded to Supabase, then verify
