@@ -380,7 +380,10 @@ class SupabaseDatabaseService {
   public async updateDeal(id: string, updates: Partial<Deal>): Promise<Deal | null> {
     const updated = dbManager.updateDeal(id, updates);
 
-    if (this.client && updated) {
+    // Always sync to Supabase even if the deal isn't in the local dbManager
+    // (e.g. deals loaded directly from Supabase). This ensures Active/Inactive
+    // toggles and edits persist correctly.
+    if (this.client) {
       try {
         const payload: Record<string, any> = {};
         if (updates.title !== undefined) payload.title = updates.title;
@@ -412,7 +415,9 @@ class SupabaseDatabaseService {
   public async deleteDeal(id: string): Promise<boolean> {
     const deleted = dbManager.deleteDeal(id);
 
-    if (this.client && deleted) {
+    // Always delete from Supabase even if the deal isn't in the local dbManager
+    // (e.g. deals loaded directly from Supabase). This ensures Delete works.
+    if (this.client) {
       try {
         await this.client.from('deals').delete().eq('id', id);
       } catch (err: any) {
