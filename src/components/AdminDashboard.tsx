@@ -705,7 +705,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
   }, 0);
 
   return (
-    <div id="admin-management-console" className="min-h-screen bg-slate-100 text-slate-800 pb-16 flex">
+    <div id="admin-management-console" className="min-h-screen bg-slate-100 text-slate-800 pb-16 flex flex-col lg:flex-row">
       
       {/* Sidebar Navigation */}
       <aside className="w-60 bg-slate-900 text-white border-r border-slate-800 sticky top-0 h-screen overflow-y-auto no-scrollbar shrink-0 hidden lg:block">
@@ -880,6 +880,15 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
               <ArrowLeft className="w-3 h-3 text-orange-400" />
               <span>Store</span>
             </button>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-[10px] rounded-lg border border-red-500/30 flex items-center gap-1"
+              >
+                <LogOut className="w-3 h-3" />
+                <span>Logout</span>
+              </button>
+            )}
           </div>
         </div>
         {/* Mobile Horizontal Scroll Menu */}
