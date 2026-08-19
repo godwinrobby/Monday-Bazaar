@@ -1881,29 +1881,6 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         </div>
       </div>
 
-      {/* Admin Dedicated Footer */}
-      <footer className="bg-slate-900 text-slate-400 border-t border-slate-800 py-6 mt-16 text-xs">
-        <div className="max-w-full px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-orange-500" />
-            <span className="font-bold text-slate-200">Monday Bazaar Admin Control Portal</span>
-            <span className="text-slate-500">• Catalog & Affiliation Management</span>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onCloseAdmin}
-              className="text-orange-400 hover:text-orange-300 font-bold hover:underline transition-colors flex items-center gap-1"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Return to Website Storefront</span>
-            </button>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-500">System Status: <strong className="text-emerald-400 font-semibold">Online</strong></span>
-          </div>
-        </div>
-      </footer>
-
       {/* ==================== ADD / EDIT DEAL MODAL ==================== */}
       {isDealModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
