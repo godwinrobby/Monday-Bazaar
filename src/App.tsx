@@ -19,7 +19,6 @@ import { AiLinkAnalyzerModal } from './components/AiLinkAnalyzerModal';
 import { PostDealModal } from './components/PostDealModal';
 import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
-import { MobileLootAlertModal } from './components/MobileLootAlertModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Flame, ShieldCheck } from 'lucide-react';
 
@@ -526,9 +525,6 @@ export default function App() {
         }}
         onRemoveSave={(id) => setSavedDealIds(prev => prev.filter(i => i !== id))}
       />
-
-      {/* Mobile-Only Loot Alert Notification Popup */}
-      <MobileLootAlertModal />
 
       {/* Global Toast Notifications */}
       <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
