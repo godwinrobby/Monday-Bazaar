@@ -2142,7 +2142,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                 <Database className="w-5 h-5 text-emerald-600" />
                 <div>
                   <h3 className="font-extrabold text-base text-slate-900">Supabase SQL Table Schema Setup</h3>
-                  <p className="text-xs text-slate-500">Run this script in Supabase Dashboard -> SQL Editor to create tables</p>
+                  <p className="text-xs text-slate-500">Run this script in Supabase Dashboard {'->'} SQL Editor to create tables</p>
                 </div>
               </div>
               <button

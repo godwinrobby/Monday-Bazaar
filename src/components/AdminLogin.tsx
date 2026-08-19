@@ -118,7 +118,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
       };
 
       // Generate session token
-      const token = `admin_sess_${Date.now()}_${Array.from(userData.id).map(c => c.charCodeAt(0).toString(16)).join('')}`;
+      const token = `admin_sess_${Date.now()}_${String(userData.id).split('').map(c => c.charCodeAt(0).toString(16)).join('')}`;
 
       // Store session
       sessionStorage.setItem('admin_token', token);
