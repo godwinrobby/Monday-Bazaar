@@ -293,19 +293,21 @@ export default function App() {
     });
   }, [deals, filters]);
 
-  // Counts by Store
+  // Counts by Store (only Active deals)
   const storeCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     deals.forEach(d => {
+      if (d.isActive === false) return;
       counts[d.store] = (counts[d.store] || 0) + 1;
     });
     return counts;
   }, [deals]);
 
-  // Counts by Category
+  // Counts by Category (only Active deals)
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: deals.length };
-    deals.forEach(d => {
+    const activeDeals = deals.filter(d => d.isActive !== false);
+    const counts: Record<string, number> = { All: activeDeals.length };
+    activeDeals.forEach(d => {
       counts[d.category] = (counts[d.category] || 0) + 1;
     });
     return counts;

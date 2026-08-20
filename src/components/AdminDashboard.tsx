@@ -689,10 +689,13 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
     return matchesSearch && matchesStore && matchesCategory && matchesStatus;
   });
 
-  // Calculate Metrics
-  const totalDealsCount = deals.length;
-  const totalLootDealsCount = deals.filter(d => d.isLootDeal).length;
-  const totalVerifiedCount = deals.filter(d => d.isVerified).length;
+  // Calculate Metrics (Counts only Active deals for public-facing metrics)
+  const activeDeals = deals.filter(d => d.isActive !== false);
+  const inactiveDeals = deals.filter(d => d.isActive === false);
+  const totalDealsCount = activeDeals.length;
+  const totalCatalogDealsCount = deals.length;
+  const totalLootDealsCount = deals.filter(d => d.isLootDeal && d.isActive !== false).length;
+  const totalVerifiedCount = deals.filter(d => d.isVerified && d.isActive !== false).length;
   const totalViewsSum = deals.reduce((sum, d) => sum + (d.viewsCount || 0), 0);
   
   // Calculate Estimated Monthly Affiliate Revenue Potential
@@ -1293,7 +1296,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                   <tbody className="divide-y divide-slate-100">
                     {(Object.keys(STORES_INFO) as StoreName[]).map(store => {
                       const cfg = affiliateConfigs[store] || DEFAULT_AFFILIATE_CONFIGS[store];
-                      const storeDealsCount = deals.filter(d => d.store === store).length;
+                      const storeDealsCount = deals.filter(d => d.store === store && d.isActive !== false).length;
 
                       return (
                         <tr key={store} className="hover:bg-slate-50/60 transition-colors">
@@ -1362,9 +1365,9 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                   onChange={(e) => setStatusFilter(e.target.value as any)}
                   className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700"
                 >
-                  <option value="All">All Status</option>
-                  <option value="Active">🟢 Active Only</option>
-                  <option value="Inactive">⚪ Inactive Only</option>
+                  <option value="All">All Status ({deals.length})</option>
+                  <option value="Active">🟢 Active ({activeDeals.length})</option>
+                  <option value="Inactive">⚪ Inactive ({inactiveDeals.length})</option>
                 </select>
 
                 <select
@@ -1400,11 +1403,41 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
               </div>
             </div>
 
+            {/* Active / Inactive Summary Strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-bold text-emerald-800">Active Deals</span>
+                </div>
+                <span className="text-2xl font-black text-emerald-700">{activeDeals.length}</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+                  <span className="text-xs font-bold text-slate-700">Inactive Deals</span>
+                </div>
+                <span className="text-2xl font-black text-slate-600">{inactiveDeals.length}</span>
+              </div>
+              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-orange-600" />
+                  <span className="text-xs font-bold text-orange-800">Total Catalog</span>
+                </div>
+                <span className="text-2xl font-black text-orange-700">{totalCatalogDealsCount}</span>
+              </div>
+            </div>
+
             {/* Deals Table */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="font-extrabold text-sm text-slate-900">
                   Catalog List ({filteredAdminDeals.length} Deals)
+                  {statusFilter !== 'All' && (
+                    <span className="ml-2 px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full">
+                      Filter: {statusFilter === 'Active' ? '🟢 Active' : '⚪ Inactive'}
+                    </span>
+                  )}
                 </h3>
                 <span className="text-xs text-slate-500">Live preview update instant</span>
               </div>
