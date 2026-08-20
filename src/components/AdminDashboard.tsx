@@ -1420,7 +1420,11 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setLootOnly(!lootOnly)}
-                    className={}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1 transition-all cursor-pointer ${
+                      lootOnly
+                        ? 'bg-red-50 text-red-700 border-red-300 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
                     title="Only Loot Deals"
                   >
                     <Flame className="w-3 h-3 text-red-600 fill-red-600" />
@@ -1428,7 +1432,11 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                   </button>
                   <button
                     onClick={() => setVerifiedOnly(!verifiedOnly)}
-                    className={}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1 transition-all cursor-pointer ${
+                      verifiedOnly
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
                     title="Only Verified Deals"
                   >
                     <CheckCircle className="w-3 h-3 text-emerald-600" />
@@ -1436,7 +1444,11 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                   </button>
                   <button
                     onClick={() => setCouponOnly(!couponOnly)}
-                    className={}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1 transition-all cursor-pointer ${
+                      couponOnly
+                        ? 'bg-amber-50 text-amber-700 border-amber-300 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
                     title="Only Deals with Coupon Codes"
                   >
                     <Tag className="w-3 h-3 text-amber-600" />
