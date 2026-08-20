@@ -15,8 +15,6 @@ import { WatchlistPage } from './pages/WatchlistPage';
 import { AdminPage } from './pages/AdminPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
-import { AiLinkAnalyzerModal } from './components/AiLinkAnalyzerModal';
-import { PostDealModal } from './components/PostDealModal';
 import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
 import { ToastContainer, ToastMessage } from './components/Toast';
@@ -72,8 +70,6 @@ export default function App() {
   };
 
   const [dealForAlert, setDealForAlert] = useState<Deal | null>(null);
-  const [isAiInspectorOpen, setIsAiInspectorOpen] = useState(false);
-  const [isPostDealOpen, setIsPostDealOpen] = useState(false);
   const [isWatchlistOpen, setIsWatchlistOpen] = useState(false);
 
   // Voting Handler
@@ -330,8 +326,6 @@ export default function App() {
             setFilters={setFilters}
             savedDealsCount={savedDealIds.length}
             onOpenSavedDeals={() => setIsWatchlistOpen(true)}
-            onOpenPostDeal={() => setIsPostDealOpen(true)}
-            onOpenAiInspector={() => setIsAiInspectorOpen(true)}
             totalDealsCount={deals.length}
           />
           <Navbar savedCount={savedDealIds.length} />
@@ -356,8 +350,6 @@ export default function App() {
                 onVote={handleVote}
                 onToggleSave={handleToggleSave}
                 onOpenPriceAlert={(d) => setDealForAlert(d)}
-                onOpenPostDeal={() => setIsPostDealOpen(true)}
-                onOpenAiInspector={() => setIsAiInspectorOpen(true)}
               />
             }
           />
@@ -501,18 +493,6 @@ export default function App() {
       )}
 
       {/* Modals & Drawers */}
-      <AiLinkAnalyzerModal
-        isOpen={isAiInspectorOpen}
-        onClose={() => setIsAiInspectorOpen(false)}
-        onPostAnalyzedDeal={handleAddDeal}
-      />
-
-      <PostDealModal
-        isOpen={isPostDealOpen}
-        onClose={() => setIsPostDealOpen(false)}
-        onAddDeal={handleAddDeal}
-      />
-
       <PriceAlertModal
         deal={dealForAlert}
         onClose={() => setDealForAlert(null)}

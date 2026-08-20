@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Flame, Plus, Heart, Sparkles, X } from 'lucide-react';
+import { Search, Flame, Heart, X } from 'lucide-react';
 import { FilterOptions } from '../types';
 
 interface HeaderProps {
@@ -8,8 +8,6 @@ interface HeaderProps {
   setFilters: React.Dispatch<React.SetStateAction<FilterOptions>>;
   savedDealsCount: number;
   onOpenSavedDeals: () => void;
-  onOpenPostDeal: () => void;
-  onOpenAiInspector: () => void;
   totalDealsCount: number;
   onLogoClick?: () => void;
 }
@@ -19,8 +17,6 @@ export const Header: React.FC<HeaderProps> = ({
   setFilters,
   savedDealsCount,
   onOpenSavedDeals,
-  onOpenPostDeal,
-  onOpenAiInspector,
   totalDealsCount,
   onLogoClick,
 }) => {
@@ -77,28 +73,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Action Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {/* AI Link Inspector */}
-            <button
-              onClick={onOpenAiInspector}
-              id="ai-inspector-header-btn"
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 text-indigo-700 border border-indigo-200/80 rounded-full font-semibold text-xs transition-all shadow-xs cursor-pointer"
-              title="Paste any product URL to inspect with Gemini AI"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-spin-slow shrink-0" />
-              <span className="hidden lg:inline">AI Link Inspector</span>
-              <span className="inline lg:hidden text-[11px] font-bold">AI</span>
-            </button>
-
-            {/* Post Deal */}
-            <button
-              onClick={onOpenPostDeal}
-              id="post-deal-header-btn"
-              className="inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full font-semibold text-xs transition-all shadow-sm shrink-0 cursor-pointer"
-            >
-              <Plus className="w-4 h-4 text-orange-400 shrink-0" />
-              <span className="hidden sm:inline">Post Deal</span>
-            </button>
-
             {/* Saved Deals Watchlist */}
             <button
               onClick={() => navigate('/watchlist')}

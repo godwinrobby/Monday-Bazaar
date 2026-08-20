@@ -4,7 +4,7 @@ import { StoreFilterBar } from '../components/StoreFilterBar';
 import { CategoryNav } from '../components/CategoryNav';
 import { MobileFilterDrawer } from '../components/MobileFilterDrawer';
 import { DealCard } from '../components/DealCard';
-import { RefreshCw, ShoppingBag, Sparkles, SlidersHorizontal, ChevronRight, Store, Grid, Flame, Ticket } from 'lucide-react';
+import { RefreshCw, ShoppingBag, SlidersHorizontal, ChevronRight, Store, Grid, Flame, Ticket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface DealsPageProps {
@@ -19,8 +19,6 @@ interface DealsPageProps {
   onVote: (dealId: string, type: 'up' | 'down') => void;
   onToggleSave: (deal: Deal) => void;
   onOpenPriceAlert: (deal: Deal) => void;
-  onOpenPostDeal: () => void;
-  onOpenAiInspector: () => void;
 }
 
 export const DealsPage: React.FC<DealsPageProps> = ({
@@ -35,8 +33,6 @@ export const DealsPage: React.FC<DealsPageProps> = ({
   onVote,
   onToggleSave,
   onOpenPriceAlert,
-  onOpenPostDeal,
-  onOpenAiInspector,
 }) => {
   const navigate = useNavigate();
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
@@ -239,10 +235,17 @@ export const DealsPage: React.FC<DealsPageProps> = ({
             </p>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
               <button
-                onClick={onOpenPostDeal}
+                onClick={() => setFilters({
+                  category: 'All',
+                  store: 'All',
+                  searchQuery: '',
+                  sortBy: 'hot',
+                  onlyLootDeals: false,
+                  onlyCoupons: false,
+                })}
                 className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors"
               >
-                Post a Deal
+                Clear Filters
               </button>
             </div>
           </div>
@@ -254,7 +257,7 @@ export const DealsPage: React.FC<DealsPageProps> = ({
             </div>
             <h3 className="font-bold text-slate-900 text-lg">No Deals Match Your Filters</h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Try adjusting your search terms or store filters, or paste a deal link directly into our AI Inspector!
+              Try adjusting your search terms or store filters to find more deals.
             </p>
             <div className="flex justify-center gap-3 pt-2">
               <button
@@ -269,14 +272,6 @@ export const DealsPage: React.FC<DealsPageProps> = ({
                 className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors"
               >
                 Clear All Filters
-              </button>
-
-              <button
-                onClick={onOpenAiInspector}
-                className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors flex items-center gap-1.5"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                Inspect Any Link with AI
               </button>
             </div>
           </div>
