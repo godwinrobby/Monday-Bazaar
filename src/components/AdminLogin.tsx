@@ -20,30 +20,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
   // Global UI states
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [adminUsers, setAdminUsers] = useState<any[]>([]);
-
-  // Fetch registered admin users directly from Supabase REST API
-  const fetchAdminUsers = async () => {
-    try {
-      const res = await fetch(`${SUPABASE_REST_URL}/users?select=*&role=eq.admin`, {
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setAdminUsers(data);
-      }
-    } catch (e) {
-      console.error('Supabase fetch admin users error:', e);
-    }
-  };
-
-  useEffect(() => {
-    fetchAdminUsers();
-  }, []);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,12 +106,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickFill = (email: string, pass: string) => {
-    setUsernameOrEmail(email);
-    setPassword(pass);
-    setErrorMsg(null);
   };
 
   return (
@@ -250,40 +220,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
             )}
           </button>
         </form>
-
-        {/* Quick Select Admin Credentials mapped from Supabase */}
-        <div className="pt-2 border-t border-slate-800/80 space-y-2">
-          <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-            <span>Supabase Mapped Admin Accounts:</span>
-            <span className="text-orange-400 font-bold">{adminUsers.length} Mapped</span>
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-0.5">
-            {adminUsers.map((usr: any) => (
-              <button
-                key={usr.id}
-                type="button"
-                onClick={() => handleQuickFill(usr.email || usr.username, usr.password || 'admin123')}
-                className="p-2.5 bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl text-left transition-all text-xs group cursor-pointer flex items-center gap-2"
-              >
-                <div className="w-7 h-7 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-400 flex items-center justify-center text-[11px] font-black shrink-0">
-                  {usr.username ? usr.username.charAt(0).toUpperCase() : 'A'}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-bold text-white group-hover:text-orange-400 transition-colors truncate text-[11px]">
-                    {usr.username}
-                  </div>
-                  <div className="text-[10px] text-slate-500 truncate">{usr.email}</div>
-                </div>
-              </button>
-            ))}
-            {adminUsers.length === 0 && (
-              <div className="col-span-2 text-center p-2 text-xs text-slate-500">
-                Loading mapped admin accounts from database...
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Footer info */}
         <div className="text-center text-[10px] text-slate-500 flex items-center justify-center gap-1.5 pt-0.5">
