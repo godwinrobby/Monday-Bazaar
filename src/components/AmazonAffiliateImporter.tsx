@@ -76,6 +76,7 @@ interface AmazonApiResponse {
     description: string;
     features: string[];
     availability: string;
+    product_url: string;
   };
 }
 
@@ -128,10 +129,10 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
           if (json.success && json.product) {
             const apiRes = json as AmazonApiResponse;
             const product: AmazonApiResponse['product'] = apiRes.product || {
-              title: '', brand: '', price: null, currency: 'INR', rating: null, review_count: null, images: [], description: '', features: [], availability: ''
+              title: '', brand: '', price: null, currency: 'INR', rating: null, review_count: null, images: [], description: '', features: [], availability: '', product_url: ''
             };
             const asin = apiRes.asin || extractAmazonAsin(targetInput) || '';
-            const productUrl = apiRes.final_product_url || apiRes.redirect_url || `https://www.amazon.in/dp/${asin}`;
+            const productUrl = product.product_url || apiRes.final_product_url || apiRes.redirect_url || `https://www.amazon.in/dp/${asin}`;
             const price = typeof product.price === 'number' ? product.price : 0;
             
             data = {
