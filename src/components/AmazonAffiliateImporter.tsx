@@ -61,22 +61,23 @@ interface AmazonProductData {
 // Raw API response format from the Amazon fetch service
 interface AmazonApiResponse {
   success: boolean;
-  original_url: string;
-  redirect_url: string;
-  final_product_url: string;
-  asin: string;
-  product: {
+  data: {
+    original_url: string;
+    final_url: string;
+    asin: string;
     title: string;
     brand: string;
-    price: number | null;
+    price: number;
     currency: string;
-    rating: number | null;
-    review_count: number | null;
+    formatted_price: string;
+    rating: number;
+    review_count: number;
+    image: string;
     images: string[];
     description: string;
     features: string[];
     availability: string;
-    product_url: string;
+    affiliate_url: string;
   };
 }
 
@@ -125,43 +126,42 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
           const json = await response.json();
           
           // Handle the new API response format:
-          // { success, original_url, redirect_url, final_product_url, asin, product: { title, brand, price, currency, rating, review_count, images, description, features, availability } }
-          if (json.success && json.product) {
+          // { success, data: { original_url, final_url, asin, title, brand, price, currency, formatted_price, rating, review_count, image, images, description, features, availability, affiliate_url } }
+          if (json.success && json.data) {
             const apiRes = json as AmazonApiResponse;
-            const product: AmazonApiResponse['product'] = apiRes.product || {
-              title: '', brand: '', price: null, currency: 'INR', rating: null, review_count: null, images: [], description: '', features: [], availability: '', product_url: ''
-            };
-            const asin = apiRes.asin || extractAmazonAsin(targetInput) || '';
-            const productUrl = product.product_url || apiRes.final_product_url || apiRes.redirect_url || `https://www.amazon.in/dp/${asin}`;
-            const price = typeof product.price === 'number' ? product.price : 0;
+            const d = apiRes.data || {} as AmazonApiResponse['data'];
+            const asin = d.asin || extractAmazonAsin(targetInput) || '';
+            const productUrl = d.final_url || d.affiliate_url || `https://www.amazon.in/dp/${asin}`;
+            const price = typeof d.price === 'number' ? d.price : 0;
+            const allImages = [...(d.images || [])];
+            if (d.image && !allImages.includes(d.image)) {
+              allImages.unshift(d.image);
+            }
             
             data = {
               asin,
               product_url: productUrl,
-              title: product.title || '',
-              brand: product.brand || '',
-              description: product.description || '',
+              title: d.title || '',
+              brand: d.brand || '',
+              description: d.description || '',
               price: {
                 current: price,
                 original: price,
-                currency: product.currency || 'INR',
-                formatted: price ? `₹${price.toLocaleString('en-IN')}` : '₹0'
+                currency: d.currency || 'INR',
+                formatted: d.formatted_price || (price ? `₹${price.toLocaleString('en-IN')}` : '₹0')
               },
-              availability: product.availability || '',
+              availability: d.availability || '',
               rating: {
-                value: typeof product.rating === 'number' ? product.rating : 0,
-                count: typeof product.review_count === 'number' ? product.review_count : 0
+                value: typeof d.rating === 'number' ? d.rating : 0,
+                count: typeof d.review_count === 'number' ? d.review_count : 0
               },
-              images: (product.images || []).map((url: string) => ({ url, type: 'main' })),
-              features: product.features || [],
+              images: allImages.map((url: string) => ({ url, type: 'main' })),
+              features: d.features || [],
               categories: [],
               seller: { name: '', url: '' },
               delivery: { available: false, estimated_date: '' },
               metadata: { source: 'amazon-api', fetched_at: new Date().toISOString() }
             };
-          } else if (json.success && json.data) {
-            // Handle the old format: { success, data: { asin, product_url, title, ... } }
-            data = json.data as AmazonProductData;
           } else {
             console.warn('Amazon API returned error:', json.error);
           }
