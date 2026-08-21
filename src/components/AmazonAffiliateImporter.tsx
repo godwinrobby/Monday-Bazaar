@@ -11,7 +11,7 @@ const CATEGORY_LIST: CategoryName[] = [
   'Gaming & Accessories',
   'Beauty & Grooming',
 ];
-import { CURATED_AMAZON_HOT_DEALS } from '../utils/amazonFetcher';
+import { CURATED_AMAZON_HOT_DEALS, fetchAmazonProductDetails } from '../utils/amazonFetcher';
 import { buildAffiliateUrl } from '../utils/affiliate';
 import { 
   ShoppingBag, 
@@ -88,20 +88,67 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
     setFetchError(null);
 
     try {
-      const response = await fetch('/api/amazon-fetch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urlOrAsin: targetInput })
-      });
-      const json = await response.json();
+      // Try the backend /api/amazon-fetch endpoint first
+      let data: AmazonProductData | null = null;
+      try {
+        const response = await fetch('/api/amazon-fetch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urlOrAsin: targetInput })
+        });
 
-      if (!json.success || !json.data) {
-        setFetchError(json.error || 'Failed to fetch Amazon product details.');
+        // Check content-type to ensure we got JSON, not HTML (SPA fallback)
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const json = await response.json();
+          if (json.success && json.data) {
+            data = json.data as AmazonProductData;
+          } else {
+            console.warn('Amazon API returned error:', json.error);
+          }
+        } else {
+          console.warn('Amazon API returned non-JSON response (likely HTML fallback). Using local fetcher.');
+        }
+      } catch (err) {
+        console.warn('Backend /api/amazon-fetch failed, falling back to local Amazon fetcher:', err);
+      }
+
+      // Fallback: use local Amazon fetcher if API failed or returned empty data
+      if (!data || (!data.title && !data.price?.current)) {
+        try {
+          const localResult = await fetchAmazonProductDetails(targetInput, amazonTag);
+          data = {
+            asin: localResult.asin,
+            product_url: `https://www.amazon.in/dp/${localResult.asin}`,
+            title: localResult.title,
+            brand: '',
+            description: localResult.description,
+            price: {
+              current: localResult.dealPrice,
+              original: localResult.originalPrice,
+              currency: 'INR',
+              formatted: `₹${localResult.dealPrice.toLocaleString('en-IN')}`
+            },
+            availability: 'In Stock',
+            rating: { value: 0, count: 0 },
+            images: [{ url: localResult.imageUrl, type: 'main' }],
+            features: localResult.aiPros,
+            categories: [localResult.category],
+            seller: { name: 'Amazon', url: '' },
+            delivery: { available: true, estimated_date: '' },
+            metadata: { source: 'local-fallback', fetched_at: new Date().toISOString() }
+          };
+        } catch (localErr: any) {
+          console.error('Local Amazon fetcher also failed:', localErr);
+        }
+      }
+
+      if (!data) {
+        setFetchError('Failed to fetch Amazon product details. Please try again or enter details manually.');
         setIsLoading(false);
         return;
       }
 
-      const data: AmazonProductData = json.data;
       setFetchedData(data);
 
       // Auto-detect category from Amazon categories or features
