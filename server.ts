@@ -1041,6 +1041,204 @@ app.post("/api/social/auto-post-deal", async (req, res) => {
   }
 });
 
+// POST /api/amazon-fetch - Fetch Amazon product details and return structured JSON
+app.post("/api/amazon-fetch", async (req, res) => {
+  try {
+    const { urlOrAsin } = req.body;
+    if (!urlOrAsin || typeof urlOrAsin !== 'string' || !urlOrAsin.trim()) {
+      return res.status(400).json({ success: false, error: 'Please provide a valid Amazon product URL or ASIN.' });
+    }
+
+    const input = urlOrAsin.trim();
+    
+    // Extract ASIN from URL or direct ASIN input
+    const asinMatch = input.match(/(?:dp|gp\/product|asin|product-reviews|d|link\.amazon[^\/]*|amzn[^\/]*)\/([A-Z0-9]{10})/i) ||
+                      input.match(/\b(B0[A-Z0-9]{8})\b/i) ||
+                      input.match(/^([A-Z0-9]{10})$/i);
+    const asin = asinMatch ? asinMatch[1].toUpperCase() : null;
+
+    if (!asin) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Could not extract a valid Amazon ASIN from the provided input.' 
+      });
+    }
+
+    const productUrl = `https://www.amazon.in/dp/${asin}`;
+
+    // Try to fetch real product data from Amazon (best-effort)
+    let productData: any = null;
+    try {
+      const amazonRes = await fetch(productUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-IN,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br'
+        }
+      });
+      
+      if (amazonRes.ok) {
+        const html = await amazonRes.text();
+        
+        // Extract title from meta tags
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/i) || 
+                           html.match(/<meta name="title" content="([^"]+)"/i) ||
+                           html.match(/<meta property="og:title" content="([^"]+)"/i);
+        const title = titleMatch ? titleMatch[1].replace(/&/g, '&').replace(/"/g, '"').trim() : '';
+
+        // Extract description
+        const descMatch = html.match(/<meta name="description" content="([^"]+)"/i) ||
+                          html.match(/<meta property="og:description" content="([^"]+)"/i);
+        const description = descMatch ? descMatch[1].replace(/&/g, '&').trim() : '';
+
+        // Extract image
+        const imgMatch = html.match(/<meta property="og:image" content="([^"]+)"/i) ||
+                         html.match(/"hiRes":"([^"]+)"/i) ||
+                         html.match(/"large":"([^"]+)"/i);
+        const imageUrl = imgMatch ? imgMatch[1] : '';
+
+        // Extract price from JSON-LD or meta tags
+        let currentPrice = 0;
+        let originalPrice = 0;
+        
+        // Try JSON-LD structured data
+        const jsonLdMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/i);
+        if (jsonLdMatch) {
+          try {
+            const jsonLd = JSON.parse(jsonLdMatch[1]);
+            if (jsonLd.offers) {
+              currentPrice = parseFloat(jsonLd.offers.price) || 0;
+              if (jsonLd.offers.highPrice) originalPrice = parseFloat(jsonLd.offers.highPrice) || 0;
+              if (jsonLd.offers.lowPrice) originalPrice = parseFloat(jsonLd.offers.lowPrice) || 0;
+            }
+          } catch (e) {}
+        }
+
+        // Fallback price extraction from meta tags
+        if (!currentPrice) {
+          const priceMatch = html.match(/"priceAmount":\s*"?([\d.]+)"?/i) ||
+                             html.match(/₹\s*([\d,]+\.?\d*)/i) ||
+                             html.match(/"displayPrice":\s*"₹([\d,]+\.?\d*)"/i);
+          if (priceMatch) {
+            currentPrice = parseFloat(priceMatch[1].replace(/,/g, '')) || 0;
+          }
+        }
+
+        // Extract brand
+        const brandMatch = html.match(/"brand":\s*"([^"]+)"/i) ||
+                           html.match(/<span id="bylineInfo"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/i);
+        const brand = brandMatch ? brandMatch[1].trim() : '';
+
+        // Extract rating
+        const ratingMatch = html.match(/"ratingValue":\s*"?([\d.]+)"?/i) ||
+                            html.match(/([\d.]+)\s*out of 5 stars/i);
+        const ratingValue = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
+
+        const ratingCountMatch = html.match(/"ratingCount":\s*"?(\d+)"?/i) ||
+                                 html.match(/([\d,]+)\s*ratings/i);
+        const ratingCount = ratingCountMatch ? parseInt(ratingCountMatch[1].replace(/,/g, '')) : 0;
+
+        // Extract availability
+        const availMatch = html.match(/"availability":\s*"([^"]+)"/i) ||
+                           html.match(/<span class="a-size-medium a-color-success">([^<]+)<\/span>/i);
+        const availability = availMatch ? availMatch[1].replace(/&/g, '&').trim() : '';
+
+        // Extract features
+        const features: string[] = [];
+        const featureMatches = html.matchAll(/<span class="a-list-item">([^<]{10,})<\/span>/g);
+        for (const match of featureMatches) {
+          const text = match[1].trim();
+          if (text.length > 10 && !text.includes('₹') && !text.includes('Free')) {
+            features.push(text);
+          }
+          if (features.length >= 5) break;
+        }
+
+        // Extract categories
+        const categories: string[] = [];
+        const catMatches = html.matchAll(/<a class="a-link-normal a-color-tertiary"[^>]*>([^<]+)<\/a>/g);
+        for (const match of catMatches) {
+          const text = match[1].trim();
+          if (text && !categories.includes(text)) {
+            categories.push(text);
+          }
+          if (categories.length >= 5) break;
+        }
+
+        productData = {
+          asin,
+          product_url: productUrl,
+          title,
+          brand,
+          description,
+          price: {
+            current: currentPrice,
+            original: originalPrice || currentPrice,
+            currency: 'INR',
+            formatted: currentPrice ? `₹${currentPrice.toLocaleString('en-IN')}` : '₹0'
+          },
+          availability,
+          rating: {
+            value: ratingValue,
+            count: ratingCount
+          },
+          images: imageUrl ? [{ url: imageUrl, type: 'main' }] : [],
+          features,
+          categories,
+          seller: { name: '', url: '' },
+          delivery: { available: false, estimated_date: '' },
+          metadata: {
+            source: 'amazon',
+            fetched_at: new Date().toISOString()
+          }
+        };
+      }
+    } catch (err: any) {
+      console.warn('Amazon direct fetch failed, returning empty structure:', err.message);
+    }
+
+    // If direct fetch failed or returned empty data, return the structured empty response
+    if (!productData) {
+      productData = {
+        asin,
+        product_url: productUrl,
+        title: '',
+        brand: '',
+        description: '',
+        price: {
+          current: 0,
+          original: 0,
+          currency: 'INR',
+          formatted: '₹0'
+        },
+        availability: '',
+        rating: {
+          value: 0,
+          count: 0
+        },
+        images: [{ url: '', type: 'main' }],
+        features: [],
+        categories: [],
+        seller: { name: '', url: '' },
+        delivery: { available: false, estimated_date: '' },
+        metadata: {
+          source: 'amazon',
+          fetched_at: new Date().toISOString()
+        }
+      };
+    }
+
+    return res.json({ success: true, data: productData });
+  } catch (error: any) {
+    console.error("Error fetching Amazon product:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to fetch Amazon product details."
+    });
+  }
+});
+
 // AI Deal Link Analyzer Endpoint
 app.post("/api/analyze-deal", async (req, res) => {
   try {
