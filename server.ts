@@ -1052,9 +1052,10 @@ app.post("/api/amazon-fetch", async (req, res) => {
     const input = urlOrAsin.trim();
     
     // Extract ASIN from URL or direct ASIN input
-    const asinMatch = input.match(/(?:dp|gp\/product|asin|product-reviews|d|link\.amazon[^\/]*|amzn[^\/]*)\/([A-Z0-9]{10})/i) ||
-                      input.match(/\b(B0[A-Z0-9]{8})\b/i) ||
-                      input.match(/^([A-Z0-9]{10})$/i);
+    // Handle various formats: amazon.in/dp/ASIN, link.amazon/ASIN, amzn.in/ASIN, direct ASIN, etc.
+    const asinMatch = input.match(/(?:dp|gp\/product|asin|product-reviews|d|link\.amazon[^\/]*|amzn[^\/]*|amazon[^\/]*)\/([A-Z0-9]{8,12})/i) ||
+                      input.match(/\b(B[A-Z0-9]{8,11})\b/i) ||
+                      input.match(/([A-Z0-9]{9,12})$/i);
     const asin = asinMatch ? asinMatch[1].toUpperCase() : null;
 
     if (!asin) {
