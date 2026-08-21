@@ -14,6 +14,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { dbManager } from "./src/db/dbManager";
 import { supabaseDb } from "./src/db/supabaseDb";
+import { fetchAmazonProductDetails } from "./src/utils/amazonFetcher";
 
 const app = express();
 const PORT = 3000;
@@ -1199,7 +1200,45 @@ app.post("/api/amazon-fetch", async (req, res) => {
       console.warn('Amazon direct fetch failed, returning empty structure:', err.message);
     }
 
-    // If direct fetch failed or returned empty data, return the structured empty response
+    // If direct fetch failed or returned empty data, fall back to curated preset data
+    if (!productData || (!productData.title && !productData.price?.current)) {
+      try {
+        const presetResult = await fetchAmazonProductDetails(input, 'mondaybazaar-21');
+        if (presetResult && presetResult.title) {
+          productData = {
+            asin,
+            product_url: productUrl,
+            title: presetResult.title,
+            brand: '',
+            description: presetResult.description,
+            price: {
+              current: presetResult.dealPrice,
+              original: presetResult.originalPrice,
+              currency: 'INR',
+              formatted: `₹${presetResult.dealPrice.toLocaleString('en-IN')}`
+            },
+            availability: 'In Stock',
+            rating: {
+              value: 0,
+              count: 0
+            },
+            images: [{ url: presetResult.imageUrl, type: 'main' }],
+            features: presetResult.aiPros,
+            categories: [presetResult.category],
+            seller: { name: 'Amazon', url: '' },
+            delivery: { available: true, estimated_date: '' },
+            metadata: {
+              source: 'preset-fallback',
+              fetched_at: new Date().toISOString()
+            }
+          };
+        }
+      } catch (presetErr: any) {
+        console.warn('Preset fallback also failed:', presetErr.message);
+      }
+    }
+
+    // If all fallbacks failed, return the structured empty response
     if (!productData) {
       productData = {
         asin,

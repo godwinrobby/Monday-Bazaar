@@ -62,22 +62,28 @@ interface AmazonProductData {
 interface AmazonApiResponse {
   success: boolean;
   data: {
-    original_url: string;
-    final_url: string;
     asin: string;
+    product_url: string;
     title: string;
     brand: string;
-    price: number;
-    currency: string;
-    formatted_price: string;
-    rating: number;
-    review_count: number;
-    image: string;
-    images: string[];
     description: string;
-    features: string[];
+    price: {
+      current: number;
+      original: number;
+      currency: string;
+      formatted: string;
+    };
     availability: string;
-    affiliate_url: string;
+    rating: {
+      value: number;
+      count: number;
+    };
+    images: Array<{ url: string; type: string }>;
+    features: string[];
+    categories: string[];
+    seller: { name: string; url: string };
+    delivery: { available: boolean; estimated_date: string };
+    metadata: { source: string; fetched_at: string };
   };
 }
 
@@ -125,18 +131,16 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
         if (contentType.includes('application/json')) {
           const json = await response.json();
           
-          // Handle the new API response format:
-          // { success, data: { original_url, final_url, asin, title, brand, price, currency, formatted_price, rating, review_count, image, images, description, features, availability, affiliate_url } }
+          // Handle the actual API response format:
+          // { success, data: { asin, product_url, title, brand, description, price: { current, original, currency, formatted }, availability, rating: { value, count }, images: [{ url, type }], features, categories, seller, delivery, metadata } }
           if (json.success && json.data) {
             const apiRes = json as AmazonApiResponse;
             const d = apiRes.data || {} as AmazonApiResponse['data'];
             const asin = d.asin || extractAmazonAsin(targetInput) || '';
-            const productUrl = d.final_url || d.affiliate_url || `https://www.amazon.in/dp/${asin}`;
-            const price = typeof d.price === 'number' ? d.price : 0;
-            const allImages = [...(d.images || [])];
-            if (d.image && !allImages.includes(d.image)) {
-              allImages.unshift(d.image);
-            }
+            const productUrl = d.product_url || `https://www.amazon.in/dp/${asin}`;
+            const currentPrice = typeof d.price?.current === 'number' ? d.price.current : 0;
+            const originalPrice = typeof d.price?.original === 'number' ? d.price.original : currentPrice;
+            const allImages = Array.isArray(d.images) ? d.images : [];
             
             data = {
               asin,
@@ -145,22 +149,22 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
               brand: d.brand || '',
               description: d.description || '',
               price: {
-                current: price,
-                original: price,
-                currency: d.currency || 'INR',
-                formatted: d.formatted_price || (price ? `₹${price.toLocaleString('en-IN')}` : '₹0')
+                current: currentPrice,
+                original: originalPrice,
+                currency: d.price?.currency || 'INR',
+                formatted: d.price?.formatted || (currentPrice ? `₹${currentPrice.toLocaleString('en-IN')}` : '₹0')
               },
               availability: d.availability || '',
               rating: {
-                value: typeof d.rating === 'number' ? d.rating : 0,
-                count: typeof d.review_count === 'number' ? d.review_count : 0
+                value: typeof d.rating?.value === 'number' ? d.rating.value : 0,
+                count: typeof d.rating?.count === 'number' ? d.rating.count : 0
               },
-              images: allImages.map((url: string) => ({ url, type: 'main' })),
+              images: allImages.map((img: { url: string; type: string }) => ({ url: img.url, type: img.type || 'main' })),
               features: d.features || [],
-              categories: [],
-              seller: { name: '', url: '' },
-              delivery: { available: false, estimated_date: '' },
-              metadata: { source: 'amazon-api', fetched_at: new Date().toISOString() }
+              categories: d.categories || [],
+              seller: d.seller || { name: '', url: '' },
+              delivery: d.delivery || { available: false, estimated_date: '' },
+              metadata: d.metadata || { source: 'amazon-api', fetched_at: new Date().toISOString() }
             };
           } else {
             console.warn('Amazon API returned error:', json.error);
