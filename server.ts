@@ -1200,7 +1200,46 @@ app.post("/api/amazon-fetch", async (req, res) => {
       console.warn('Amazon direct fetch failed, returning empty structure:', err.message);
     }
 
-    // If direct fetch failed or returned empty data, fall back to curated preset data
+    // If direct fetch failed or returned empty data, check Supabase database for existing deal
+    if (!productData || (!productData.title && !productData.price?.current)) {
+      try {
+        const existingDeal = await supabaseDb.getDealByAsin(asin);
+        if (existingDeal && existingDeal.title) {
+          productData = {
+            asin,
+            product_url: existingDeal.dealUrl || productUrl,
+            title: existingDeal.title,
+            brand: '',
+            description: existingDeal.description || '',
+            price: {
+              current: existingDeal.dealPrice,
+              original: existingDeal.originalPrice || existingDeal.dealPrice,
+              currency: 'INR',
+              formatted: `₹${existingDeal.dealPrice.toLocaleString('en-IN')}`
+            },
+            availability: 'In Stock',
+            rating: {
+              value: 0,
+              count: 0
+            },
+            images: existingDeal.imageUrl ? [{ url: existingDeal.imageUrl, type: 'main' }] : [],
+            features: existingDeal.aiPros || [],
+            categories: existingDeal.category ? [existingDeal.category] : [],
+            seller: { name: 'Amazon', url: '' },
+            delivery: { available: true, estimated_date: '' },
+            metadata: {
+              source: 'supabase-db',
+              fetched_at: new Date().toISOString()
+            }
+          };
+          console.log(`✅ Found existing deal in Supabase for ASIN ${asin}: ${existingDeal.title}`);
+        }
+      } catch (dbErr: any) {
+        console.warn('Supabase getDealByAsin failed:', dbErr.message);
+      }
+    }
+
+    // If direct fetch and Supabase both failed, fall back to curated preset data
     if (!productData || (!productData.title && !productData.price?.current)) {
       try {
         const presetResult = await fetchAmazonProductDetails(input, 'mondaybazaar-21');

@@ -329,6 +329,54 @@ class SupabaseDatabaseService {
     return deals.find(d => d.id === id) || null;
   }
 
+  // Fetch a deal from Supabase by ASIN (searches dealurl for the ASIN)
+  public async getDealByAsin(asin: string): Promise<Deal | null> {
+    if (!this.client || !asin) return null;
+    try {
+      const { data, error } = await this.client
+        .from('deals')
+        .select('*')
+        .ilike('dealurl', `%${asin}%`)
+        .limit(1)
+        .single();
+
+      if (!error && data) {
+        const r = data;
+        return {
+          id: r.id,
+          title: r.title,
+          description: r.description,
+          store: r.store as StoreName,
+          category: r.category,
+          originalPrice: Number(r.originalprice ?? r.originalPrice ?? 0),
+          dealPrice: Number(r.dealprice ?? r.dealPrice ?? 0),
+          discountPercentage: Number(r.discountpercentage ?? r.discountPercentage ?? 0),
+          couponCode: r.couponcode ?? r.couponCode ?? '',
+          imageUrl: r.imageurl ?? r.imageUrl ?? '',
+          dealUrl: r.dealurl ?? r.dealUrl ?? '',
+          isLootDeal: Boolean(r.islootdeal ?? r.isLootDeal),
+          isVerified: Boolean(r.isverified ?? r.isVerified),
+          isActive: r.isactive !== false && r.isActive !== false,
+          upvotes: Number(r.upvotes || 0),
+          downvotes: Number(r.downvotes || 0),
+          aiScore: Number(r.aiscore ?? r.aiScore ?? 85),
+          aiVerdict: r.aiverdict ?? r.aiVerdict ?? '',
+          aiPros: Array.isArray(r.aipros) ? r.aipros : (r.aipros ? (typeof r.aipros === 'string' ? (r.aipros.startsWith('[') ? JSON.parse(r.aipros) : [r.aipros]) : r.aipros) : []),
+          aiCons: Array.isArray(r.aicons) ? r.aicons : (r.aicons ? (typeof r.aicons === 'string' ? (r.aicons.startsWith('[') ? JSON.parse(r.aicons) : [r.aicons]) : r.aicons) : []),
+          postedAt: r.postedat ?? r.postedAt ?? 'Recently',
+          postedBy: r.postedby ?? r.postedBy ?? 'Community Member',
+          viewsCount: Number(r.viewscount ?? r.viewsCount ?? 0),
+          commentsCount: Number(r.commentscount ?? r.commentsCount ?? 0),
+          priceHistory: [],
+          comments: []
+        };
+      }
+    } catch (err: any) {
+      console.warn('⚠️ Supabase getDealByAsin error:', err.message);
+    }
+    return null;
+  }
+
   // Add new deal
   public async addDeal(dealData: Partial<Deal>, allowDuplicate: boolean = false): Promise<Deal> {
     const newDeal = dbManager.addDeal(dealData, allowDuplicate);
