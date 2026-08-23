@@ -664,7 +664,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 20;
+  const pageSize = 10;
 
   useEffect(() => {
     setCurrentPage(1);
