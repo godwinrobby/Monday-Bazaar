@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Deal } from '../types';
 import { AdminDashboard } from '../components/AdminDashboard';
 import { AdminLogin } from '../components/AdminLogin';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 
 // Supabase REST API constants
 const SUPABASE_URL = 'https://pmvnyxpyypifneqojlqq.supabase.co';
@@ -128,15 +128,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-900 selection:bg-orange-500 selection:text-white">
-      <AdminDashboard
-        deals={deals}
-        onAddDeal={onAddDeal}
-        onUpdateDeal={onUpdateDeal}
-        onDeleteDeal={onDeleteDeal}
-        onCloseAdmin={() => navigate('/')}
-        adminUser={adminUser}
-        onLogout={handleLogout}
-      />
+      <Routes>
+        <Route index element={<Navigate to="/admin/overview" replace />} />
+        <Route path="overview" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
+        <Route path="amazon-import" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
+        <Route path="csv-import" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
+        <Route path="deals" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
+        <Route path="social-autopost" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
+        <Route path="affiliation" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
+        <Route path="settings" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
+      </Routes>
     </div>
   );
 };

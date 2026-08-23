@@ -459,7 +459,7 @@ export default function App() {
               }
             />
             <Route
-              path="/admin"
+              path="/admin/*"
               element={
                 <AdminPage
                   deals={deals}

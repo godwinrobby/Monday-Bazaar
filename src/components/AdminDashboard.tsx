@@ -47,6 +47,7 @@ import {
   Lock,
   User
 } from 'lucide-react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { AmazonAffiliateImporter } from './AmazonAffiliateImporter';
 import { SocialAutoPoster } from './SocialAutoPoster';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
@@ -72,7 +73,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   adminUser,
   onLogout,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'amazon-import' | 'csv-import' | 'deals' | 'social-autopost' | 'affiliation' | 'pending' | 'settings'>('overview');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentTab = location.pathname.split('/').pop() || 'overview';
 
   // Affiliate Config State with Node.js Backend Database Persistence
   const [affiliateConfigs, setAffiliateConfigs] = useState<Record<StoreName, StoreAffiliateConfig>>(DEFAULT_AFFILIATE_CONFIGS);
@@ -1004,22 +1007,22 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
 
         {/* Sidebar Menu */}
         <nav className="p-3 space-y-1">
-          <button
-            onClick={() => setActiveTab('overview')}
+          <Link
+            to="/admin/overview"
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
-              activeTab === 'overview'
+              currentTab === 'overview'
                 ? 'bg-orange-500 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
           >
             <LayoutDashboard className="w-4 h-4 shrink-0" />
             <span className="text-left">Dashboard & Analytics</span>
-          </button>
+          </Link>
 
-          <button
-            onClick={() => setActiveTab('amazon-import')}
+          <Link
+            to="/admin/amazon-import"
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
-              activeTab === 'amazon-import'
+              currentTab === 'amazon-import'
                 ? 'bg-amber-500 text-slate-950 shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
@@ -1027,12 +1030,12 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
             <ShoppingBag className="w-4 h-4 shrink-0 text-amber-400" />
             <span className="text-left flex-1">Amazon Affiliate Fetcher</span>
             <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 font-extrabold rounded text-[9px] shrink-0">Auto Import</span>
-          </button>
+          </Link>
 
-          <button
-            onClick={() => setActiveTab('csv-import')}
+          <Link
+            to="/admin/csv-import"
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
-              activeTab === 'csv-import'
+              currentTab === 'csv-import'
                 ? 'bg-emerald-500 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
@@ -1040,24 +1043,24 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
             <FileSpreadsheet className="w-4 h-4 shrink-0 text-emerald-400" />
             <span className="text-left flex-1">CSV Import</span>
             <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded text-[9px] shrink-0">Bulk Upload</span>
-          </button>
+          </Link>
 
-          <button
-            onClick={() => setActiveTab('deals')}
+          <Link
+            to="/admin/deals"
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
-              activeTab === 'deals'
+              currentTab === 'deals'
                 ? 'bg-orange-500 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
           >
             <Tag className="w-4 h-4 shrink-0" />
             <span className="text-left">Deals Catalog ({deals.length})</span>
-          </button>
+          </Link>
 
-          <button
-            onClick={() => setActiveTab('social-autopost')}
+          <Link
+            to="/admin/social-autopost"
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
-              activeTab === 'social-autopost'
+              currentTab === 'social-autopost'
                 ? 'bg-blue-500 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
@@ -1065,12 +1068,12 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
             <Share2 className="w-4 h-4 shrink-0 text-blue-400" />
             <span className="text-left flex-1">FB & IG Auto-Poster</span>
             <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 font-extrabold rounded text-[9px] shrink-0">Meta API</span>
-          </button>
+          </Link>
 
-          <button
-            onClick={() => setActiveTab('affiliation')}
+          <Link
+            to="/admin/affiliation"
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
-              activeTab === 'affiliation'
+              currentTab === 'affiliation'
                 ? 'bg-emerald-500 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
@@ -1078,19 +1081,19 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
             <Link2 className="w-4 h-4 shrink-0 text-emerald-400" />
             <span className="text-left flex-1">Affiliation & Store Rules</span>
             <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded text-[9px] shrink-0">Active</span>
-          </button>
+          </Link>
 
-          <button
-            onClick={() => setActiveTab('settings')}
+          <Link
+            to="/admin/settings"
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
-              activeTab === 'settings'
+              currentTab === 'settings'
                 ? 'bg-orange-500 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
             }`}
           >
             <Settings className="w-4 h-4 shrink-0" />
             <span className="text-left">Site Banners & Configuration</span>
-          </button>
+          </Link>
         </nav>
 
         {/* Sidebar Footer Actions */}
@@ -1170,60 +1173,60 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         </div>
         {/* Mobile Horizontal Scroll Menu */}
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar border-t border-slate-800/80 px-2 py-1.5">
-          <button
-            onClick={() => setActiveTab('overview')}
+          <Link
+            to="/admin/overview"
             className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
-              activeTab === 'overview' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              currentTab === 'overview' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <LayoutDashboard className="w-3 h-3" />
             <span>Dashboard</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('amazon-import')}
+          </Link>
+          <Link
+            to="/admin/amazon-import"
             className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
-              activeTab === 'amazon-import' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              currentTab === 'amazon-import' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <ShoppingBag className="w-3 h-3" />
             <span>Amazon Importer</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('deals')}
+          </Link>
+          <Link
+            to="/admin/deals"
             className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
-              activeTab === 'deals' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              currentTab === 'deals' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <Tag className="w-3 h-3" />
             <span>Deals ({deals.length})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('social-autopost')}
+          </Link>
+          <Link
+            to="/admin/social-autopost"
             className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
-              activeTab === 'social-autopost' ? 'bg-blue-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              currentTab === 'social-autopost' ? 'bg-blue-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <Share2 className="w-3 h-3" />
             <span>Auto-Poster</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('affiliation')}
+          </Link>
+          <Link
+            to="/admin/affiliation"
             className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
-              activeTab === 'affiliation' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              currentTab === 'affiliation' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <Link2 className="w-3 h-3" />
             <span>Affiliation</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
+          </Link>
+          <Link
+            to="/admin/settings"
             className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
-              activeTab === 'settings' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              currentTab === 'settings' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <Settings className="w-3 h-3" />
             <span>Settings</span>
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -1233,7 +1236,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         <div className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-8 max-w-full">
         
         {/* ==================== TAB 1: OVERVIEW & ANALYTICS ==================== */}
-        {activeTab === 'overview' && (
+        {currentTab === 'overview' && (
           <div className="space-y-8 animate-in fade-in duration-200">
             
             {/* Metric KPI Cards */}
@@ -1473,7 +1476,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
               </div>
 
               <button
-                onClick={() => setActiveTab('amazon-import')}
+                onClick={() => navigate('/admin/amazon-import')}
                 className="px-6 py-3 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs rounded-2xl shadow-md transition-all shrink-0 flex items-center gap-2 group"
               >
                 <span>Launch Amazon Importer</span>
@@ -1607,7 +1610,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         )}
 
         {/* ==================== TAB 2: AMAZON AFFILIATE IMPORTER ==================== */}
-        {activeTab === 'amazon-import' && (
+        {currentTab === 'amazon-import' && (
           <AmazonAffiliateImporter
             amazonTag={affiliateConfigs.Amazon.tag || 'mondaybazaar-21'}
             onPublishDeal={onAddDeal}
@@ -1615,7 +1618,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         )}
 
         {/* ==================== TAB: CSV IMPORT ==================== */}
-        {activeTab === 'csv-import' && (
+        {currentTab === 'csv-import' && (
           <div className="max-w-full space-y-6 animate-in fade-in duration-200">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-6">
               <div className="border-b border-slate-100 pb-3">
@@ -1738,7 +1741,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         )}
 
         {/* ==================== TAB: FACEBOOK & INSTAGRAM AUTO-POSTER ==================== */}
-        {activeTab === 'social-autopost' && (
+        {currentTab === 'social-autopost' && (
           <SocialAutoPoster
             deals={deals}
             addToast={addToast}
@@ -1746,7 +1749,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         )}
 
         {/* ==================== TAB 3: DEALS CATALOG MANAGEMENT ==================== */}
-        {activeTab === 'deals' && (
+        {currentTab === 'deals' && (
           <div className="space-y-6 animate-in fade-in duration-200">
             
             {/* Search & Action Bar */}
@@ -2075,7 +2078,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         )}
 
         {/* ==================== TAB 3: AFFILIATION RULES & STORE CONFIG ==================== */}
-        {activeTab === 'affiliation' && (
+        {currentTab === 'affiliation' && (
           <div className="space-y-6 animate-in fade-in duration-200">
             
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-3">
@@ -2169,7 +2172,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         )}
 
         {/* ==================== TAB 4: SITE BANNERS & SETTINGS ==================== */}
-        {activeTab === 'settings' && (
+        {currentTab === 'settings' && (
           <div className="max-w-full space-y-6 animate-in fade-in duration-200">
             
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-6">
