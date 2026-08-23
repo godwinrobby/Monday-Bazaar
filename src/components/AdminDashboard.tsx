@@ -1438,7 +1438,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
 
         {/* ==================== TAB: CSV IMPORT ==================== */}
         {activeTab === 'csv-import' && (
-          <div className="max-w-4xl space-y-6 animate-in fade-in duration-200">
+          <div className="max-w-full space-y-6 animate-in fade-in duration-200">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-6">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
