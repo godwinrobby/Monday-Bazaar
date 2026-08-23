@@ -112,6 +112,131 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvProgress, setCsvProgress] = useState<string>('');
 
+  const downloadCsvTemplate = () => {
+    const headers = [
+      'title','description','store','category','originalPrice','dealPrice','discountPercentage',
+      'couponCode','imageUrl','dealUrl','isLootDeal','isVerified','isExpiringSoon','isActive',
+      'upvotes','downvotes','userVoted','aiScore','aiVerdict','aiPros','aiCons','postedAt',
+      'expiryDate','priceHistory','commentsCount','comments','viewsCount','postedBy'
+    ];
+    
+    const sampleRows = [
+      {
+        title: 'Roadster Men Lightweight Solid Puffer Jacket',
+        description: 'Men Navy Blue Solid Puffer Jacket with mock collar, two pockets, zip closure, and warm thermal padding.',
+        store: 'Myntra',
+        category: 'Fashion & Apparel',
+        originalPrice: 3999,
+        dealPrice: 1199,
+        discountPercentage: 70,
+        couponCode: 'MYNTRA200',
+        imageUrl: 'https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=800&q=80',
+        dealUrl: 'https://www.myntra.com/jackets/roadster/navy-puffer-jacket/12345',
+        isLootDeal: true,
+        isVerified: true,
+        isExpiringSoon: false,
+        isActive: true,
+        upvotes: 198,
+        downvotes: 6,
+        userVoted: '',
+        aiScore: 89,
+        aiVerdict: 'Steal fashion deal on Myntra with 70% direct price reduction.',
+        aiPros: '70% discount off MRP|Premium water-resistant material|Stylish slim fit',
+        aiCons: 'Limited size options left',
+        postedAt: '5 hours ago',
+        expiryDate: '',
+        priceHistory: '2026-08-18:3999|2026-08-23:1199',
+        commentsCount: 12,
+        comments: '',
+        viewsCount: 1420,
+        postedBy: 'StyleBlogger'
+      },
+      {
+        title: 'Apple iPhone 15 128GB',
+        description: 'iPhone 15 with Dynamic Island, 48MP camera, USB-C, and all-day battery life.',
+        store: 'Apple',
+        category: 'Mobiles & Tablets',
+        originalPrice: 59999,
+        dealPrice: 47999,
+        discountPercentage: 20,
+        couponCode: '',
+        imageUrl: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=800&q=80',
+        dealUrl: 'https://www.apple.com/in/iphone-15/',
+        isLootDeal: false,
+        isVerified: true,
+        isExpiringSoon: false,
+        isActive: true,
+        upvotes: 856,
+        downvotes: 23,
+        userVoted: '',
+        aiScore: 92,
+        aiVerdict: 'Lowest online price ever for iPhone 15 with bank discounts.',
+        aiPros: 'SuperRetina XDR display|A16 Bionic chip|USB-C charging|5G capable',
+        aiCons: 'No charger in box|Standard 60Hz display',
+        postedAt: '12 mins ago',
+        expiryDate: '',
+        priceHistory: '2026-08-20:59999|2026-08-23:47999',
+        commentsCount: 45,
+        comments: '',
+        viewsCount: 3420,
+        postedBy: 'DealMaster_Pro'
+      },
+      {
+        title: 'Sony WH-1000XM5 Wireless Headphones',
+        description: 'Industry leading noise canceling with Auto NC Optimizer, 8 mics for crisp calls, and 30hr battery.',
+        store: 'Amazon',
+        category: 'Audio & Headphones',
+        originalPrice: 26990,
+        dealPrice: 19990,
+        discountPercentage: 26,
+        couponCode: '',
+        imageUrl: 'https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?auto=format&fit=crop&w=800&q=80',
+        dealUrl: 'https://www.amazon.in/dp/B09XS7JWHH',
+        isLootDeal: false,
+        isVerified: true,
+        isExpiringSoon: false,
+        isActive: true,
+        upvotes: 534,
+        downvotes: 12,
+        userVoted: '',
+        aiScore: 88,
+        aiVerdict: 'Excellent ANC headphones at a historic low price on Amazon.',
+        aiPros: 'Best-in-class noise cancellation|30-hour battery|Multipoint connection|LDAC Hi-Res Audio',
+        aiCons: 'Earcups may run warm after long use',
+        postedAt: '2 hours ago',
+        expiryDate: '',
+        priceHistory: '2026-08-21:26990|2026-08-23:19990',
+        commentsCount: 28,
+        comments: '',
+        viewsCount: 1890,
+        postedBy: 'AudioPhile'
+      }
+    ];
+
+    const escapeCsv = (val: any): string => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const csvContent = [
+      headers.map(escapeCsv).join(','),
+      ...sampleRows.map(row => headers.map(h => escapeCsv(row[h as keyof typeof row] ?? '')).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'deals-import-template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1449,14 +1574,13 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <a
-                  href="/deals-import-template.csv"
-                  download
+                <button
+                  onClick={downloadCsvTemplate}
                   className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors"
                 >
                   <Download className="w-4 h-4" />
                   Download CSV Template
-                </a>
+                </button>
                 
                 <label className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer">
                   <Upload className="w-4 h-4" />
