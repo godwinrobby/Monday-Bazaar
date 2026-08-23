@@ -316,6 +316,7 @@ class DatabaseManager {
       aiPros: dealData.aiPros || ['Great value for money'],
       aiCons: dealData.aiCons || ['Check stock availability'],
       postedAt: 'Just now',
+      createdAt: new Date().toISOString(),
       priceHistory: dealData.priceHistory || [
         { date: 'Previous', price: dealData.originalPrice || 0 },
         { date: 'Today', price: dealData.dealPrice || 0 }

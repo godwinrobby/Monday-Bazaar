@@ -60,6 +60,7 @@ export interface Deal {
   aiPros: string[];
   aiCons: string[];
   postedAt: string;
+  createdAt?: string;
   expiryDate?: string;
   priceHistory: PriceHistoryPoint[];
   commentsCount: number;

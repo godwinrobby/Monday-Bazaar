@@ -173,7 +173,7 @@ export const DealCard: React.FC<DealCardProps> = ({
             </span>
             <span className="flex items-center gap-1 text-slate-400">
               <Clock className="w-3 h-3" />
-              {getRelativeTime(deal.postedAt)}
+              {getRelativeTime(deal.createdAt || deal.postedAt)}
             </span>
           </div>
 

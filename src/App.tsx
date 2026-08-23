@@ -224,6 +224,7 @@ export default function App() {
       aiPros: newDealData.aiPros || ['Substantial discount off MRP', 'Community verified link'],
       aiCons: newDealData.aiCons || ['Check store delivery pin code before checkout'],
       postedAt: 'Just now',
+      createdAt: new Date().toISOString(),
       priceHistory: newDealData.priceHistory || [
         { date: 'Yesterday', price: newDealData.originalPrice || 1000 },
         { date: 'Today', price: newDealData.dealPrice || 500 }

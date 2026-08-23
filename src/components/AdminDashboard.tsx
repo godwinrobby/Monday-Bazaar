@@ -581,6 +581,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         aiPros: formData.aiPros || ['Verified merchant link', 'Immediate savings'],
         aiCons: formData.aiCons || ['Check stock availability'],
         postedAt: 'Just now',
+        createdAt: new Date().toISOString(),
         priceHistory: [
           { date: 'Previous', price: origPrice },
           { date: 'Today', price: dealPriceNum },

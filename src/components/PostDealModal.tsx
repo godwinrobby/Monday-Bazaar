@@ -65,6 +65,7 @@ export const PostDealModal: React.FC<PostDealModalProps> = ({
         isLootDeal: discountPct >= 40,
         isVerified: true,
         postedAt: 'Just now',
+        createdAt: new Date().toISOString(),
       });
 
       if (res && !res.success) {

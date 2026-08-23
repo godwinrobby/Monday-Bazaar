@@ -340,6 +340,7 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
       ],
       aiCons: ['Check delivery pin code before checkout'],
       postedAt: 'Just now',
+      createdAt: new Date().toISOString(),
       priceHistory: [
         { date: 'Last Month', price: editableOrigPrice || editablePrice },
         { date: 'Today', price: editablePrice },
