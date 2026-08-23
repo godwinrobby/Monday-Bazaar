@@ -3,6 +3,7 @@ import { Deal } from '../types';
 import { STORES_INFO } from '../data/initialDeals';
 import { recordLinkClick, recordDealView } from '../utils/analytics';
 import { shareDeal } from '../utils/shareUtils';
+import { getRelativeTime } from '../utils/timeUtils';
 import { 
   Flame, 
   ExternalLink, 
@@ -172,7 +173,7 @@ export const DealCard: React.FC<DealCardProps> = ({
             </span>
             <span className="flex items-center gap-1 text-slate-400">
               <Clock className="w-3 h-3" />
-              {deal.postedAt}
+              {getRelativeTime(deal.postedAt)}
             </span>
           </div>
 

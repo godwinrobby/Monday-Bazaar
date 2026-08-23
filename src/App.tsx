@@ -1,24 +1,26 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { Deal, FilterOptions } from './types';
 import { supabaseDb } from './db/supabaseDb';
-import { TelegramBanner } from './components/TelegramBanner';
-import { StatsBar } from './components/StatsBar';
-import { Header } from './components/Header';
-import { Navbar } from './components/Navbar';
-import { DealsPage } from './pages/DealsPage';
-import { DealDetailsRoute } from './pages/DealDetailsRoute';
-import { LootDealsPage } from './pages/LootDealsPage';
-import { CategoriesPage } from './pages/CategoriesPage';
-import { StoresPage } from './pages/StoresPage';
-import { WatchlistPage } from './pages/WatchlistPage';
-import { AdminPage } from './pages/AdminPage';
-import { NotFoundPage } from './pages/NotFoundPage';
+import { Flame, ShieldCheck } from 'lucide-react';
+
+const TelegramBanner = lazy(() => import('./components/TelegramBanner').then(m => ({ default: m.TelegramBanner })));
+const StatsBar = lazy(() => import('./components/StatsBar').then(m => ({ default: m.StatsBar })));
+const Header = lazy(() => import('./components/Header').then(m => ({ default: m.Header })));
+const Navbar = lazy(() => import('./components/Navbar').then(m => ({ default: m.Navbar })));
+
+const DealsPage = lazy(() => import('./pages/DealsPage').then(m => ({ default: m.DealsPage })));
+const DealDetailsRoute = lazy(() => import('./pages/DealDetailsRoute').then(m => ({ default: m.DealDetailsRoute })));
+const LootDealsPage = lazy(() => import('./pages/LootDealsPage').then(m => ({ default: m.LootDealsPage })));
+const CategoriesPage = lazy(() => import('./pages/CategoriesPage').then(m => ({ default: m.CategoriesPage })));
+const StoresPage = lazy(() => import('./pages/StoresPage').then(m => ({ default: m.StoresPage })));
+const WatchlistPage = lazy(() => import('./pages/WatchlistPage').then(m => ({ default: m.WatchlistPage })));
+const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
 
 import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
 import { ToastContainer, ToastMessage } from './components/Toast';
-import { Flame, ShieldCheck } from 'lucide-react';
 
 export default function App() {
   const location = useLocation();
@@ -71,6 +73,16 @@ export default function App() {
 
   const [dealForAlert, setDealForAlert] = useState<Deal | null>(null);
   const [isWatchlistOpen, setIsWatchlistOpen] = useState(false);
+
+  const LoadingFallback = () => (
+    <div className="flex items-center justify-center py-12">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+    </div>
+  );
+
+  const NavLoadingFallback = () => (
+    <div className="animate-pulse bg-slate-800/50 h-12 w-full"></div>
+  );
 
   // Voting Handler
   const handleVote = (dealId: string, type: 'up' | 'down') => {
@@ -318,7 +330,7 @@ export default function App() {
       
       {/* Show Banners, Header & Navbar on non-admin routes */}
       {!isAdminRoute && (
-        <>
+        <Suspense fallback={<NavLoadingFallback />}>
           <TelegramBanner />
           <StatsBar />
           <Header
@@ -329,134 +341,136 @@ export default function App() {
             totalDealsCount={deals.length}
           />
           <Navbar savedCount={savedDealIds.length} />
-        </>
+        </Suspense>
       )}
 
       {/* Primary Router Views */}
       <div className="flex-1">
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <DealsPage
-                deals={deals}
-                isLoading={isLoading}
-                filters={filters}
-                setFilters={setFilters}
-                filteredDeals={filteredDeals}
-                storeCounts={storeCounts}
-                categoryCounts={categoryCounts}
-                savedDealIds={savedDealIds}
-                onVote={handleVote}
-                onToggleSave={handleToggleSave}
-                onOpenPriceAlert={(d) => setDealForAlert(d)}
-              />
-            }
-          />
-          <Route
-            path="/deal/:id"
-            element={
-              <DealDetailsRoute
-                deals={deals}
-                onVote={handleVote}
-                onAddComment={handleAddComment}
-                onOpenPriceAlert={(d) => setDealForAlert(d)}
-                savedDealIds={savedDealIds}
-                onToggleSave={handleToggleSave}
-              />
-            }
-          />
-          <Route
-            path="/loot"
-            element={
-              <LootDealsPage
-                deals={deals}
-                isLoading={isLoading}
-                savedDealIds={savedDealIds}
-                onVote={handleVote}
-                onToggleSave={handleToggleSave}
-                onOpenPriceAlert={(d) => setDealForAlert(d)}
-              />
-            }
-          />
-          <Route
-            path="/categories"
-            element={
-              <CategoriesPage
-                deals={deals}
-                isLoading={isLoading}
-                savedDealIds={savedDealIds}
-                onVote={handleVote}
-                onToggleSave={handleToggleSave}
-                onOpenPriceAlert={(d) => setDealForAlert(d)}
-              />
-            }
-          />
-          <Route
-            path="/category/:categoryName"
-            element={
-              <CategoriesPage
-                deals={deals}
-                isLoading={isLoading}
-                savedDealIds={savedDealIds}
-                onVote={handleVote}
-                onToggleSave={handleToggleSave}
-                onOpenPriceAlert={(d) => setDealForAlert(d)}
-              />
-            }
-          />
-          <Route
-            path="/stores"
-            element={
-              <StoresPage
-                deals={deals}
-                isLoading={isLoading}
-                savedDealIds={savedDealIds}
-                onVote={handleVote}
-                onToggleSave={handleToggleSave}
-                onOpenPriceAlert={(d) => setDealForAlert(d)}
-              />
-            }
-          />
-          <Route
-            path="/store/:storeName"
-            element={
-              <StoresPage
-                deals={deals}
-                isLoading={isLoading}
-                savedDealIds={savedDealIds}
-                onVote={handleVote}
-                onToggleSave={handleToggleSave}
-                onOpenPriceAlert={(d) => setDealForAlert(d)}
-              />
-            }
-          />
-          <Route
-            path="/watchlist"
-            element={
-              <WatchlistPage
-                deals={deals}
-                savedDealIds={savedDealIds}
-                onVote={handleVote}
-                onToggleSave={handleToggleSave}
-                onOpenPriceAlert={(d) => setDealForAlert(d)}
-                onClearWatchlist={() => setSavedDealIds([])}
-              />
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <AdminPage
-                deals={deals}
-                onAddDeal={handleAddDeal}
-                onUpdateDeal={handleUpdateDeal}
-                onDeleteDeal={handleDeleteDeal}
-              />
-            }
-          />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <DealsPage
+                  deals={deals}
+                  isLoading={isLoading}
+                  filters={filters}
+                  setFilters={setFilters}
+                  filteredDeals={filteredDeals}
+                  storeCounts={storeCounts}
+                  categoryCounts={categoryCounts}
+                  savedDealIds={savedDealIds}
+                  onVote={handleVote}
+                  onToggleSave={handleToggleSave}
+                  onOpenPriceAlert={(d) => setDealForAlert(d)}
+                />
+              }
+            />
+            <Route
+              path="/deal/:id"
+              element={
+                <DealDetailsRoute
+                  deals={deals}
+                  onVote={handleVote}
+                  onAddComment={handleAddComment}
+                  onOpenPriceAlert={(d) => setDealForAlert(d)}
+                  savedDealIds={savedDealIds}
+                  onToggleSave={handleToggleSave}
+                />
+              }
+            />
+            <Route
+              path="/loot"
+              element={
+                <LootDealsPage
+                  deals={deals}
+                  isLoading={isLoading}
+                  savedDealIds={savedDealIds}
+                  onVote={handleVote}
+                  onToggleSave={handleToggleSave}
+                  onOpenPriceAlert={(d) => setDealForAlert(d)}
+                />
+              }
+            />
+            <Route
+              path="/categories"
+              element={
+                <CategoriesPage
+                  deals={deals}
+                  isLoading={isLoading}
+                  savedDealIds={savedDealIds}
+                  onVote={handleVote}
+                  onToggleSave={handleToggleSave}
+                  onOpenPriceAlert={(d) => setDealForAlert(d)}
+                />
+              }
+            />
+            <Route
+              path="/category/:categoryName"
+              element={
+                <CategoriesPage
+                  deals={deals}
+                  isLoading={isLoading}
+                  savedDealIds={savedDealIds}
+                  onVote={handleVote}
+                  onToggleSave={handleToggleSave}
+                  onOpenPriceAlert={(d) => setDealForAlert(d)}
+                />
+              }
+            />
+            <Route
+              path="/stores"
+              element={
+                <StoresPage
+                  deals={deals}
+                  isLoading={isLoading}
+                  savedDealIds={savedDealIds}
+                  onVote={handleVote}
+                  onToggleSave={handleToggleSave}
+                  onOpenPriceAlert={(d) => setDealForAlert(d)}
+                />
+              }
+            />
+            <Route
+              path="/store/:storeName"
+              element={
+                <StoresPage
+                  deals={deals}
+                  isLoading={isLoading}
+                  savedDealIds={savedDealIds}
+                  onVote={handleVote}
+                  onToggleSave={handleToggleSave}
+                  onOpenPriceAlert={(d) => setDealForAlert(d)}
+                />
+              }
+            />
+            <Route
+              path="/watchlist"
+              element={
+                <WatchlistPage
+                  deals={deals}
+                  savedDealIds={savedDealIds}
+                  onVote={handleVote}
+                  onToggleSave={handleToggleSave}
+                  onOpenPriceAlert={(d) => setDealForAlert(d)}
+                  onClearWatchlist={() => setSavedDealIds([])}
+                />
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <AdminPage
+                  deals={deals}
+                  onAddDeal={handleAddDeal}
+                  onUpdateDeal={handleUpdateDeal}
+                  onDeleteDeal={handleDeleteDeal}
+                />
+              }
+            />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
       </div>
 
       {/* Footer */}
