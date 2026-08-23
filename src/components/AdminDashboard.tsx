@@ -662,6 +662,14 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
   const [couponOnly, setCouponOnly] = useState(false);
   const [minDiscount, setMinDiscount] = useState<number>(0);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, storeFilter, categoryFilter, statusFilter, lootOnly, verifiedOnly, couponOnly, minDiscount]);
+
   // Affiliate Tester Tool State
   const [testUrlInput, setTestUrlInput] = useState('https://www.amazon.in/dp/B09XS7JWHH');
   const [testStoreSelect, setTestStoreSelect] = useState<StoreName>('Amazon');
@@ -902,6 +910,9 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
     const matchesDiscount = d.discountPercentage >= minDiscount;
     return matchesSearch && matchesStore && matchesCategory && matchesStatus && matchesLoot && matchesVerified && matchesCoupon && matchesDiscount;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredAdminDeals.length / pageSize));
+  const paginatedDeals = filteredAdminDeals.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   // Calculate Metrics (Counts only Active deals for public-facing metrics)
   const activeDeals = deals.filter(d => d.isActive !== false);
@@ -1663,9 +1674,36 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                </table>
+              </div>
+
+              {filteredAdminDeals.length > pageSize && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/50">
+                  <div className="text-[11px] text-slate-500 font-medium">
+                    Showing {Math.min((currentPage - 1) * pageSize + 1, filteredAdminDeals.length)} to {Math.min(currentPage * pageSize, filteredAdminDeals.length)} of {filteredAdminDeals.length} deals
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-2 py-1 text-[11px] font-bold text-slate-600">
+                      Page {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
                   </div>
                 </div>
+              )}
+            </div>
               )}
 
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 space-y-1">
@@ -1867,7 +1905,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredAdminDeals.map((deal) => {
+                    {paginatedDeals.map((deal) => {
                       const affUrl = buildAffiliateUrl(deal.dealUrl, deal.store, affiliateConfigs);
                       const isActive = deal.isActive !== false;
 
