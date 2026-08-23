@@ -51,6 +51,7 @@ import { AmazonAffiliateImporter } from './AmazonAffiliateImporter';
 import { SocialAutoPoster } from './SocialAutoPoster';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { ToastContainer, ToastMessage } from './Toast';
+import { parseDealsCSV, DealCSVRow } from '../utils/csvImport';
 
 interface AdminDashboardProps {
   deals: Deal[];
@@ -71,7 +72,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   adminUser,
   onLogout,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'amazon-import' | 'deals' | 'social-autopost' | 'affiliation' | 'pending' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'amazon-import' | 'csv-import' | 'deals' | 'social-autopost' | 'affiliation' | 'pending' | 'settings'>('overview');
 
   // Affiliate Config State with Node.js Backend Database Persistence
   const [affiliateConfigs, setAffiliateConfigs] = useState<Record<StoreName, StoreAffiliateConfig>>(DEFAULT_AFFILIATE_CONFIGS);
@@ -103,6 +104,85 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     text: '🔥 Monday Bazaar Super Sale is LIVE! Grab exclusive coupons & loot deals across Amazon, Flipkart & Myntra.',
     badge: 'FLASH LOOT SALE'
   });
+
+  // CSV Import State
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<DealCSVRow[] | null>(null);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvProgress, setCsvProgress] = useState<string>('');
+
+  const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setCsvFile(file);
+    setCsvError(null);
+    setCsvPreview(null);
+    setCsvProgress('');
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const deals = parseDealsCSV(text);
+        if (deals.length === 0) {
+          setCsvError('No valid deals found in CSV. Check the format.');
+        } else {
+          setCsvPreview(deals);
+          setCsvProgress(`Found ${deals.length} deals ready to import.`);
+        }
+      } catch (err) {
+        setCsvError('Failed to parse CSV file. Please check the format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleCsvImport = async () => {
+    if (!csvPreview || csvPreview.length === 0) return;
+    
+    setCsvImporting(true);
+    setCsvProgress('');
+    
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const deal of csvPreview) {
+        try {
+          await onAddDeal({
+            ...deal,
+            id: `deal_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            priceHistory: deal.priceHistory.length > 0 ? deal.priceHistory : [{ date: 'Previous', price: deal.originalPrice }, { date: 'Today', price: deal.dealPrice }],
+            comments: deal.comments || [],
+          });
+          successCount++;
+          setCsvProgress(`Imported ${successCount} of ${csvPreview.length} deals...`);
+        } catch (err) {
+          errorCount++;
+        }
+      }
+      
+      addToast({
+        type: 'success',
+        title: 'CSV Import Complete',
+        message: `Successfully imported ${successCount} deals.${errorCount > 0 ? ` Failed: ${errorCount}.` : ''}`
+      });
+      
+      setCsvFile(null);
+      setCsvPreview(null);
+      setCsvProgress('');
+    } catch (err) {
+      addToast({
+        type: 'error',
+        title: 'Import Failed',
+        message: 'An error occurred during CSV import.'
+      });
+    } finally {
+      setCsvImporting(false);
+    }
+  };
 
   // Password Change State
   const [currPass, setCurrPass] = useState('');
@@ -779,6 +859,19 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
           </button>
 
           <button
+            onClick={() => setActiveTab('csv-import')}
+            className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
+              activeTab === 'csv-import'
+                ? 'bg-emerald-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span className="text-left flex-1">CSV Import</span>
+            <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded text-[9px] shrink-0">Bulk Upload</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('deals')}
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
               activeTab === 'deals'
@@ -1341,6 +1434,130 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
             amazonTag={affiliateConfigs.Amazon.tag || 'mondaybazaar-21'}
             onPublishDeal={onAddDeal}
           />
+        )}
+
+        {/* ==================== TAB: CSV IMPORT ==================== */}
+        {activeTab === 'csv-import' && (
+          <div className="max-w-4xl space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-500" />
+                  Bulk Deal Import via CSV
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Upload a CSV file to bulk import deals into the catalog. Download the template first to ensure correct formatting.</p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <a
+                  href="/deals-import-template.csv"
+                  download
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download CSV Template
+                </a>
+                
+                <label className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  Choose CSV File
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleCsvFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {csvFile && (
+                <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                  <span className="font-medium">{csvFile.name}</span>
+                  <span className="text-slate-400">({(csvFile.size / 1024).toFixed(1)} KB)</span>
+                </div>
+              )}
+
+              {csvError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                  {csvError}
+                </div>
+              )}
+
+              {csvProgress && !csvError && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700">
+                  {csvProgress}
+                </div>
+              )}
+
+              {csvPreview && csvPreview.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-sm text-slate-900">
+                      Preview ({csvPreview.length} deals)
+                    </h4>
+                    <button
+                      onClick={handleCsvImport}
+                      disabled={csvImporting}
+                      className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white font-bold text-xs rounded-xl transition-colors flex items-center gap-2"
+                    >
+                      {csvImporting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                          Importing...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          Import All Deals
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 sticky top-0">
+                        <tr>
+                          <th className="text-left p-2 font-bold text-slate-700">Title</th>
+                          <th className="text-left p-2 font-bold text-slate-700">Store</th>
+                          <th className="text-left p-2 font-bold text-slate-700">Category</th>
+                          <th className="text-right p-2 font-bold text-slate-700">Price</th>
+                          <th className="text-right p-2 font-bold text-slate-700">Discount</th>
+                          <th className="text-left p-2 font-bold text-slate-700">Posted</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {csvPreview.map((deal, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="p-2 font-medium text-slate-900 max-w-xs truncate">{deal.title}</td>
+                            <td className="p-2 text-slate-600">{deal.store}</td>
+                            <td className="p-2 text-slate-600">{deal.category}</td>
+                            <td className="p-2 text-right font-bold text-slate-900">₹{deal.dealPrice.toLocaleString('en-IN')}</td>
+                            <td className="p-2 text-right font-bold text-emerald-600">{deal.discountPercentage}%</td>
+                            <td className="p-2 text-slate-500">{deal.postedAt}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 space-y-1">
+                <p className="font-bold">CSV Format Guidelines:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-amber-700">
+                  <li>Download the template above and fill in your deal data.</li>
+                  <li>Store names must match exactly: Amazon, Flipkart, Myntra, Ajio, Tata CLiQ, Croma, Reliance Digital, Boat, Noise, Samsung, Apple.</li>
+                  <li>Categories must match exactly: Mobiles &amp; Tablets, Electronics &amp; Laptops, Audio &amp; Headphones, Fashion &amp; Apparel, Home &amp; Kitchen, Gaming &amp; Accessories, Beauty &amp; Grooming, Smartwatches.</li>
+                  <li>For multi-value fields like aiPros and aiCons, use pipe <code className="bg-amber-100 px-1 rounded">|</code> to separate items.</li>
+                  <li>For priceHistory, use format: <code className="bg-amber-100 px-1 rounded">date:price|date:price</code> (e.g. <code className="bg-amber-100 px-1 rounded">Aug 20:59999|Aug 23:47999</code>).</li>
+                  <li>Boolean fields use <code className="bg-amber-100 px-1 rounded">true</code> or <code className="bg-amber-100 px-1 rounded">false</code>.</li>
+                  <li>Leave optional fields empty if not applicable; defaults will be applied.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ==================== TAB: FACEBOOK & INSTAGRAM AUTO-POSTER ==================== */}
