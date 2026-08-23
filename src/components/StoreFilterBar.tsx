@@ -18,6 +18,17 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [isDragging, setIsDragging] = useState(false);
+
+  const isStoreClosed = (store: StoreName): boolean => {
+    try {
+      const saved = localStorage.getItem('storeStatuses');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed[store] === 'closed';
+      }
+    } catch {}
+    return false;
+  };
   const [startX, setStartX] = useState(0);
   const [scrollLeftState, setScrollLeftState] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -119,21 +130,26 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
               const isSelected = selectedStore === store;
               const count = dealsCountByStore[store] || 0;
               const info = STORES_INFO[store];
+              const closed = isStoreClosed(store);
 
               return (
                 <button
                   key={store}
                   id={`filter-store-${store.toLowerCase().replace(/\s+/g, '-')}`}
-                  onClick={() => onSelectStore(store)}
+                  onClick={() => !closed && onSelectStore(store)}
+                  disabled={closed}
                   className={`px-3.5 py-1.5 rounded-full font-bold text-xs border transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
-                    isSelected
-                      ? `${info.badgeBg} border-current ring-2 ring-orange-500/30 shadow-xs`
-                      : 'bg-white text-slate-700 border-slate-200/90 hover:border-slate-300 hover:bg-slate-100/50'
+                    closed
+                      ? 'bg-slate-100 text-slate-400 border-slate-200 line-through opacity-60 cursor-not-allowed'
+                      : isSelected
+                        ? `${info.badgeBg} border-current ring-2 ring-orange-500/30 shadow-xs`
+                        : 'bg-white text-slate-700 border-slate-200/90 hover:border-slate-300 hover:bg-slate-100/50'
                   }`}
                 >
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: info.accentColor }} />
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${closed ? 'bg-slate-300' : ''}`} style={{ backgroundColor: closed ? '#ccc' : info.accentColor }} />
                   <span>{store}</span>
-                  {count > 0 && (
+                  {closed && <span className="text-[10px] font-bold text-red-500">Closed</span>}
+                  {!closed && count > 0 && (
                     <span
                       className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                         isSelected ? 'bg-black/10 text-slate-900' : 'bg-slate-100 text-slate-500'

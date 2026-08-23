@@ -48,6 +48,17 @@ export const DealCard: React.FC<DealCardProps> = ({
     accentColor: '#334155',
   };
 
+  const isStoreClosed = (() => {
+    try {
+      const saved = localStorage.getItem('storeStatuses');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed[deal.store] === 'closed';
+      }
+    } catch {}
+    return false;
+  })();
+
   const handleCopyCoupon = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (deal.couponCode) {
@@ -98,9 +109,16 @@ export const DealCard: React.FC<DealCardProps> = ({
           {/* Top Badges */}
           <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2">
             {/* Store Name Badge */}
-            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border shadow-xs backdrop-blur-md ${storeInfo.badgeBg}`}>
-              {deal.store}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border shadow-xs backdrop-blur-md ${isStoreClosed ? 'bg-slate-500 text-slate-200 border-slate-400 line-through' : storeInfo.badgeBg}`}>
+                {deal.store}
+              </span>
+              {isStoreClosed && (
+                <span className="px-2 py-0.5 bg-red-600 text-white font-extrabold text-[10px] rounded-md shadow-sm animate-pulse">
+                  CLOSED
+                </span>
+              )}
+            </div>
 
             {/* Watchlist & Share Buttons */}
             <div className="flex items-center gap-1.5">

@@ -8,6 +8,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-amber-400',
     accentColor: '#FF9900',
     dealsCount: 0,
+    status: 'open',
   },
   Flipkart: {
     name: 'Flipkart',
@@ -16,6 +17,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-blue-400',
     accentColor: '#2874F0',
     dealsCount: 0,
+    status: 'open',
   },
   Myntra: {
     name: 'Myntra',
@@ -24,6 +26,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-pink-400',
     accentColor: '#E40046',
     dealsCount: 0,
+    status: 'open',
   },
   Ajio: {
     name: 'Ajio',
@@ -32,6 +35,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-slate-400',
     accentColor: '#2C4152',
     dealsCount: 0,
+    status: 'open',
   },
   'Tata CLiQ': {
     name: 'Tata CLiQ',
@@ -40,6 +44,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-red-400',
     accentColor: '#DA251C',
     dealsCount: 0,
+    status: 'open',
   },
   Croma: {
     name: 'Croma',
@@ -48,6 +53,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-emerald-400',
     accentColor: '#00B894',
     dealsCount: 0,
+    status: 'open',
   },
   'Reliance Digital': {
     name: 'Reliance Digital',
@@ -56,6 +62,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-red-300',
     accentColor: '#E21B23',
     dealsCount: 0,
+    status: 'open',
   },
   Boat: {
     name: 'Boat',
@@ -64,6 +71,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-red-400',
     accentColor: '#EA1D25',
     dealsCount: 0,
+    status: 'open',
   },
   Noise: {
     name: 'Noise',
@@ -72,6 +80,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-indigo-400',
     accentColor: '#4F46E5',
     dealsCount: 0,
+    status: 'open',
   },
   Samsung: {
     name: 'Samsung',
@@ -80,6 +89,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-sky-400',
     accentColor: '#1428A0',
     dealsCount: 0,
+    status: 'open',
   },
   Apple: {
     name: 'Apple',
@@ -88,6 +98,7 @@ export const STORES_INFO: Record<StoreName, StoreInfo> = {
     borderColor: 'border-gray-400',
     accentColor: '#000000',
     dealsCount: 0,
+    status: 'open',
   }
 };
 

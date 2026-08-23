@@ -77,6 +77,7 @@ export interface StoreInfo {
   borderColor: string;
   accentColor: string;
   dealsCount: number;
+  status?: 'open' | 'closed';
 }
 
 export interface FilterOptions {

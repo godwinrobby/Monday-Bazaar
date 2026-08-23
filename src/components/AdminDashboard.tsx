@@ -77,6 +77,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const navigate = useNavigate();
   const currentTab = location.pathname.split('/').pop() || 'overview';
 
+  // Store Status State (open/closed per store)
+  const [storeStatuses, setStoreStatuses] = useState<Record<StoreName, 'open' | 'closed'>>(() => {
+    const saved = localStorage.getItem('storeStatuses');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+    const initial: Record<StoreName, 'open' | 'closed'> = {} as any;
+    (Object.keys(STORES_INFO) as StoreName[]).forEach(s => {
+      initial[s] = 'open';
+    });
+    return initial;
+  });
+
   // Affiliate Config State with Node.js Backend Database Persistence
   const [affiliateConfigs, setAffiliateConfigs] = useState<Record<StoreName, StoreAffiliateConfig>>(DEFAULT_AFFILIATE_CONFIGS);
 
@@ -884,6 +899,15 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         [field]: value
       }
     }));
+  };
+
+  // Update Store Status
+  const handleUpdateStoreStatus = (store: StoreName, status: 'open' | 'closed') => {
+    setStoreStatuses(prev => {
+      const next = { ...prev, [store]: status };
+      localStorage.setItem('storeStatuses', JSON.stringify(next));
+      return next;
+    });
   };
 
   // Auto Fetch Link Details (Title, Prices, Affiliate URL)
@@ -2110,17 +2134,23 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                       <div className="flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full" style={{ backgroundColor: STORES_INFO[store]?.accentColor || '#f97316' }} />
                         <h4 className="font-black text-sm text-slate-900">{store}</h4>
+                        {storeStatuses[store] === 'closed' && (
+                          <span className="px-2 py-0.5 bg-red-100 text-red-700 font-extrabold text-[10px] rounded-md">CLOSED</span>
+                        )}
                       </div>
 
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={config.isActive}
-                          onChange={(e) => handleUpdateAffiliateRule(store, 'isActive', e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Shop Status</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={storeStatuses[store] === 'open'}
+                            onChange={(e) => handleUpdateStoreStatus(store, e.target.checked ? 'open' : 'closed')}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                      </div>
                     </div>
 
                     <div className="space-y-3 text-xs">

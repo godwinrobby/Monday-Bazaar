@@ -33,6 +33,17 @@ export const StoresPage: React.FC<StoresPageProps> = ({
 
   const allStores = Object.keys(STORES_INFO);
 
+  const isStoreClosed = (store: string): boolean => {
+    try {
+      const saved = localStorage.getItem('storeStatuses');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed[store] === 'closed';
+      }
+    } catch {}
+    return false;
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-6">
       
@@ -68,19 +79,28 @@ export const StoresPage: React.FC<StoresPageProps> = ({
           {allStores.map((store) => {
             const info = STORES_INFO[store] || { logo: '🛒', badgeBg: 'bg-slate-100 text-slate-800' };
             const count = deals.filter(d => d.store === store).length;
+            const closed = isStoreClosed(store);
             return (
               <div
                 key={store}
-                onClick={() => navigate(`/store/${encodeURIComponent(store)}`)}
-                className="bg-white hover:bg-orange-50/50 border border-slate-200/90 rounded-2xl p-4 text-center cursor-pointer transition-all hover:shadow-md hover:border-orange-300 group space-y-2"
+                onClick={() => !closed && navigate(`/store/${encodeURIComponent(store)}`)}
+                className={`bg-white hover:bg-orange-50/50 border rounded-2xl p-4 text-center cursor-pointer transition-all space-y-2 ${
+                  closed
+                    ? 'border-slate-200 opacity-50 cursor-not-allowed line-through'
+                    : 'border-slate-200/90 hover:shadow-md hover:border-orange-300 group'
+                }`}
               >
-                <div className="text-3xl font-black">{info.logo}</div>
+                <div className="text-3xl font-black">{closed ? '🔒' : info.logo}</div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm group-hover:text-orange-600 transition-colors">
+                  <h3 className={`font-bold text-sm transition-colors ${closed ? 'text-slate-400' : 'text-slate-900 group-hover:text-orange-600'}`}>
                     {store}
                   </h3>
-                  <span className="inline-block mt-1 px-2 py-0.5 bg-slate-100 group-hover:bg-orange-100 group-hover:text-orange-800 text-slate-600 font-extrabold text-[10px] rounded-md">
-                    {count} deals
+                  <span className={`inline-block mt-1 px-2 py-0.5 font-extrabold text-[10px] rounded-md ${
+                    closed
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-slate-100 group-hover:bg-orange-100 group-hover:text-orange-800 text-slate-600'
+                  }`}>
+                    {closed ? 'TEMPORARILY CLOSED' : `${count} deals`}
                   </span>
                 </div>
               </div>
