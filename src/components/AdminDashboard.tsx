@@ -123,6 +123,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     badge: 'FLASH LOOT SALE'
   });
 
+  // Google Places / Google Fetcher Settings
+  const [googlePlacesApiKey, setGooglePlacesApiKey] = useState(() => localStorage.getItem('googlePlacesApiKey') || '');
+  const [googlePlacesStatus, setGooglePlacesStatus] = useState<string | null>(null);
+
   // CSV Import State
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvPreview, setCsvPreview] = useState<DealCSVRow[] | null>(null);
@@ -2428,6 +2432,53 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
               </div>
             </div>
 
+            {/* Google Places / Google Fetcher Settings */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">Google Fetcher Settings</h3>
+                  <p className="text-xs text-slate-500">Configure Google Places API key for store image and details fetching.</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Google Places API Key</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={googlePlacesApiKey}
+                      onChange={(e) => {
+                        setGooglePlacesApiKey(e.target.value.trim());
+                        localStorage.setItem('googlePlacesApiKey', e.target.value.trim());
+                      }}
+                      placeholder="Enter your Google Places API key..."
+                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!googlePlacesApiKey) {
+                          setGooglePlacesStatus('Please enter an API key first.');
+                          return;
+                        }
+                        setGooglePlacesStatus('API key saved successfully.');
+                        setTimeout(() => setGooglePlacesStatus(null), 3000);
+                      }}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors"
+                    >
+                      Save Key
+                    </button>
+                  </div>
+                  {googlePlacesStatus && (
+                    <p className="text-[11px] text-emerald-700 mt-1.5 font-medium">{googlePlacesStatus}</p>
+                  )}
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Enable Places API in Google Cloud Console and create a browser/server key.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Backup / Export Data */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
               <h3 className="font-extrabold text-base text-slate-900">Catalog & System Data Backup</h3>
@@ -2525,6 +2576,8 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                     <option value="Audio & Headphones">Audio & Headphones</option>
                     <option value="Fashion & Apparel">Fashion & Apparel</option>
                     <option value="Home & Kitchen">Home & Kitchen</option>
+                    <option value="Gaming & Accessories">Gaming & Accessories</option>
+                    <option value="Beauty & Grooming">Beauty & Grooming</option>
                     <option value="Smartwatches">Smartwatches</option>
                   </select>
                 </div>
