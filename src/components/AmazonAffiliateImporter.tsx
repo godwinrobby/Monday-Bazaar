@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Deal, CategoryName } from '../types';
+import { supabaseDb } from '../db/supabaseDb';
 
 const CATEGORY_LIST: CategoryName[] = [
   'Mobiles & Tablets',
@@ -107,7 +108,7 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
   const [publishSuccessMsg, setPublishSuccessMsg] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Handle Fetch Details from Amazon using the new /api/amazon-fetch endpoint
+  // Handle Fetch Details from Amazon via Supabase Edge Function or Express fallback
   const handleFetch = async (urlOrAsinToFetch?: string) => {
     const targetInput = urlOrAsinToFetch || inputUrl;
     if (!targetInput.trim()) return;
@@ -117,63 +118,44 @@ export const AmazonAffiliateImporter: React.FC<AmazonAffiliateImporterProps> = (
     setFetchError(null);
 
     try {
-      // Try the backend /api/amazon-fetch endpoint first
+      const json = await supabaseDb.amazonFetch(targetInput);
       let data: AmazonProductData | null = null;
-      try {
-        const response = await fetch('/api/amazon-fetch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ urlOrAsin: targetInput })
-        });
 
-        // Check content-type to ensure we got JSON, not HTML (SPA fallback)
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const json = await response.json();
-          
-          // Handle the actual API response format:
-          // { success, data: { asin, product_url, title, brand, description, price: { current, original, currency, formatted }, availability, rating: { value, count }, images: [{ url, type }], features, categories, seller, delivery, metadata } }
-          if (json.success && json.data) {
-            const apiRes = json as AmazonApiResponse;
-            const d = apiRes.data || {} as AmazonApiResponse['data'];
-            const asin = d.asin || extractAmazonAsin(targetInput) || '';
-            const productUrl = d.product_url || `https://www.amazon.in/dp/${asin}`;
-            const currentPrice = typeof d.price?.current === 'number' ? d.price.current : 0;
-            const originalPrice = typeof d.price?.original === 'number' ? d.price.original : currentPrice;
-            const allImages = Array.isArray(d.images) ? d.images : [];
-            
-            data = {
-              asin,
-              product_url: productUrl,
-              title: d.title || '',
-              brand: d.brand || '',
-              description: d.description || '',
-              price: {
-                current: currentPrice,
-                original: originalPrice,
-                currency: d.price?.currency || 'INR',
-                formatted: d.price?.formatted || (currentPrice ? `₹${currentPrice.toLocaleString('en-IN')}` : '₹0')
-              },
-              availability: d.availability || '',
-              rating: {
-                value: typeof d.rating?.value === 'number' ? d.rating.value : 0,
-                count: typeof d.rating?.count === 'number' ? d.rating.count : 0
-              },
-              images: allImages.map((img: { url: string; type: string }) => ({ url: img.url, type: img.type || 'main' })),
-              features: d.features || [],
-              categories: d.categories || [],
-              seller: d.seller || { name: '', url: '' },
-              delivery: d.delivery || { available: false, estimated_date: '' },
-              metadata: d.metadata || { source: 'amazon-api', fetched_at: new Date().toISOString() }
-            };
-          } else {
-            console.warn('Amazon API returned error:', json.error);
-          }
-        } else {
-          console.warn('Amazon API returned non-JSON response (likely HTML fallback). Using local fetcher.');
-        }
-      } catch (err) {
-        console.warn('Backend /api/amazon-fetch failed, falling back to local Amazon fetcher:', err);
+      if (json.success && json.data) {
+        const d = json.data || {};
+        const asin = d.asin || extractAmazonAsin(targetInput) || '';
+        const productUrl = d.product_url || `https://www.amazon.in/dp/${asin}`;
+        const currentPrice = typeof d.price?.current === 'number' ? d.price.current : 0;
+        const originalPrice = typeof d.price?.original === 'number' ? d.price.original : currentPrice;
+        const allImages = Array.isArray(d.images) ? d.images : [];
+
+        data = {
+          asin,
+          product_url: productUrl,
+          title: d.title || '',
+          brand: d.brand || '',
+          description: d.description || '',
+          price: {
+            current: currentPrice,
+            original: originalPrice,
+            currency: d.price?.currency || 'INR',
+            formatted: d.price?.formatted || (currentPrice ? `₹${currentPrice.toLocaleString('en-IN')}` : '₹0')
+          },
+          availability: d.availability || '',
+          rating: {
+            value: typeof d.rating?.value === 'number' ? d.rating.value : 0,
+            count: typeof d.rating?.count === 'number' ? d.rating.count : 0
+          },
+          images: allImages.map((img: { url: string; type: string }) => ({ url: img.url, type: img.type || 'main' })),
+          features: d.features || [],
+          categories: d.categories || [],
+          seller: d.seller || { name: '', url: '' },
+          delivery: d.delivery || { available: false, estimated_date: '' },
+          metadata: d.metadata || { source: 'amazon-api', fetched_at: new Date().toISOString() }
+        };
+      } else {
+        console.warn('Amazon fetch returned error:', json.error);
+        setFetchError(json.error || 'Failed to fetch product details.');
       }
 
       // Fallback: use local Amazon fetcher if API failed or returned empty data

@@ -1026,6 +1026,40 @@ class SupabaseDatabaseService {
     }
     return updated;
   }
+
+  // Fetch Amazon product details via Supabase Edge Function or Express fallback
+  public async amazonFetch(urlOrAsin: string): Promise<any> {
+    const payload = { urlOrAsin };
+
+    // Try Supabase Edge Function first
+    if (this.client) {
+      try {
+        const { data, error } = await this.client.functions.invoke('amazon-fetch', {
+          body: payload,
+        });
+        if (!error && data) {
+          return data;
+        }
+      } catch (e) {
+        console.warn('Supabase Edge Function amazon-fetch failed, falling back to Express:', e);
+      }
+    }
+
+    // Fallback to Express endpoint
+    const apiUrl = `${window.location.origin}/api/amazon-fetch`;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return await response.json();
+    }
+
+    throw new Error(`Amazon fetch endpoint returned non-JSON response (status: ${response.status})`);
+  }
 }
 
 export const supabaseDb = new SupabaseDatabaseService();
