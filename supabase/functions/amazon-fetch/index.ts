@@ -3,12 +3,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, origin',
 }
 
 serve(async (req) => {
+  const origin = req.headers.get('origin') || '*';
+  const headers = new Headers(corsHeaders);
+  headers.set('Access-Control-Allow-Origin', origin);
+  headers.set('Content-Type', 'application/json');
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers })
   }
 
   try {
@@ -17,7 +23,7 @@ serve(async (req) => {
     if (!urlOrAsin || typeof urlOrAsin !== 'string' || !urlOrAsin.trim()) {
       return new Response(
         JSON.stringify({ success: false, error: 'Please provide a valid Amazon product URL or ASIN.' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        { headers, status: 400 }
       )
     }
 
@@ -32,7 +38,7 @@ serve(async (req) => {
     if (!asin) {
       return new Response(
         JSON.stringify({ success: false, error: 'Could not extract a valid Amazon ASIN from the provided input.' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        { headers, status: 400 }
       )
     }
 
@@ -153,13 +159,13 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, data: productData }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers }
     )
 
   } catch (error) {
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { headers, status: 500 }
     )
   }
 })

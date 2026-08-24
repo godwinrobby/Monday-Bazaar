@@ -1040,25 +1040,33 @@ class SupabaseDatabaseService {
         if (!error && data) {
           return data;
         }
-      } catch (e) {
-        console.warn('Supabase Edge Function amazon-fetch failed, falling back to Express:', e);
+        if (error) {
+          console.warn('Supabase Edge Function amazon-fetch error:', error);
+        }
+      } catch (e: any) {
+        console.warn('Supabase Edge Function amazon-fetch failed, falling back to Express:', e.message || e);
       }
     }
 
     // Fallback to Express endpoint
-    const apiUrl = `${window.location.origin}/api/amazon-fetch`;
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const apiUrl = `${window.location.origin}/api/amazon-fetch`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      return await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        return await response.json();
+      }
+
+      const text = await response.text();
+      throw new Error(`Amazon fetch endpoint returned non-JSON response (status: ${response.status}): ${text.substring(0, 200)}`);
+    } catch (err: any) {
+      throw new Error(`Amazon fetch failed: ${err.message || 'Network error'}`);
     }
-
-    throw new Error(`Amazon fetch endpoint returned non-JSON response (status: ${response.status})`);
   }
 }
 
