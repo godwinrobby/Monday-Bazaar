@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Deal, StoreName, CategoryName } from '../types';
 import { STORES_INFO } from '../data/initialDeals';
+import { supabaseDb } from '../db/supabaseDb';
 import { 
   StoreAffiliateConfig, 
   DEFAULT_AFFILIATE_CONFIGS, 
@@ -91,6 +92,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
     return initial;
   });
+
+  // Categories State
+  const [categories, setCategories] = useState<string[]>([]);
+  const [newCategory, setNewCategory] = useState('');
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoryStatus, setCategoryStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      setCategoriesLoading(true);
+      try {
+        const cats = await supabaseDb.getCategories();
+        setCategories(cats);
+      } catch (e) {
+        setCategories(['Mobiles & Tablets', 'Electronics & Laptops', 'Audio & Headphones', 'Fashion & Apparel', 'Home & Kitchen', 'Gaming & Accessories', 'Beauty & Grooming', 'Smartwatches']);
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+    loadCategories();
+  }, []);
 
   // Affiliate Config State with Node.js Backend Database Persistence
   const [affiliateConfigs, setAffiliateConfigs] = useState<Record<StoreName, StoreAffiliateConfig>>(DEFAULT_AFFILIATE_CONFIGS);
@@ -925,6 +947,67 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
     });
   };
 
+  // Add Category
+  const handleAddCategory = async () => {
+    const trimmed = newCategory.trim();
+    if (!trimmed) return;
+    if (categories.includes(trimmed)) {
+      setCategoryStatus('Category already exists.');
+      return;
+    }
+    const updated = [...categories, trimmed];
+    setCategories(updated);
+    setNewCategory('');
+    setCategoryStatus(null);
+    try {
+      await supabaseDb.saveCategories(updated);
+      setCategoryStatus('Category added successfully.');
+      setTimeout(() => setCategoryStatus(null), 3000);
+    } catch (e) {
+      setCategoryStatus('Failed to save category. Please try again.');
+    }
+  };
+
+  // Edit Category
+  const handleEditCategory = async (index: number, oldName: string) => {
+    const newName = prompt('Edit category name:', oldName);
+    if (newName === null) return;
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    if (trimmed === oldName) return;
+    if (categories.some(c => c.toLowerCase() === trimmed.toLowerCase() && c !== oldName)) {
+      setCategoryStatus('A category with that name already exists.');
+      return;
+    }
+    const updated = [...categories];
+    updated[index] = trimmed;
+    setCategories(updated);
+    setCategoryStatus(null);
+    try {
+      await supabaseDb.saveCategories(updated);
+      setCategoryStatus('Category updated successfully.');
+      setTimeout(() => setCategoryStatus(null), 3000);
+    } catch (e) {
+      setCategoryStatus('Failed to update category. Please try again.');
+    }
+  };
+
+  // Delete Category
+  const handleDeleteCategory = async (index: number) => {
+    const name = categories[index];
+    if (!confirm(`Delete category "${name}"? Deals in this category will be moved to the first available category.`)) return;
+    const updated = categories.filter((_, i) => i !== index);
+    setCategories(updated);
+    setCategoryStatus(null);
+    try {
+      await supabaseDb.saveCategories(updated);
+      setCategoryStatus('Category deleted successfully.');
+      setTimeout(() => setCategoryStatus(null), 3000);
+    } catch (e) {
+      setCategoryStatus('Failed to delete category. Please try again.');
+    }
+  };
+
   // Auto Fetch Link Details (Title, Prices, Affiliate URL)
   const [isAnalyzingLink, setIsAnalyzingLink] = useState(false);
 
@@ -1085,6 +1168,19 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
           </Link>
 
           <Link
+            to="/admin/categories"
+            className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
+              currentTab === 'categories'
+                ? 'bg-indigo-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+            }`}
+          >
+            <Layers className="w-4 h-4 shrink-0 text-indigo-400" />
+            <span className="text-left flex-1">Categories</span>
+            <span className="px-1.5 py-0.2 bg-indigo-500/20 text-indigo-300 rounded text-[9px] shrink-0">{categories.length}</span>
+          </Link>
+
+          <Link
             to="/admin/deals"
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
               currentTab === 'deals'
@@ -1229,6 +1325,15 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
           >
             <ShoppingBag className="w-3 h-3" />
             <span>Amazon Importer</span>
+          </Link>
+          <Link
+            to="/admin/categories"
+            className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
+              currentTab === 'categories' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Layers className="w-3 h-3" />
+            <span>Categories</span>
           </Link>
           <Link
             to="/admin/deals"
@@ -2506,6 +2611,93 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
           </div>
         )}
 
+        {/* ==================== TAB: CATEGORIES MANAGEMENT ==================== */}
+        {currentTab === 'categories' && (
+          <div className="max-w-full space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-indigo-500" />
+                  Category Management
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Add, edit, or remove product categories. Changes sync to Supabase and update all deal forms.</p>
+              </div>
+
+              {categoryStatus && (
+                <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between ${
+                  categoryStatus.includes('Error') || categoryStatus.includes('failed')
+                    ? 'bg-red-50 border border-red-200 text-red-700'
+                    : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                }`}>
+                  <span>{categoryStatus}</span>
+                  <button onClick={() => setCategoryStatus(null)} className="font-bold text-xs opacity-70 hover:opacity-100">✕</button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                  placeholder="New category name..."
+                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={handleAddCategory}
+                  disabled={!newCategory.trim()}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add
+                </button>
+              </div>
+
+              {categoriesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {categories.map((cat, idx) => (
+                    <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <span className="text-sm font-bold text-slate-800">{cat}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleEditCategory(idx, cat)}
+                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Edit"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        {categories.length > 1 && (
+                          <button
+                            onClick={() => handleDeleteCategory(idx)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 space-y-1">
+                <p className="font-bold">Category Guidelines:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-amber-700">
+                  <li>Categories are stored in Supabase site_config table.</li>
+                  <li>All deal forms and filters will automatically use the updated list.</li>
+                  <li>Deals with removed categories will show under the first available category.</li>
+                  <li>Drag reorder is not supported; categories appear in the order shown above.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         </div>
       </div>
 
@@ -2568,17 +2760,12 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                   <label className="block font-bold text-slate-700 mb-1">Category *</label>
                   <select
                     value={formData.category}
-                    onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value as CategoryName }))}
+                    onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
                   >
-                    <option value="Mobiles & Tablets">Mobiles & Tablets</option>
-                    <option value="Electronics & Laptops">Electronics & Laptops</option>
-                    <option value="Audio & Headphones">Audio & Headphones</option>
-                    <option value="Fashion & Apparel">Fashion & Apparel</option>
-                    <option value="Home & Kitchen">Home & Kitchen</option>
-                    <option value="Gaming & Accessories">Gaming & Accessories</option>
-                    <option value="Beauty & Grooming">Beauty & Grooming</option>
-                    <option value="Smartwatches">Smartwatches</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
               </div>

@@ -11,16 +11,7 @@ export type StoreName =
   | 'Samsung' 
   | 'Apple';
 
-export type CategoryName = 
-  | 'All' 
-  | 'Mobiles & Tablets' 
-  | 'Electronics & Laptops' 
-  | 'Audio & Headphones' 
-  | 'Fashion & Apparel' 
-  | 'Home & Kitchen' 
-  | 'Gaming & Accessories' 
-  | 'Beauty & Grooming' 
-  | 'Smartwatches';
+export type CategoryName = string;
 
 export interface PriceHistoryPoint {
   date: string;

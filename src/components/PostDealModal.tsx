@@ -7,10 +7,11 @@ interface PostDealModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddDeal: (deal: Partial<Deal>) => Promise<{ success: boolean; error?: string }> | void;
+  categories?: string[];
 }
 
 const STORES = Object.keys(STORES_INFO) as StoreName[];
-const CATEGORIES: CategoryName[] = [
+const DEFAULT_CATEGORIES: string[] = [
   'Mobiles & Tablets',
   'Electronics & Laptops',
   'Audio & Headphones',
@@ -25,6 +26,7 @@ export const PostDealModal: React.FC<PostDealModalProps> = ({
   isOpen,
   onClose,
   onAddDeal,
+  categories = DEFAULT_CATEGORIES,
 }) => {
   if (!isOpen) return null;
 
@@ -147,10 +149,10 @@ export const PostDealModal: React.FC<PostDealModalProps> = ({
               <label className="block font-bold text-slate-700 mb-1">Category</label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as CategoryName)}
+                onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20"
               >
-                {CATEGORIES.map((c) => (
+                {categories.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>

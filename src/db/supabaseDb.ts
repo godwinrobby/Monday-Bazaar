@@ -994,6 +994,38 @@ class SupabaseDatabaseService {
     }
     return true;
   }
+
+  // Get categories from site_config
+  public async getCategories(): Promise<string[]> {
+    if (this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('site_config')
+          .select('config_value')
+          .eq('config_key', 'categories')
+          .single();
+        if (!error && data?.config_value) {
+          const parsed = typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e: any) {}
+    }
+    return ['Mobiles & Tablets', 'Electronics & Laptops', 'Audio & Headphones', 'Fashion & Apparel', 'Home & Kitchen', 'Gaming & Accessories', 'Beauty & Grooming', 'Smartwatches'];
+  }
+
+  // Save categories to site_config
+  public async saveCategories(categories: string[]): Promise<string[]> {
+    const updated = dbManager.updateCategories(categories);
+    if (this.client) {
+      try {
+        await this.client.from('site_config').upsert({
+          config_key: 'categories',
+          config_value: JSON.stringify(updated)
+        }, { onConflict: 'config_key' });
+      } catch (e: any) {}
+    }
+    return updated;
+  }
 }
 
 export const supabaseDb = new SupabaseDatabaseService();

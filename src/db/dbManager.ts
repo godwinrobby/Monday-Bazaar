@@ -72,6 +72,7 @@ interface DatabaseSchema {
   socialConfig?: SocialConfig;
   socialLogs?: SocialLogRecord[];
   siteBanner?: SiteBannerConfig;
+  categories?: string[];
   stats: {
     totalClicks: number;
     totalViews: number;
@@ -204,6 +205,7 @@ class DatabaseManager {
         linkClicks: INITIAL_CLICKS_SEED,
         dealViews: INITIAL_VIEWS_SEED,
         affiliateConfigs: DEFAULT_AFFILIATE_CONFIGS,
+        categories: ['Mobiles & Tablets', 'Electronics & Laptops', 'Audio & Headphones', 'Fashion & Apparel', 'Home & Kitchen', 'Gaming & Accessories', 'Beauty & Grooming', 'Smartwatches'],
         stats: { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
       };
     }
@@ -225,6 +227,7 @@ class DatabaseManager {
             linkClicks: Array.isArray(parsed.linkClicks) ? parsed.linkClicks : INITIAL_CLICKS_SEED,
             dealViews: Array.isArray(parsed.dealViews) ? parsed.dealViews : INITIAL_VIEWS_SEED,
             affiliateConfigs: parsed.affiliateConfigs || DEFAULT_AFFILIATE_CONFIGS,
+            categories: parsed.categories || ['Mobiles & Tablets', 'Electronics & Laptops', 'Audio & Headphones', 'Fashion & Apparel', 'Home & Kitchen', 'Gaming & Accessories', 'Beauty & Grooming', 'Smartwatches'],
             stats: parsed.stats || { totalClicks: 1250, totalViews: 4500, totalSavingsGenerated: 485000, updatedAt: new Date().toISOString() }
           };
           if (!Array.isArray(parsed.deals) || parsed.deals.length === 0) {
@@ -592,6 +595,16 @@ class DatabaseManager {
     this.db.siteBanner = updated;
     this.saveDatabase(this.db);
     return updated;
+  }
+
+  public getCategories(): string[] {
+    return this.db.categories || ['Mobiles & Tablets', 'Electronics & Laptops', 'Audio & Headphones', 'Fashion & Apparel', 'Home & Kitchen', 'Gaming & Accessories', 'Beauty & Grooming', 'Smartwatches'];
+  }
+
+  public updateCategories(categories: string[]): string[] {
+    this.db.categories = categories;
+    this.saveDatabase(this.db);
+    return categories;
   }
 }
 
