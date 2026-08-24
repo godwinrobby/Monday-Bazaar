@@ -51,10 +51,11 @@ export interface Deal {
   isLootDeal?: boolean;
   isVerified?: boolean;
   isExpiringSoon?: boolean;
-  isActive?: boolean; // Default true, allows admin to set Active/Inactive
+  isActive?: boolean; // Default true, allows admin to set Active / Inactive
   upvotes: number;
   downvotes: number;
   userVoted?: 'up' | 'down';
+  operatingHours?: Record<string, { open: string; close: string; closed: boolean }>;
   aiScore: number; // 0 to 100
   aiVerdict: string;
   aiPros: string[];

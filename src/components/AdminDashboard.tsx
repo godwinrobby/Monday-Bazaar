@@ -754,6 +754,11 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
   const handleOpenAddModal = () => {
     setEditingDeal(null);
     setDealModalError(null);
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const defaultHours: Record<string, { open: string; close: string; closed: boolean }> = {};
+    days.forEach(day => {
+      defaultHours[day] = { open: '09:00', close: '21:00', closed: false };
+    });
     setFormData({
       title: '',
       description: '',
@@ -772,6 +777,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
       aiPros: ['Great savings compared to standard MRP', 'Verified merchant deal'],
       aiCons: ['Limited stock offer'],
       postedBy: 'Admin_Master',
+      operatingHours: defaultHours,
     });
     setIsDealModalOpen(true);
   };
@@ -780,7 +786,11 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
   const handleOpenEditModal = (deal: Deal) => {
     setEditingDeal(deal);
     setDealModalError(null);
-    setFormData({ ...deal, isActive: deal.isActive !== false });
+    setFormData({
+      ...deal,
+      isActive: deal.isActive !== false,
+      operatingHours: deal.operatingHours || {},
+    });
     setIsDealModalOpen(true);
   };
 
@@ -816,6 +826,7 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
         isActive: formData.isActive !== false,
         aiScore: Number(formData.aiScore) || 85,
         aiVerdict: formData.aiVerdict || 'Verified deal',
+        operatingHours: formData.operatingHours || editingDeal.operatingHours,
       };
       onUpdateDeal(updated);
       addToast({
@@ -2651,6 +2662,102 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                     <span className="text-emerald-700">Verified Badge</span>
                   </label>
                 </div>
+              </div>
+
+              {/* Operating Hours */}
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-900">Operating Hours</h4>
+                    <p className="text-[10px] text-slate-500">Set weekly schedule for this listing</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                      const defaultHours: Record<string, { open: string; close: string; closed: boolean }> = {};
+                      days.forEach(day => {
+                        defaultHours[day] = { open: '09:00', close: '21:00', closed: false };
+                      });
+                      setFormData(prev => ({
+                        ...prev,
+                        operatingHours: prev.operatingHours || defaultHours
+                      }));
+                    }}
+                    className="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 font-bold text-[11px] rounded-lg transition-colors"
+                  >
+                    Set Hours
+                  </button>
+                </div>
+
+                {formData.operatingHours && Object.keys(formData.operatingHours).length > 0 && (
+                  <div className="divide-y divide-slate-100">
+                    {Object.entries(formData.operatingHours).map(([day, hours]) => {
+                      const h = hours as { open: string; close: string; closed: boolean };
+                      return (
+                        <div key={day} className="flex items-center gap-3 px-4 py-2.5">
+                          <div className="w-24 shrink-0">
+                            <span className="text-xs font-bold text-slate-700">{day}</span>
+                          </div>
+
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={!h.closed}
+                              onChange={(e) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  operatingHours: {
+                                    ...prev.operatingHours,
+                                    [day]: { ...prev.operatingHours![day], closed: !e.target.checked }
+                                  }
+                                }));
+                              }}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <span className="text-[11px] font-medium text-slate-600">Open</span>
+                          </label>
+
+                          {!h.closed ? (
+                            <div className="flex items-center gap-2 flex-1">
+                              <input
+                                type="time"
+                                value={h.open}
+                                onChange={(e) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    operatingHours: {
+                                      ...prev.operatingHours,
+                                      [day]: { ...prev.operatingHours![day], open: e.target.value }
+                                    }
+                                  }));
+                                }}
+                                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                              />
+                              <span className="text-slate-400 text-[11px]">to</span>
+                              <input
+                                type="time"
+                                value={h.close}
+                                onChange={(e) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    operatingHours: {
+                                      ...prev.operatingHours,
+                                      [day]: { ...prev.operatingHours![day], close: e.target.value }
+                                    }
+                                  }));
+                                }}
+                                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                              />
+                            </div>
+                          ) : (
+                            <span className="text-[11px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-md">Closed</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
