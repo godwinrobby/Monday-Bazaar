@@ -7,6 +7,13 @@ export interface StoreAffiliateConfig {
   commissionRate: number; // percentage, e.g. 8.5
   isActive: boolean;
   notes?: string;
+  paapi?: {
+    accessKey: string;
+    secretKey: string;
+    partnerTag: string;
+    region: string;
+    marketplace: string;
+  };
 }
 
 export const DEFAULT_AFFILIATE_CONFIGS: Record<StoreName, StoreAffiliateConfig> = {
@@ -17,6 +24,13 @@ export const DEFAULT_AFFILIATE_CONFIGS: Record<StoreName, StoreAffiliateConfig> 
     commissionRate: 8.5,
     isActive: true,
     notes: 'Amazon Associates India tag',
+    paapi: {
+      accessKey: '',
+      secretKey: '',
+      partnerTag: 'mondaybazaar-21',
+      region: 'us-east-1',
+      marketplace: 'www.amazon.in',
+    },
   },
   Flipkart: {
     store: 'Flipkart',

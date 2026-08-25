@@ -1045,7 +1045,7 @@ app.post("/api/social/auto-post-deal", async (req, res) => {
 // POST /api/amazon-fetch - Fetch Amazon product details and return structured JSON
 app.post("/api/amazon-fetch", async (req, res) => {
   try {
-    const { urlOrAsin } = req.body;
+    const { urlOrAsin, paapi } = req.body;
     if (!urlOrAsin || typeof urlOrAsin !== 'string' || !urlOrAsin.trim()) {
       return res.status(400).json({ success: false, error: 'Please provide a valid Amazon product URL or ASIN.' });
     }
@@ -1053,7 +1053,6 @@ app.post("/api/amazon-fetch", async (req, res) => {
     const input = urlOrAsin.trim();
     
     // Extract ASIN from URL or direct ASIN input
-    // Handle various formats: amazon.in/dp/ASIN, link.amazon/ASIN, amzn.in/ASIN, direct ASIN, etc.
     const asinMatch = input.match(/(?:dp|gp\/product|asin|product-reviews|d|link\.amazon[^\/]*|amzn[^\/]*|amazon[^\/]*)\/([A-Z0-9]{8,12})/i) ||
                       input.match(/\b(B[A-Z0-9]{8,11})\b/i) ||
                       input.match(/([A-Z0-9]{9,12})$/i);
@@ -1068,7 +1067,17 @@ app.post("/api/amazon-fetch", async (req, res) => {
 
     const productUrl = `https://www.amazon.in/dp/${asin}`;
 
-    // Try to fetch real product data from Amazon (best-effort)
+    // Try PA-API if credentials are provided
+    if (paapi?.accessKey && paapi?.secretKey && paapi?.partnerTag) {
+      try {
+        // PA-API signing would go here in production
+        // For now, fall through to scraping
+      } catch (paapiErr) {
+        console.warn('PA-API request failed, falling back to scraping:', paapiErr);
+      }
+    }
+
+    // Fallback: scrape Amazon product page
     let productData: any = null;
     try {
       const amazonRes = await fetch(productUrl, {

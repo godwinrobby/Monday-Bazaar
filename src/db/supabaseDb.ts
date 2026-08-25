@@ -1029,7 +1029,11 @@ class SupabaseDatabaseService {
 
   // Fetch Amazon product details via Supabase Edge Function or Express fallback
   public async amazonFetch(urlOrAsin: string): Promise<any> {
-    const payload = { urlOrAsin };
+    const amazonConfig = (await this.getAffiliateConfigs()).Amazon;
+    const payload = {
+      urlOrAsin,
+      paapi: amazonConfig?.paapi || null,
+    };
 
     // Try Supabase Edge Function first
     if (this.client) {
