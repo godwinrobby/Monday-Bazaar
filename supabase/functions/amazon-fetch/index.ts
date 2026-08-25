@@ -1,20 +1,22 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, origin',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, origin, accept',
+  'Access-Control-Max-Age': '86400',
 }
 
 serve(async (req) => {
-  const origin = req.headers.get('origin') || '*';
-  const headers = new Headers(corsHeaders);
-  headers.set('Access-Control-Allow-Origin', origin);
-  headers.set('Content-Type', 'application/json');
+  const origin = req.headers.get('origin') || '*'
 
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers })
+    return new Response('ok', {
+      headers: {
+        ...corsHeaders,
+        'Access-Control-Allow-Origin': origin,
+      },
+    })
   }
 
   try {
@@ -23,13 +25,19 @@ serve(async (req) => {
     if (!urlOrAsin || typeof urlOrAsin !== 'string' || !urlOrAsin.trim()) {
       return new Response(
         JSON.stringify({ success: false, error: 'Please provide a valid Amazon product URL or ASIN.' }),
-        { headers, status: 400 }
+        {
+          headers: {
+            ...corsHeaders,
+            'Access-Control-Allow-Origin': origin,
+            'Content-Type': 'application/json',
+          },
+          status: 400,
+        }
       )
     }
 
     const input = urlOrAsin.trim()
 
-    // Extract ASIN from URL or direct ASIN input
     const asinMatch = input.match(/(?:dp|gp\/product|asin|product-reviews|d|link\.amazon[^\/]*|amzn[^\/]*|amazon[^\/]*)\/([A-Z0-9]{8,12})/i) ||
                       input.match(/\b(B[A-Z0-9]{8,11})\b/i) ||
                       input.match(/([A-Z0-9]{9,12})$/i)
@@ -38,13 +46,19 @@ serve(async (req) => {
     if (!asin) {
       return new Response(
         JSON.stringify({ success: false, error: 'Could not extract a valid Amazon ASIN from the provided input.' }),
-        { headers, status: 400 }
+        {
+          headers: {
+            ...corsHeaders,
+            'Access-Control-Allow-Origin': origin,
+            'Content-Type': 'application/json',
+          },
+          status: 400,
+        }
       )
     }
 
     const productUrl = `https://www.amazon.in/dp/${asin}`
 
-    // Try to fetch real product data from Amazon
     let productData: any = null
     try {
       const amazonRes = await fetch(productUrl, {
@@ -59,24 +73,20 @@ serve(async (req) => {
       if (amazonRes.ok) {
         const html = await amazonRes.text()
 
-        // Extract title
         const titleMatch = html.match(/<title>([^<]+)<\/title>/i) ||
                            html.match(/<meta name="title" content="([^"]+)"/i) ||
                            html.match(/<meta property="og:title" content="([^"]+)"/i)
         const title = titleMatch ? titleMatch[1].replace(/&/g, '&').replace(/"/g, '"').trim() : ''
 
-        // Extract description
         const descMatch = html.match(/<meta name="description" content="([^"]+)"/i) ||
                           html.match(/<meta property="og:description" content="([^"]+)"/i)
         const description = descMatch ? descMatch[1].replace(/&/g, '&').trim() : ''
 
-        // Extract image
         const imgMatch = html.match(/<meta property="og:image" content="([^"]+)"/i) ||
                          html.match(/"hiRes":"([^"]+)"/i) ||
                          html.match(/"large":"([^"]+)"/i)
         const imageUrl = imgMatch ? imgMatch[1] : ''
 
-        // Extract price
         let currentPrice = 0
         let originalPrice = 0
 
@@ -132,7 +142,6 @@ serve(async (req) => {
       console.warn('Amazon fetch error:', err)
     }
 
-    // Fallback data if scraping failed
     if (!productData || (!productData.title && !productData.price?.current)) {
       productData = {
         asin,
@@ -159,13 +168,25 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, data: productData }),
-      { headers }
+      {
+        headers: {
+          ...corsHeaders,
+          'Access-Control-Allow-Origin': origin,
+          'Content-Type': 'application/json',
+        },
+      }
     )
-
   } catch (error) {
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      { headers, status: 500 }
+      {
+        headers: {
+          ...corsHeaders,
+          'Access-Control-Allow-Origin': origin,
+          'Content-Type': 'application/json',
+        },
+        status: 500,
+      }
     )
   }
 })
