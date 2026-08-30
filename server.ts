@@ -1522,6 +1522,22 @@ function injectDealOgMeta(html: string, deal: any): string {
   // Update <title> tags (there are two in index.html)
   updated = updated.replace(/<title>[^<]*<\/title>/g, `<title>${escapeHtmlAttr(ogTitle)}</title>`);
 
+  // Meta title & description (SEO)
+  updated = updated.replace(
+    /<meta name="title" content="[^"]*"\s*\/?>/i,
+    `<meta name="title" content="${escapeHtmlAttr(ogTitle)}" />`
+  );
+  updated = updated.replace(
+    /<meta name="description" content="[^"]*"\s*\/?>/i,
+    `<meta name="description" content="${escapeHtmlAttr(ogDesc)}" />`
+  );
+
+  // Canonical URL for the deal page
+  updated = updated.replace(
+    /<link rel="canonical" href="[^"]*"\s*\/?>/i,
+    `<link rel="canonical" href="${escapeHtmlAttr(dealPageUrl)}" />`
+  );
+
   // Open Graph tags
   updated = updated.replace(
     /<meta property="og:title" content="[^"]*"\s*\/?>/i,

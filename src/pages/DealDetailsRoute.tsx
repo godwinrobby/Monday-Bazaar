@@ -51,6 +51,42 @@ export const DealDetailsRoute: React.FC<DealDetailsRouteProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [id, deals]);
 
+  // Update SEO meta title & description for inner deal pages (client-side navigation)
+  useEffect(() => {
+    if (!deal) return;
+    const price = typeof deal.dealPrice === 'number' ? deal.dealPrice.toLocaleString('en-IN') : deal.dealPrice;
+    const seoTitle = `${deal.title} - ₹${price} (${deal.discountPercentage}% OFF) | Monday Bazaar`;
+    const seoDesc = `🔥 ${deal.title} - ₹${price} (${deal.discountPercentage}% OFF) on ${deal.store}. Verified deal with AI price analysis.`;
+
+    document.title = seoTitle;
+
+    const setMeta = (selector: string, attr: string, value: string) => {
+      let el = document.head.querySelector<HTMLMetaElement>(selector);
+      if (!el) {
+        el = document.createElement('meta');
+        if (selector.includes('property=')) el.setAttribute('property', attr);
+        else el.setAttribute('name', attr);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', value);
+    };
+
+    setMeta('meta[name="title"]', 'title', seoTitle);
+    setMeta('meta[name="description"]', 'description', seoDesc);
+    setMeta('meta[property="og:title"]', 'og:title', seoTitle);
+    setMeta('meta[property="og:description"]', 'og:description', seoDesc);
+
+    const baseUrl = 'https://mondaybazaar.in';
+    const dealUrl = `${baseUrl}/deal/${encodeURIComponent(deal.id)}`;
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute('href', dealUrl);
+  }, [deal]);
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12 text-center">
