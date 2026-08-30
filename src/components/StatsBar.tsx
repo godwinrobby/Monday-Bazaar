@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, IndianRupee, ShieldCheck, ShoppingBag, Sparkles } from 'lucide-react';
+import { Flame, IndianRupee, ShieldCheck, ShoppingBag } from 'lucide-react';
 
 export const StatsBar: React.FC = () => {
   return (
@@ -24,10 +24,6 @@ export const StatsBar: React.FC = () => {
           </div>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 text-slate-400 text-xs shrink-0">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span>Powered by Gemini AI Price Inspector</span>
-        </div>
       </div>
     </div>
   );

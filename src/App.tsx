@@ -498,11 +498,9 @@ export default function App() {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-500">
               <p>© {new Date().getFullYear()} Monday Bazaar. All rights reserved. E-Commerce deals & coupons aggregator.</p>
               <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1 text-slate-400">
+                                <span className="flex items-center gap-1 text-slate-400">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" /> Verified Deal Links
                 </span>
-                <span>•</span>
-                <span className="text-slate-400">Powered by Gemini AI</span>
               </div>
             </div>
           </div>
