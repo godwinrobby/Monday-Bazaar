@@ -144,7 +144,8 @@ class SupabaseDatabaseService {
           postedat: deal.postedAt || 'Recently',
           postedby: deal.postedBy || 'Community Member',
           viewscount: deal.viewsCount || 0,
-          commentscount: deal.commentsCount || 0
+          commentscount: deal.commentsCount || 0,
+          created_at: deal.createdAt || new Date().toISOString()
         };
 
         const { error } = await this.client.from('deals').upsert(payload, { onConflict: 'id' });
