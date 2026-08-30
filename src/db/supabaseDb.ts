@@ -238,7 +238,7 @@ class SupabaseDatabaseService {
         const { data, error } = await this.client
           .from('deals')
           .select('*')
-          .order('id', { ascending: false });
+          .order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data)) {
           return data.map((r: any) => ({
@@ -410,7 +410,8 @@ class SupabaseDatabaseService {
           postedat: newDeal.postedAt || 'Recently',
           postedby: newDeal.postedBy || 'Community Member',
           viewscount: newDeal.viewsCount || 0,
-          commentscount: newDeal.commentsCount || 0
+          commentscount: newDeal.commentsCount || 0,
+          created_at: newDeal.createdAt || new Date().toISOString()
         };
 
         const { error } = await this.client.from('deals').upsert(payload, { onConflict: 'id' });

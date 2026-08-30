@@ -51,7 +51,7 @@ export default function App() {
     category: 'All',
     store: 'All',
     searchQuery: '',
-    sortBy: 'hot',
+    sortBy: 'newest',
     onlyLootDeals: false,
     onlyCoupons: false,
   });
@@ -296,7 +296,9 @@ export default function App() {
         return b.dealPrice - a.dealPrice;
       }
       if (filters.sortBy === 'newest') {
-        return b.id.localeCompare(a.id);
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
       }
       return 0;
     });

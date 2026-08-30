@@ -20,7 +20,7 @@
       "aiScore": 96,
       "aiVerdict": "Rare 27% price collapse on flagship iPhone 15. Historical lowest recorded price with additional HDFC card discount.",
       "aiPros": [
-        "Flat ₹5,000 SBI/HDFC Card Discount",
+        "Flat \u20b95,000 SBI/HDFC Card Discount",
         "Type-C Port & Dynamic Island",
         "Highest resale value"
       ],
@@ -45,7 +45,8 @@
       ],
       "commentsCount": 18,
       "comments": [],
-      "viewsCount": 3420
+      "viewsCount": 3420,
+      "createdAt": "2026-08-30T14:48:00.000Z"
     },
     {
       "id": "deal-2",
@@ -92,7 +93,8 @@
       ],
       "commentsCount": 24,
       "comments": [],
-      "viewsCount": 2150
+      "viewsCount": 2150,
+      "createdAt": "2026-08-30T14:15:00.000Z"
     },
     {
       "id": "deal-3",
@@ -139,7 +141,8 @@
       ],
       "commentsCount": 39,
       "comments": [],
-      "viewsCount": 5120
+      "viewsCount": 5120,
+      "createdAt": "2026-08-30T13:00:00.000Z"
     },
     {
       "id": "deal-4",
@@ -159,7 +162,7 @@
       "upvotes": 890,
       "downvotes": 45,
       "aiScore": 91,
-      "aiVerdict": "Loot Deal! True wireless ANC earbuds under ₹1,300 with 42 hours battery.",
+      "aiVerdict": "Loot Deal! True wireless ANC earbuds under \u20b91,300 with 42 hours battery.",
       "aiPros": [
         "Massive 71% discount",
         "Active Noise Cancellation included",
@@ -186,7 +189,8 @@
       ],
       "commentsCount": 52,
       "comments": [],
-      "viewsCount": 7890
+      "viewsCount": 7890,
+      "createdAt": "2026-08-30T12:00:00.000Z"
     },
     {
       "id": "deal-5",
@@ -233,7 +237,8 @@
       ],
       "commentsCount": 15,
       "comments": [],
-      "viewsCount": 1980
+      "viewsCount": 1980,
+      "createdAt": "2026-08-30T11:00:00.000Z"
     },
     {
       "id": "deal-6",
@@ -280,7 +285,8 @@
       ],
       "commentsCount": 12,
       "comments": [],
-      "viewsCount": 1420
+      "viewsCount": 1420,
+      "createdAt": "2026-08-30T10:00:00.000Z"
     }
   ],
   "users": [

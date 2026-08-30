@@ -77,7 +77,7 @@ export const MobileFilterDrawer: React.FC<MobileFilterDrawerProps> = ({
       category: 'All',
       store: 'All',
       searchQuery: '',
-      sortBy: 'hot',
+      sortBy: 'newest',
       onlyLootDeals: false,
       onlyCoupons: false,
     });

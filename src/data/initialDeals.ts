@@ -126,6 +126,7 @@ export const INITIAL_DEALS: Deal[] = [
     aiCons: ['Standard 60Hz display refresh rate'],
     postedAt: '12 mins ago',
     postedBy: 'DealMaster_Pro',
+    createdAt: '2026-08-30T14:48:00.000Z',
     priceHistory: [
       { date: 'Jan 2026', price: 72999 },
       { date: 'Feb 2026', price: 68999 },
@@ -158,6 +159,7 @@ export const INITIAL_DEALS: Deal[] = [
     aiCons: ['Does not fold completely compact like XM4'],
     postedAt: '45 mins ago',
     postedBy: 'AudioLover99',
+    createdAt: '2026-08-30T14:15:00.000Z',
     priceHistory: [
       { date: 'Jan 2026', price: 29990 },
       { date: 'Feb 2026', price: 27990 },
@@ -190,6 +192,7 @@ export const INITIAL_DEALS: Deal[] = [
     aiCons: ['256GB base storage capacity'],
     postedAt: '2 hours ago',
     postedBy: 'TechGeek_IN',
+    createdAt: '2026-08-30T13:00:00.000Z',
     priceHistory: [
       { date: 'Jan 2026', price: 92990 },
       { date: 'Feb 2026', price: 87990 },
@@ -222,6 +225,7 @@ export const INITIAL_DEALS: Deal[] = [
     aiCons: ['Plastic case finish'],
     postedAt: '3 hours ago',
     postedBy: 'LootHunter_Raj',
+    createdAt: '2026-08-30T12:00:00.000Z',
     priceHistory: [
       { date: 'Jan 2026', price: 1999 },
       { date: 'Feb 2026', price: 1599 },
@@ -254,6 +258,7 @@ export const INITIAL_DEALS: Deal[] = [
     aiCons: ['128GB base variant'],
     postedAt: '4 hours ago',
     postedBy: 'SamsungFanatic',
+    createdAt: '2026-08-30T11:00:00.000Z',
     priceHistory: [
       { date: 'Jan 2026', price: 74999 },
       { date: 'Feb 2026', price: 69999 },
@@ -286,6 +291,7 @@ export const INITIAL_DEALS: Deal[] = [
     aiCons: ['Limited size options left'],
     postedAt: '5 hours ago',
     postedBy: 'StyleBlogger',
+    createdAt: '2026-08-30T10:00:00.000Z',
     priceHistory: [
       { date: 'Jan 2026', price: 2499 },
       { date: 'Feb 2026', price: 1799 },

@@ -269,13 +269,17 @@ class DatabaseManager {
     }
   }
 
-  // Get all deals
+    // Get all deals, sorted by createdAt descending (latest first)
   public getDeals(): Deal[] {
     if (!this.db.deals || this.db.deals.length === 0) {
       this.db.deals = [...INITIAL_DEALS];
       this.saveDatabase(this.db);
     }
-    return this.db.deals;
+    return this.db.deals.sort((a, b) => {
+      const dateA = a.createdAt || '';
+      const dateB = b.createdAt || '';
+      return new Date(dateB).getTime() - new Date(dateA).getTime();
+    });
   }
 
   // Get single deal by ID
