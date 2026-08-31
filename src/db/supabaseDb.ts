@@ -3,6 +3,28 @@ import { Deal, StoreName } from '../types';
 import { StoreAffiliateConfig, DEFAULT_AFFILIATE_CONFIGS } from '../utils/affiliate';
 import { dbManager, UserRecord, LinkClickRecord, DealViewRecord, SiteBannerConfig, SocialLogRecord, SocialConfig } from './dbManager';
 
+// Pagination types for the User App product APIs
+export interface DealQueryParams {
+  page?: number;
+  limit?: number;
+  category?: string;
+  store?: string;
+  search?: string;
+  sortBy?: string;
+  onlyLoot?: boolean;
+  onlyCoupons?: boolean;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasMore: boolean;
+  source: 'edge-function' | 'direct-db' | 'local-fallback';
+}
+
 export interface SupabaseStatus {
   isConnected: boolean;
   engine: string;
@@ -232,6 +254,42 @@ class SupabaseDatabaseService {
     }
   }
 
+  // Shared row mapper for deals rows coming from Supabase (snake_case or camelCase)
+  private static mapDealRow(r: any): Deal {
+    return {
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      store: r.store as StoreName,
+      category: r.category,
+      originalPrice: Number(r.originalprice ?? r.originalPrice ?? 0),
+      dealPrice: Number(r.dealprice ?? r.dealPrice ?? 0),
+      discountPercentage: Number(r.discountpercentage ?? r.discountPercentage ?? 0),
+      couponCode: r.couponcode ?? r.couponCode ?? '',
+      imageUrl: r.imageurl ?? r.imageUrl ?? '',
+      dealUrl: r.dealurl ?? r.dealUrl ?? '',
+      isLootDeal: Boolean(r.islootdeal ?? r.isLootDeal),
+      isVerified: Boolean(r.isverified ?? r.isVerified),
+      isActive: r.isactive !== false && r.isActive !== false,
+      upvotes: Number(r.upvotes || 0),
+      downvotes: Number(r.downvotes || 0),
+      aiScore: Number(r.aiscore ?? r.aiScore ?? 85),
+      aiVerdict: r.aiverdict ?? r.aiVerdict ?? '',
+      aiPros: Array.isArray(r.aipros) ? r.aipros : (r.aipros ? (typeof r.aipros === 'string' ? (r.aipros.startsWith('[') ? JSON.parse(r.aipros) : [r.aipros]) : r.aipros) : []),
+      aiCons: Array.isArray(r.aicons) ? r.aicons : (r.aicons ? (typeof r.aicons === 'string' ? (r.aicons.startsWith('[') ? JSON.parse(r.aicons) : [r.aicons]) : r.aicons) : []),
+      postedAt: r.postedat ?? r.postedAt ?? 'Recently',
+      createdAt: r.created_at,
+      postedBy: r.postedby ?? r.postedBy ?? 'Community Member',
+      viewsCount: Number(r.viewscount ?? r.viewsCount ?? 0),
+      commentsCount: Number(r.commentscount ?? r.commentsCount ?? 0),
+      priceHistory: [
+        { date: 'Previous', price: Number(r.originalprice ?? r.originalPrice ?? 0) },
+        { date: 'Today', price: Number(r.dealprice ?? r.dealPrice ?? 0) }
+      ],
+      comments: []
+    };
+  }
+
   // Fetch all deals from Supabase only (no demo data fallback)
   public async getDeals(): Promise<Deal[]> {
     if (this.client) {
@@ -242,44 +300,171 @@ class SupabaseDatabaseService {
           .order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data)) {
-          return data.map((r: any) => ({
-            id: r.id,
-            title: r.title,
-            description: r.description,
-            store: r.store as StoreName,
-            category: r.category,
-            originalPrice: Number(r.originalprice ?? r.originalPrice ?? 0),
-            dealPrice: Number(r.dealprice ?? r.dealPrice ?? 0),
-            discountPercentage: Number(r.discountpercentage ?? r.discountPercentage ?? 0),
-            couponCode: r.couponcode ?? r.couponCode ?? '',
-            imageUrl: r.imageurl ?? r.imageUrl ?? '',
-            dealUrl: r.dealurl ?? r.dealUrl ?? '',
-            isLootDeal: Boolean(r.islootdeal ?? r.isLootDeal),
-            isVerified: Boolean(r.isverified ?? r.isVerified),
-            isActive: r.isactive !== false && r.isActive !== false,
-            upvotes: Number(r.upvotes || 0),
-            downvotes: Number(r.downvotes || 0),
-            aiScore: Number(r.aiscore ?? r.aiScore ?? 85),
-            aiVerdict: r.aiverdict ?? r.aiVerdict ?? '',
-            aiPros: Array.isArray(r.aipros) ? r.aipros : (r.aipros ? (typeof r.aipros === 'string' ? (r.aipros.startsWith('[') ? JSON.parse(r.aipros) : [r.aipros]) : r.aipros) : []),
-            aiCons: Array.isArray(r.aicons) ? r.aicons : (r.aicons ? (typeof r.aicons === 'string' ? (r.aicons.startsWith('[') ? JSON.parse(r.aicons) : [r.aicons]) : r.aicons) : []),
-            postedAt: r.postedat ?? r.postedAt ?? 'Recently',
-            createdAt: r.created_at,
-            postedBy: r.postedby ?? r.postedBy ?? 'Community Member',
-            viewsCount: Number(r.viewscount ?? r.viewsCount ?? 0),
-            commentsCount: Number(r.commentscount ?? r.commentsCount ?? 0),
-            priceHistory: [
-              { date: 'Previous', price: Number(r.originalprice ?? r.originalPrice ?? 0) },
-              { date: 'Today', price: Number(r.dealprice ?? r.dealPrice ?? 0) }
-            ],
-            comments: []
-          }));
+          return data.map(SupabaseDatabaseService.mapDealRow);
         }
       } catch (err: any) {
         console.warn('⚠️ Supabase deal fetch error:', err.message);
       }
     }
     return [];
+  }
+
+  // Build the Supabase query for paginated deals (mirrors the deals-api Edge Function)
+  private buildPaginatedQuery(params: Required<Pick<DealQueryParams, 'page' | 'limit'>> & DealQueryParams) {
+    let query = this.client!
+      .from('deals')
+      .select('*', { count: 'exact' })
+      .eq('isactive', true)
+      .range((params.page - 1) * params.limit, params.page * params.limit - 1);
+
+    if (params.category && params.category !== 'All') {
+      query = query.ilike('category', params.category);
+    }
+    if (params.store && params.store !== 'All') {
+      query = query.eq('store', params.store);
+    }
+    if (params.onlyLoot) {
+      query = query.eq('islootdeal', true);
+    }
+    if (params.onlyCoupons) {
+      query = query.neq('couponcode', '').not('couponcode', 'is', null);
+    }
+    if (params.search && params.search.trim()) {
+      const q = params.search.trim().replace(/[(),*%]/g, ' ').trim();
+      if (q) {
+        const pat = `%${q}%`;
+        query = query.or(`title.ilike.${pat},store.ilike.${pat},category.ilike.${pat},description.ilike.${pat},couponcode.ilike.${pat}`);
+      }
+    }
+
+    switch (params.sortBy) {
+      case 'hot': query = query.order('upvotes', { ascending: false }).order('aiscore', { ascending: false }); break;
+      case 'discount': query = query.order('discountpercentage', { ascending: false }); break;
+      case 'ai_score': query = query.order('aiscore', { ascending: false }); break;
+      case 'price_low': query = query.order('dealprice', { ascending: true }); break;
+      case 'price_high': query = query.order('dealprice', { ascending: false }); break;
+      case 'oldest': query = query.order('created_at', { ascending: true }); break;
+      default: query = query.order('created_at', { ascending: false }); break;
+    }
+    return query;
+  }
+
+  // Paginated deals fetch for the User App.
+  // Order of attempts: Supabase Edge Function 'deals-api' -> direct Supabase range query -> local slice.
+  public async getDealsPaginated(params: DealQueryParams): Promise<PaginatedResult<Deal>> {
+    const page = Math.max(1, Math.floor(params.page || 1));
+    const limit = Math.min(50, Math.max(1, Math.floor(params.limit || 12)));
+
+    // 1) Supabase Edge Function (deals-api)
+    if (this.client) {
+      try {
+        const { data, error } = await this.client.functions.invoke('deals-api', {
+          body: {
+            page,
+            limit,
+            category: params.category,
+            store: params.store,
+            search: params.search,
+            sortBy: params.sortBy,
+            onlyLoot: params.onlyLoot,
+            onlyCoupons: params.onlyCoupons,
+          },
+        });
+        if (!error && data && data.success && Array.isArray(data.deals)) {
+          return {
+            items: data.deals.map(SupabaseDatabaseService.mapDealRow),
+            page: Number(data.page) || page,
+            limit: Number(data.limit) || limit,
+            total: Number(data.total) || data.deals.length,
+            totalPages: Number(data.totalPages) || 1,
+            hasMore: Boolean(data.hasMore),
+            source: 'edge-function',
+          };
+        }
+        if (error) {
+          console.warn('⚠️ Edge Function deals-api error, falling back to direct query:', error.message || error);
+        }
+      } catch (e: any) {
+        console.warn('⚠️ Edge Function deals-api failed, falling back to direct query:', e?.message || e);
+      }
+    }
+
+    // 2) Direct Supabase paginated query (only the required page is fetched)
+    if (this.client) {
+      try {
+        const query = this.buildPaginatedQuery({ ...params, page, limit });
+        const { data, error, count } = await query;
+        if (!error && Array.isArray(data)) {
+          const total = Number(count ?? data.length);
+          const totalPages = Math.ceil(total / limit) || 0;
+          return {
+            items: data.map(SupabaseDatabaseService.mapDealRow),
+            page,
+            limit,
+            total,
+            totalPages,
+            hasMore: page < totalPages,
+            source: 'direct-db',
+          };
+        }
+        if (error) {
+          console.warn('⚠️ Direct paginated Supabase query error:', error.message);
+        }
+      } catch (e: any) {
+        console.warn('⚠️ Direct paginated Supabase query failed:', e?.message || e);
+      }
+    }
+
+    // 3) Local fallback is handled in loadPaginatedFromLocal below
+    return this.loadPaginatedFromLocal(params, page, limit);
+  }
+
+  private async loadPaginatedFromLocal(params: DealQueryParams, page: number, limit: number): Promise<PaginatedResult<Deal>> {
+    const all = await this.getDeals();
+    const filtered = all.filter(d => {
+      if (d.isActive === false) return false;
+      if (params.category && params.category !== 'All' && d.category.toLowerCase() !== params.category.toLowerCase()) return false;
+      if (params.store && params.store !== 'All' && d.store !== params.store) return false;
+      if (params.onlyLoot && !d.isLootDeal) return false;
+      if (params.onlyCoupons && !d.couponCode) return false;
+      if (params.search && params.search.trim()) {
+        const q = params.search.toLowerCase();
+        const hit = [d.title, d.store, d.category, d.description, d.couponCode].some(v => (v || '').toLowerCase().includes(q));
+        if (!hit) return false;
+      }
+      return true;
+    });
+    const sortBy = params.sortBy || 'newest';
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'hot': return (b.upvotes + b.aiScore) - (a.upvotes + a.aiScore);
+        case 'discount': return b.discountPercentage - a.discountPercentage;
+        case 'ai_score': return b.aiScore - a.aiScore;
+        case 'price_low': return a.dealPrice - b.dealPrice;
+        case 'price_high': return b.dealPrice - a.dealPrice;
+        case 'oldest': {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return ta - tb;
+        }
+        default: {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return tb - ta;
+        }
+      }
+    });
+    const from = (page - 1) * limit;
+    const items = filtered.slice(from, from + limit);
+    return {
+      items,
+      page,
+      limit,
+      total: filtered.length,
+      totalPages: Math.ceil(filtered.length / limit) || 0,
+      hasMore: from + limit < filtered.length,
+      source: 'local-fallback',
+    };
   }
 
   // Fetch single deal by ID

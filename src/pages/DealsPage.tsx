@@ -4,6 +4,8 @@ import { StoreFilterBar } from '../components/StoreFilterBar';
 import { CategoryNav } from '../components/CategoryNav';
 import { MobileFilterDrawer } from '../components/MobileFilterDrawer';
 import { DealCard } from '../components/DealCard';
+import { PaginatedDealGrid } from '../components/PaginatedDealGrid';
+import { usePaginatedDeals } from '../hooks/usePaginatedDeals';
 import { RefreshCw, ShoppingBag, SlidersHorizontal, ChevronRight, Store, Grid, Flame, Ticket } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -36,6 +38,20 @@ export const DealsPage: React.FC<DealsPageProps> = ({
 }) => {
   const navigate = useNavigate();
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
+  // Server-side pagination: only the required page of products is fetched via
+  // the Supabase deals-api function. Filters & sorting are applied in the query.
+  const resetKey = `${filters.category}|${filters.store}|${filters.searchQuery}|${filters.sortBy}|${filters.onlyLootDeals}|${filters.onlyCoupons}`;
+  const paginated = usePaginatedDeals({
+    category: filters.category,
+    store: filters.store,
+    search: filters.searchQuery,
+    sortBy: filters.sortBy,
+    onlyLoot: filters.onlyLootDeals,
+    onlyCoupons: filters.onlyCoupons,
+    limit: 12,
+    resetKey,
+  });
 
   const activeFiltersCount = 
     (filters.store !== 'All' ? 1 : 0) + 
@@ -194,88 +210,83 @@ export const DealsPage: React.FC<DealsPageProps> = ({
           </div>
         </div>
 
-        {/* Deals Cards Grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-              <div key={i} className="bg-white rounded-3xl p-5 border border-slate-200 animate-pulse space-y-4">
-                <div className="w-full h-44 bg-slate-100 rounded-2xl"></div>
-                <div className="h-4 bg-slate-100 rounded w-3/4"></div>
-                <div className="h-3 bg-slate-100 rounded w-1/2"></div>
-                <div className="flex justify-between items-center pt-2">
-                  <div className="h-6 bg-slate-100 rounded w-20"></div>
-                  <div className="h-8 bg-slate-100 rounded-xl w-24"></div>
-                </div>
+        {/* Deals Cards Grid (server-paginated) */}
+        <PaginatedDealGrid
+          deals={paginated.deals}
+          isLoading={paginated.isLoading}
+          isLoadingMore={paginated.isLoadingMore}
+          error={paginated.error}
+          hasMore={paginated.hasMore}
+          total={paginated.total}
+          page={paginated.page}
+          totalPages={paginated.totalPages}
+          onRetry={paginated.retry}
+          onLoadMore={paginated.loadMore}
+          renderDeal={(deal) => (
+            <DealCard
+              key={deal.id}
+              deal={deal}
+              onSelectDeal={(d) => navigate(`/deal/${d.id}`)}
+              onVote={onVote}
+              isSaved={savedDealIds.includes(deal.id)}
+              onToggleSave={onToggleSave}
+              onOpenPriceAlert={onOpenPriceAlert}
+            />
+          )}
+          emptyState={deals.length === 0 ? (
+            /* Database Empty State */
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
+              <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
+                <ShoppingBag className="w-8 h-8" />
               </div>
-            ))}
-          </div>
-        ) : filteredDeals.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filteredDeals.map((deal) => (
-              <DealCard
-                key={deal.id}
-                deal={deal}
-                onSelectDeal={(d) => navigate(`/deal/${d.id}`)}
-                onVote={onVote}
-                isSaved={savedDealIds.includes(deal.id)}
-                onToggleSave={onToggleSave}
-                onOpenPriceAlert={onOpenPriceAlert}
-              />
-            ))}
-          </div>
-        ) : deals.length === 0 ? (
-          /* Database Empty State */
-          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
-            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
-              <ShoppingBag className="w-8 h-8" />
+              <h3 className="font-bold text-slate-900 text-lg">No Live Deals in Database</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Your Supabase database is connected and active. Post your first deal to get started!
+              </p>
+              <div className="flex flex-wrap justify-center gap-3 pt-2">
+                <button
+                  onClick={() => setFilters({
+                    category: 'All',
+                    store: 'All',
+                    searchQuery: '',
+                    sortBy: 'newest',
+                    onlyLootDeals: false,
+                    onlyCoupons: false,
+                  })}
+                  className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors"
+                >
+                  Clear Filters
+                </button>
+              </div>
             </div>
-            <h3 className="font-bold text-slate-900 text-lg">No Live Deals in Database</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Your Supabase database is connected and active. Post your first deal to get started!
-            </p>
-            <div className="flex flex-wrap justify-center gap-3 pt-2">
-              <button
-                onClick={() => setFilters({
-                  category: 'All',
-                  store: 'All',
-                  searchQuery: '',
-                  sortBy: 'newest',
-                  onlyLootDeals: false,
-                  onlyCoupons: false,
-                })}
-                className="px-4 py-2 bg-orange-500 text-white font-bold text-xs rounded-xl hover:bg-orange-600 transition-colors"
-              >
-                Clear Filters
-              </button>
+          ) : (
+            /* Filter Empty State */
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
+              <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto">
+                <ShoppingBag className="w-8 h-8" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-lg">No Deals Match Your Filters</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Try adjusting your search terms or store filters to find more deals.
+              </p>
+              <div className="flex justify-center gap-3 pt-2">
+                <button
+                  onClick={() => setFilters({
+                    category: 'All',
+                    store: 'All',
+                    searchQuery: '',
+                    sortBy: 'newest',
+                    onlyLootDeals: false,
+                    onlyCoupons: false,
+                  })}
+                  className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors"
+                >
+                  Clear All Filters
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          /* Filter Empty State */
-          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-8 space-y-4 shadow-sm">
-            <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto">
-              <ShoppingBag className="w-8 h-8" />
-            </div>
-            <h3 className="font-bold text-slate-900 text-lg">No Deals Match Your Filters</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Try adjusting your search terms or store filters to find more deals.
-            </p>
-            <div className="flex justify-center gap-3 pt-2">
-              <button
-                onClick={() => setFilters({
-                  category: 'All',
-                  store: 'All',
-                  searchQuery: '',
-                  sortBy: 'newest',
-                  onlyLootDeals: false,
-                  onlyCoupons: false,
-                })}
-                className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors"
-              >
-                Clear All Filters
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        />
 
       </main>
     </div>

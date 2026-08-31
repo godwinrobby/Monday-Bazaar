@@ -2,6 +2,8 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Deal } from '../types';
 import { DealCard } from '../components/DealCard';
+import { PaginatedDealGrid } from '../components/PaginatedDealGrid';
+import { usePaginatedDeals } from '../hooks/usePaginatedDeals';
 import { Tag, Sparkles, LayoutGrid } from 'lucide-react';
 
 interface CategoriesPageProps {
@@ -36,9 +38,14 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
 
   const selectedCat = categoryName ? decodeURIComponent(categoryName) : null;
 
-  const categoryDeals = selectedCat
-    ? deals.filter(d => d.category.toLowerCase() === selectedCat.toLowerCase())
-    : deals;
+  // Server-side pagination for the selected category: only one page of
+  // products is fetched at a time via the Supabase deals-api function.
+  const paginated = usePaginatedDeals({
+    category: selectedCat || undefined,
+    sortBy: 'newest',
+    limit: 12,
+    resetKey: selectedCat || 'all',
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -54,7 +61,7 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
             {selectedCat ? selectedCat : 'Explore Categories'}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            {selectedCat ? `Showing ${categoryDeals.length} live deals in ${selectedCat}` : 'Browse curated discount offers across all product categories'}
+            {selectedCat ? `Showing ${paginated.total} live deals in ${selectedCat}` : 'Browse curated discount offers across all product categories'}
           </p>
         </div>
 
@@ -98,45 +105,45 @@ export const CategoriesPage: React.FC<CategoriesPageProps> = ({
         </div>
       )}
 
-      {/* Deals List */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-3xl p-5 border border-slate-200 animate-pulse space-y-4">
-              <div className="w-full h-44 bg-slate-100 rounded-2xl"></div>
-              <div className="h-4 bg-slate-100 rounded w-3/4"></div>
-            </div>
-          ))}
-        </div>
-      ) : categoryDeals.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {categoryDeals.map((deal) => (
-            <DealCard
-              key={deal.id}
-              deal={deal}
-              onSelectDeal={(d) => navigate(`/deal/${d.id}`)}
-              onVote={onVote}
-              isSaved={savedDealIds.includes(deal.id)}
-              onToggleSave={onToggleSave}
-              onOpenPriceAlert={onOpenPriceAlert}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-md mx-auto my-8 space-y-4 shadow-sm">
-          <div className="text-4xl">📦</div>
-          <h3 className="font-bold text-slate-900 text-lg">No Deals in this Category</h3>
-          <p className="text-xs text-slate-500">
-            Be the first to post a bargain in this category!
-          </p>
-          <button
-            onClick={() => navigate('/categories')}
-            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors"
-          >
-            All Categories
-          </button>
-        </div>
-      )}
+      {/* Deals List (server-paginated per category) */}
+      <PaginatedDealGrid
+        deals={paginated.deals}
+        isLoading={paginated.isLoading}
+        isLoadingMore={paginated.isLoadingMore}
+        error={paginated.error}
+        hasMore={paginated.hasMore}
+        total={paginated.total}
+        page={paginated.page}
+        totalPages={paginated.totalPages}
+        onRetry={paginated.retry}
+        onLoadMore={paginated.loadMore}
+        renderDeal={(deal) => (
+          <DealCard
+            key={deal.id}
+            deal={deal}
+            onSelectDeal={(d) => navigate(`/deal/${d.id}`)}
+            onVote={onVote}
+            isSaved={savedDealIds.includes(deal.id)}
+            onToggleSave={onToggleSave}
+            onOpenPriceAlert={onOpenPriceAlert}
+          />
+        )}
+        emptyState={
+          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-md mx-auto my-8 space-y-4 shadow-sm">
+            <div className="text-4xl">📦</div>
+            <h3 className="font-bold text-slate-900 text-lg">No Deals in this Category</h3>
+            <p className="text-xs text-slate-500">
+              Be the first to post a bargain in this category!
+            </p>
+            <button
+              onClick={() => navigate('/categories')}
+              className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors"
+            >
+              All Categories
+            </button>
+          </div>
+        }
+      />
 
     </div>
   );
