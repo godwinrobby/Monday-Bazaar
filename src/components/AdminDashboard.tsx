@@ -188,7 +188,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setStoreLogoUrl(store, data.imageUrl);
       applyServerStoreLogos(data.images || {});
       setGoogleStoreImages(getStoreLogos());
-      setGoogleRefetchSuccess(`${store} image fetched from Google and saved. The updated store image is now used across the site.`);
+      const fetchedFrom = data.usedFallback
+        ? `${store} image fetched from Google (favicon) and saved.`
+        : `${store} image fetched from Google Places and saved.`;
+      setGoogleRefetchSuccess(`${fetchedFrom} The updated store image is now used across the site.`);
     } catch (err: any) {
       setGoogleRefetchError(`Google Places request failed: ${err && err.message ? err.message : 'Network error'}`);
     } finally {
@@ -2643,12 +2646,22 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                       className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
                     />
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         if (!googlePlacesApiKey) {
                           setGooglePlacesStatus('Please enter an API key first.');
                           return;
                         }
-                        setGooglePlacesStatus('API key saved successfully.');
+                        try {
+                          const res = await fetch('/api/google-places/save-key', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ apiKey: googlePlacesApiKey })
+                          });
+                          const data = await res.json();
+                          setGooglePlacesStatus(data && data.success ? 'API key saved successfully and stored server-side.' : 'API key saved locally.');
+                        } catch {
+                          setGooglePlacesStatus('API key saved locally.');
+                        }
                         setTimeout(() => setGooglePlacesStatus(null), 3000);
                       }}
                       className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors"

@@ -1042,15 +1042,98 @@ app.post("/api/social/auto-post-deal", async (req, res) => {
   }
 });
 
+// Store -> website domain map, used as a reliable fallback logo source (Google favicons)
+// for online-only stores that do not have a Google Places photo.
+const STORE_DOMAINS: Record<string, string> = {
+  Amazon: 'amazon.in',
+  Flipkart: 'flipkart.com',
+  Myntra: 'myntra.com',
+  Ajio: 'ajio.com',
+  'Tata CLiQ': 'tatacliq.com',
+  Croma: 'croma.com',
+  'Reliance Digital': 'reliancedigital.in',
+  Boat: 'boat-lifestyle.com',
+  Noise: 'gonoise.com',
+  Samsung: 'samsung.com',
+  Apple: 'apple.com',
+};
+
+// Resolve the Google Places API key: request key > server-side DB key > env fallback.
+async function resolveGooglePlacesKey(requestKey?: string): Promise<string> {
+  if (requestKey && typeof requestKey === 'string' && requestKey.trim()) {
+    return requestKey.trim();
+  }
+  try {
+    const dbKey = await supabaseDb.getGooglePlacesApiKey();
+    if (dbKey && dbKey.trim()) return dbKey.trim();
+  } catch (e: any) {}
+  return (process.env.GOOGLE_PLACES_API_KEY || '').trim();
+}
+
+// POST /api/google-places/save-key - Persist the Google Places API key server-side so the
+// image proxy can serve store images to all users without exposing the key in the browser.
+app.post("/api/google-places/save-key", async (req, res) => {
+  const { apiKey } = req.body || {};
+  const key = (apiKey && typeof apiKey === 'string') ? apiKey.trim() : '';
+  if (!key) {
+    return res.status(400).json({ success: false, error: 'Please provide a Google Places API key first.' });
+  }
+  try {
+    await supabaseDb.saveGooglePlacesApiKey(key);
+  } catch (err) {
+    console.warn('Failed persisting Google Places API key:', err);
+  }
+  res.json({ success: true });
+});
+
+// GET /api/google-places/image - Proxy that fetches a store image server-side using the
+// stored Google Places API key (no key is exposed to the browser). Supports a Google Places
+// photo reference, or falls back to the store's Google favicon when no photo is available.
+app.get("/api/google-places/image", async (req, res) => {
+  const ref = (typeof req.query.ref === 'string' ? req.query.ref : '').trim();
+  const store = (typeof req.query.store === 'string' ? req.query.store : '').trim();
+  const key = await resolveGooglePlacesKey();
+
+  let googleUrl = '';
+  if (ref && key) {
+    googleUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${encodeURIComponent(ref)}&key=${encodeURIComponent(key)}`;
+  } else if (store) {
+    const domain = STORE_DOMAINS[store] || `${store.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+    googleUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+  }
+
+  if (!googleUrl) {
+    return res.status(400).json({ success: false, error: 'Missing image reference or store name.' });
+  }
+
+  try {
+    const upstream = await fetch(googleUrl);
+    if (!upstream.ok) {
+      return res.status(upstream.status).json({ success: false, error: `Upstream image fetch failed with HTTP ${upstream.status}.` });
+    }
+    const contentType = upstream.headers.get('content-type') || 'image/png';
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('Access-Control-Allow-Origin', '*');
+    return res.send(buf);
+  } catch (err) {
+    console.error('Store image proxy error:', err);
+    return res.status(502).json({ success: false, error: 'Failed to fetch the store image.' });
+  }
+});
+
 // POST /api/google-places/fetch-store-image - Fetch a store's image/logo from Google Places
-// and return a direct image URL so the admin can update a store image across the site.
+// and update it site-wide via site_config. Returns a proxied image URL (no API key exposed).
 app.post("/api/google-places/fetch-store-image", async (req, res) => {
   const { storeName, apiKey } = req.body || {};
 
-  // Prefer the key sent from the Admin UI, but allow an optional server-side env fallback.
-  const googleKey = (apiKey && typeof apiKey === 'string' && apiKey.trim())
-    ? apiKey.trim()
-    : (process.env.GOOGLE_PLACES_API_KEY || '').trim();
+  // Resolve the key (request key > persisted DB key > env fallback) and persist any request key
+  // so the server-side image proxy can serve images to all users.
+  const googleKey = await resolveGooglePlacesKey(apiKey);
+  if (apiKey && typeof apiKey === 'string' && apiKey.trim()) {
+    await supabaseDb.saveGooglePlacesApiKey(apiKey).catch(() => {});
+  }
 
   if (!googleKey) {
     return res.status(400).json({
@@ -1066,6 +1149,7 @@ app.post("/api/google-places/fetch-store-image", async (req, res) => {
   const query = storeName.trim();
 
   try {
+    // 1) Find the place using the Google Places Text Search API.
     const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&type=point_of_interest&key=${encodeURIComponent(googleKey)}`;
     const textRes = await fetch(textSearchUrl);
 
@@ -1088,42 +1172,34 @@ app.post("/api/google-places/fetch-store-image", async (req, res) => {
     if (status === 'INVALID_REQUEST') {
       return res.status(400).json({ success: false, error: 'Google Places API rejected the request (INVALID_REQUEST).' });
     }
-    if (status === 'ZERO_RESULTS' || !textData.results || textData.results.length === 0) {
-      return res.status(404).json({ success: false, error: `No store matching "${query}" was found on Google Places.` });
-    }
-    if (status !== 'OK') {
-      return res.status(400).json({ success: false, error: `Google Places API error (${status || 'UNKNOWN'}).` });
-    }
 
-    const place = textData.results[0];
-    const photoRef = place.photos && place.photos[0] && place.photos[0].photo_reference;
-
-    if (!photoRef) {
-      return res.status(404).json({
-        success: false,
-        error: `Found "${place.name || query}" on Google Places but no photo was available for it.`
-      });
+    let photoRef: string | null = null;
+    let placeName: string | null = null;
+    if (textData.results && textData.results.length > 0) {
+      const place = textData.results[0];
+      placeName = place.name || null;
+      photoRef = (place.photos && place.photos[0] && place.photos[0].photo_reference) || null;
     }
 
-    const imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${encodeURIComponent(photoRef)}&key=${encodeURIComponent(googleKey)}`;
+    // 2) Build a proxied image URL. Use the Google Places photo when available, otherwise fall
+    //    back to the store's Google favicon so online-only stores still get an image.
+    const proxiedUrl = `/api/google-places/image?store=${encodeURIComponent(query)}${photoRef ? `&ref=${encodeURIComponent(photoRef)}` : ''}`;
 
-    // Persist the fetched image so it updates the store image across the whole site for all users,
-    // not just the browser that triggered the re-fetch.
-    let images: Record<string, string> = { [query]: imageUrl };
+    // 3) Persist the fetched image so it updates the store image across the whole site for all users.
+    let images: Record<string, string> = { [query]: proxiedUrl };
     try {
-      images = await supabaseDb.saveStoreImage(query, imageUrl);
+      images = await supabaseDb.saveStoreImage(query, proxiedUrl);
     } catch (persistErr) {
       console.warn('Failed persisting store image:', persistErr);
     }
 
     res.json({
       success: true,
-      imageUrl,
+      imageUrl: proxiedUrl,
       storeName: query,
-      placeId: place.place_id || null,
-      name: place.name || null,
-      address: place.formatted_address || null,
+      name: placeName,
       photoReference: photoRef,
+      usedFallback: !photoRef,
       images
     });
   } catch (err) {

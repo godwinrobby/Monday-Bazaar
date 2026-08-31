@@ -919,6 +919,37 @@ class SupabaseDatabaseService {
     return updated;
   }
 
+  // Persist the Google Places API key server-side so the image proxy can serve images
+  // to ALL users without exposing the key in the browser.
+  public async saveGooglePlacesApiKey(key: string): Promise<void> {
+    if (this.client) {
+      try {
+        await this.client.from('site_config').upsert({
+          config_key: 'google_places_api_key',
+          config_value: JSON.stringify(key.trim())
+        }, { onConflict: 'config_key' });
+      } catch (e: any) {}
+    }
+  }
+
+  // Read the server-side Google Places API key (saved from the admin Google Fetcher settings).
+  public async getGooglePlacesApiKey(): Promise<string> {
+    if (this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('site_config')
+          .select('config_value')
+          .eq('config_key', 'google_places_api_key')
+          .single();
+        if (!error && data?.config_value) {
+          const v = typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
+          return typeof v === 'string' ? v.trim() : '';
+        }
+      } catch (e: any) {}
+    }
+    return '';
+  }
+
   // Get social config - Supabase only (no demo data)
   public async getSocialConfig(): Promise<SocialConfig> {
     if (this.client) {
