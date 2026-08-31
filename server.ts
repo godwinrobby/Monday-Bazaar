@@ -1107,6 +1107,15 @@ app.post("/api/google-places/fetch-store-image", async (req, res) => {
 
     const imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${encodeURIComponent(photoRef)}&key=${encodeURIComponent(googleKey)}`;
 
+    // Persist the fetched image so it updates the store image across the whole site for all users,
+    // not just the browser that triggered the re-fetch.
+    let images: Record<string, string> = { [query]: imageUrl };
+    try {
+      images = await supabaseDb.saveStoreImage(query, imageUrl);
+    } catch (persistErr) {
+      console.warn('Failed persisting store image:', persistErr);
+    }
+
     res.json({
       success: true,
       imageUrl,
@@ -1114,11 +1123,22 @@ app.post("/api/google-places/fetch-store-image", async (req, res) => {
       placeId: place.place_id || null,
       name: place.name || null,
       address: place.formatted_address || null,
-      photoReference: photoRef
+      photoReference: photoRef,
+      images
     });
   } catch (err) {
     console.error('Google Places fetch error:', err);
     res.status(500).json({ success: false, error: `Google Places request failed: ${err && err.message ? err.message : 'Unknown error'}` });
+  }
+});
+
+// GET /api/store-images - Get persisted store images (store -> image URL) for the whole site
+app.get("/api/store-images", async (req, res) => {
+  try {
+    const images = await supabaseDb.getStoreImages();
+    res.json({ success: true, images });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: `Failed to load store images: ${err && err.message ? err.message : 'Unknown error'}` });
   }
 });
 

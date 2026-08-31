@@ -54,7 +54,7 @@ import { SocialAutoPoster } from './SocialAutoPoster';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { ToastContainer, ToastMessage } from './Toast';
 import { parseDealsCSV, DealCSVRow } from '../utils/csvImport';
-import { getStoreLogos, setStoreLogoUrl } from '../utils/storeLogos';
+import { getStoreLogos, setStoreLogoUrl, applyServerStoreLogos } from '../utils/storeLogos';
 
 interface AdminDashboardProps {
   deals: Deal[];
@@ -186,6 +186,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
 
       setStoreLogoUrl(store, data.imageUrl);
+      applyServerStoreLogos(data.images || {});
       setGoogleStoreImages(getStoreLogos());
       setGoogleRefetchSuccess(`${store} image fetched from Google and saved. The updated store image is now used across the site.`);
     } catch (err: any) {

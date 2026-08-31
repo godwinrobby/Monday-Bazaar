@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { Deal, FilterOptions } from './types';
 import { supabaseDb } from './db/supabaseDb';
+import { applyServerStoreLogos, getStoreLogos } from './utils/storeLogos';
 import { Flame, ShieldCheck } from 'lucide-react';
 
 const TelegramBanner = lazy(() => import('./components/TelegramBanner').then(m => ({ default: m.TelegramBanner })));
@@ -41,6 +42,22 @@ export default function App() {
       })
       .catch(err => console.error('Supabase deals fetch error:', err))
       .finally(() => setIsLoading(false));
+  }, []);
+
+  // Load persisted store images (store -> logo) from the backend so fetched images
+  // apply site-wide for all users. Bumping a tick forces a re-render after seeding.
+  const [, setStoreImagesTick] = useState(0);
+  useEffect(() => {
+    applyServerStoreLogos(getStoreLogos());
+    fetch('/api/store-images')
+      .then(r => (r.ok ? r.json() : null))
+      .then((data: any) => {
+        if (data && data.success && data.images) {
+          applyServerStoreLogos(data.images);
+        }
+      })
+      .catch(err => console.error('Store images fetch error:', err))
+      .finally(() => setStoreImagesTick(t => t + 1));
   }, []);
 
   // Watchlist State (in-memory)

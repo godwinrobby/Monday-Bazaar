@@ -886,6 +886,39 @@ class SupabaseDatabaseService {
     return updated;
   }
 
+  // Get store images (store name -> image URL) from site_config
+  public async getStoreImages(): Promise<Record<string, string>> {
+    if (this.client) {
+      try {
+        const { data, error } = await this.client
+          .from('site_config')
+          .select('config_value')
+          .eq('config_key', 'store_images')
+          .single();
+        if (!error && data?.config_value) {
+          const parsed = typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
+          return (parsed && typeof parsed === 'object') ? parsed : {};
+        }
+      } catch (e: any) {}
+    }
+    return {};
+  }
+
+  // Save/update a single store image and return the full updated map
+  public async saveStoreImage(store: string, imageUrl: string): Promise<Record<string, string>> {
+    const current = await this.getStoreImages();
+    const updated = { ...current, [store]: imageUrl };
+    if (this.client) {
+      try {
+        await this.client.from('site_config').upsert({
+          config_key: 'store_images',
+          config_value: JSON.stringify(updated)
+        }, { onConflict: 'config_key' });
+      } catch (e: any) {}
+    }
+    return updated;
+  }
+
   // Get social config - Supabase only (no demo data)
   public async getSocialConfig(): Promise<SocialConfig> {
     if (this.client) {
