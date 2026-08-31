@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { StoreName } from '../types';
 import { STORES_INFO } from '../data/initialDeals';
 import { Store, Tag, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getStoreLogoUrl } from '../utils/storeLogos';
 
 interface StoreFilterBarProps {
   selectedStore: StoreName | 'All';
@@ -131,6 +132,7 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
               const count = dealsCountByStore[store] || 0;
               const info = STORES_INFO[store];
               const closed = isStoreClosed(store);
+              const logo = getStoreLogoUrl(store);
 
               return (
                 <button
@@ -146,7 +148,11 @@ export const StoreFilterBar: React.FC<StoreFilterBarProps> = ({
                         : 'bg-white text-slate-700 border-slate-200/90 hover:border-slate-300 hover:bg-slate-100/50'
                   }`}
                 >
-                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${closed ? 'bg-slate-300' : ''}`} style={{ backgroundColor: closed ? '#ccc' : info.accentColor }} />
+                  {logo ? (
+                    <img src={logo} alt={store} className="w-4 h-4 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${closed ? 'bg-slate-300' : ''}`} style={{ backgroundColor: closed ? '#ccc' : info.accentColor }} />
+                  )}
                   <span>{store}</span>
                   {closed && <span className="text-[10px] font-bold text-red-500">Closed</span>}
                   {!closed && count > 0 && (

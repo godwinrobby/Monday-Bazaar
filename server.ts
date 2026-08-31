@@ -1042,6 +1042,86 @@ app.post("/api/social/auto-post-deal", async (req, res) => {
   }
 });
 
+// POST /api/google-places/fetch-store-image - Fetch a store's image/logo from Google Places
+// and return a direct image URL so the admin can update a store image across the site.
+app.post("/api/google-places/fetch-store-image", async (req, res) => {
+  const { storeName, apiKey } = req.body || {};
+
+  // Prefer the key sent from the Admin UI, but allow an optional server-side env fallback.
+  const googleKey = (apiKey && typeof apiKey === 'string' && apiKey.trim())
+    ? apiKey.trim()
+    : (process.env.GOOGLE_PLACES_API_KEY || '').trim();
+
+  if (!googleKey) {
+    return res.status(400).json({
+      success: false,
+      error: 'No Google Places API key found. Add one in the Google Fetcher settings.'
+    });
+  }
+
+  if (!storeName || typeof storeName !== 'string' || !storeName.trim()) {
+    return res.status(400).json({ success: false, error: 'Please provide a store name to re-fetch.' });
+  }
+
+  const query = storeName.trim();
+
+  try {
+    const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&type=point_of_interest&key=${encodeURIComponent(googleKey)}`;
+    const textRes = await fetch(textSearchUrl);
+
+    if (!textRes.ok) {
+      return res.status(502).json({ success: false, error: `Google Places API request failed with HTTP ${textRes.status}.` });
+    }
+
+    const textData = await textRes.json();
+    const status = textData && textData.status;
+
+    if (status === 'REQUEST_DENIED') {
+      return res.status(401).json({
+        success: false,
+        error: 'Google Places API key is invalid or does not have access. Enable the Places API in Google Cloud Console and add the correct key.'
+      });
+    }
+    if (status === 'OVER_QUERY_LIMIT') {
+      return res.status(429).json({ success: false, error: 'Google Places API quota or rate limit exceeded. Check your billing and quota settings.' });
+    }
+    if (status === 'INVALID_REQUEST') {
+      return res.status(400).json({ success: false, error: 'Google Places API rejected the request (INVALID_REQUEST).' });
+    }
+    if (status === 'ZERO_RESULTS' || !textData.results || textData.results.length === 0) {
+      return res.status(404).json({ success: false, error: `No store matching "${query}" was found on Google Places.` });
+    }
+    if (status !== 'OK') {
+      return res.status(400).json({ success: false, error: `Google Places API error (${status || 'UNKNOWN'}).` });
+    }
+
+    const place = textData.results[0];
+    const photoRef = place.photos && place.photos[0] && place.photos[0].photo_reference;
+
+    if (!photoRef) {
+      return res.status(404).json({
+        success: false,
+        error: `Found "${place.name || query}" on Google Places but no photo was available for it.`
+      });
+    }
+
+    const imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${encodeURIComponent(photoRef)}&key=${encodeURIComponent(googleKey)}`;
+
+    res.json({
+      success: true,
+      imageUrl,
+      storeName: query,
+      placeId: place.place_id || null,
+      name: place.name || null,
+      address: place.formatted_address || null,
+      photoReference: photoRef
+    });
+  } catch (err) {
+    console.error('Google Places fetch error:', err);
+    res.status(500).json({ success: false, error: `Google Places request failed: ${err && err.message ? err.message : 'Unknown error'}` });
+  }
+});
+
 // POST /api/amazon-fetch - Fetch Amazon product details and return structured JSON
 app.post("/api/amazon-fetch", async (req, res) => {
   try {

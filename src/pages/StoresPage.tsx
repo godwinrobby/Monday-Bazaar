@@ -4,6 +4,7 @@ import { Deal } from '../types';
 import { DealCard } from '../components/DealCard';
 import { STORES_INFO } from '../data/initialDeals';
 import { Store, LayoutGrid, ExternalLink } from 'lucide-react';
+import { getStoreLogoUrl } from '../utils/storeLogos';
 
 interface StoresPageProps {
   deals: Deal[];
@@ -80,6 +81,7 @@ export const StoresPage: React.FC<StoresPageProps> = ({
             const info = STORES_INFO[store] || { logo: '🛒', badgeBg: 'bg-slate-100 text-slate-800' };
             const count = deals.filter(d => d.store === store).length;
             const closed = isStoreClosed(store);
+            const logo = getStoreLogoUrl(store);
             return (
               <div
                 key={store}
@@ -90,7 +92,15 @@ export const StoresPage: React.FC<StoresPageProps> = ({
                     : 'border-slate-200/90 hover:shadow-md hover:border-orange-300 group'
                 }`}
               >
-                <div className="text-3xl font-black">{closed ? '🔒' : info.logo}</div>
+                <div className="flex items-center justify-center h-9">
+                  {closed ? (
+                    <span className="text-3xl">🔒</span>
+                  ) : logo ? (
+                    <img src={logo} alt={store} className="w-9 h-9 rounded-xl object-cover" />
+                  ) : (
+                    <span className="text-3xl font-black">{info.logo}</span>
+                  )}
+                </div>
                 <div>
                   <h3 className={`font-bold text-sm transition-colors ${closed ? 'text-slate-400' : 'text-slate-900 group-hover:text-orange-600'}`}>
                     {store}

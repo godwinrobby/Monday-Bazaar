@@ -54,6 +54,7 @@ import { SocialAutoPoster } from './SocialAutoPoster';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { ToastContainer, ToastMessage } from './Toast';
 import { parseDealsCSV, DealCSVRow } from '../utils/csvImport';
+import { getStoreLogos, setStoreLogoUrl } from '../utils/storeLogos';
 
 interface AdminDashboardProps {
   deals: Deal[];
@@ -150,6 +151,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Google Places / Google Fetcher Settings
   const [googlePlacesApiKey, setGooglePlacesApiKey] = useState(() => localStorage.getItem('googlePlacesApiKey') || '');
   const [googlePlacesStatus, setGooglePlacesStatus] = useState<string | null>(null);
+
+  // Google Fetcher - Re-Fetch store image from Google state
+  const [googleRefetchStore, setGoogleRefetchStore] = useState<StoreName>(Object.keys(STORES_INFO)[0] as StoreName);
+  const [googleStoreImages, setGoogleStoreImages] = useState<Record<string, string>>(() => getStoreLogos());
+  const [googleRefetching, setGoogleRefetching] = useState(false);
+  const [googleRefetchError, setGoogleRefetchError] = useState<string | null>(null);
+  const [googleRefetchSuccess, setGoogleRefetchSuccess] = useState<string | null>(null);
+
+  // Re-Fetch the selected store's image from Google Places using the saved API key
+  const handleReFetchGoogleImage = async () => {
+    setGoogleRefetchError(null);
+    setGoogleRefetchSuccess(null);
+
+    const apiKey = (googlePlacesApiKey || '').trim();
+    if (!apiKey) {
+      setGoogleRefetchError('No Google Places API key found. Add one in the Google Fetcher settings.');
+      return;
+    }
+
+    const store = googleRefetchStore;
+    setGoogleRefetching(true);
+    try {
+      const res = await fetch('/api/google-places/fetch-store-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeName: store, apiKey })
+      });
+      const data = await res.json();
+
+      if (!data || !data.success) {
+        setGoogleRefetchError((data && data.error) || 'Failed to fetch the store image from Google Places.');
+        return;
+      }
+
+      setStoreLogoUrl(store, data.imageUrl);
+      setGoogleStoreImages(getStoreLogos());
+      setGoogleRefetchSuccess(`${store} image fetched from Google and saved. The updated store image is now used across the site.`);
+    } catch (err: any) {
+      setGoogleRefetchError(`Google Places request failed: ${err && err.message ? err.message : 'Network error'}`);
+    } finally {
+      setGoogleRefetching(false);
+    }
+  };
 
   // CSV Import State
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -2617,6 +2661,67 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
                   <p className="text-[10px] text-slate-400 mt-1">
                     Enable Places API in Google Cloud Console and create a browser/server key.
                   </p>
+                </div>
+
+                {/* Re-Fetch Store Image from Google */}
+                <div className="border-t border-slate-100 pt-3 space-y-3">
+                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Re-Fetch Store Image from Google</label>
+                  <p className="text-[10px] text-slate-400">Choose a store and click Re-Fetch to pull its image from Google Places and update it across the site.</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={googleRefetchStore}
+                      onChange={(e) => setGoogleRefetchStore(e.target.value as StoreName)}
+                      className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-900"
+                    >
+                      {Object.keys(STORES_INFO).map((s: string) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleReFetchGoogleImage}
+                      disabled={googleRefetching}
+                      className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {googleRefetching ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          Fetching...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Re-Fetch from Google
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {googleRefetching && (
+                    <p className="text-[11px] text-orange-600 mt-1.5 font-medium">Fetching store image from Google Places...</p>
+                  )}
+                  {googleRefetchError && (
+                    <p className="text-[11px] text-red-600 mt-1.5 font-medium flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      {googleRefetchError}
+                    </p>
+                  )}
+                  {googleRefetchSuccess && (
+                    <p className="text-[11px] text-emerald-700 mt-1.5 font-medium flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      {googleRefetchSuccess}
+                    </p>
+                  )}
+                  {Object.keys(googleStoreImages).filter((s) => googleStoreImages[s]).length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-1">
+                      {Object.keys(STORES_INFO)
+                        .filter((s) => googleStoreImages[s])
+                        .map((s) => (
+                          <div key={s} className="flex flex-col items-center gap-1 bg-slate-50 border border-slate-100 rounded-xl p-2">
+                            <img src={googleStoreImages[s]} alt={s} className="w-9 h-9 rounded-lg object-cover" />
+                            <span className="text-[9px] font-bold text-slate-600 truncate w-full text-center">{s}</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
