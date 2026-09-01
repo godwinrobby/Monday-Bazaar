@@ -731,6 +731,14 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
   };
 
   const handleMigrateToSupabase = async () => {
+    // Explicit manual action with confirmation — demo/local data must never be
+    // imported automatically on startup, login, or page load.
+    const confirmed = window.confirm(
+      'Import local/demo data into the Supabase database?\n\n' +
+      'This will upsert the local demo deals, users, and store configs into production. ' +
+      'Only continue if you intentionally want this demo/sample data in the live database.'
+    );
+    if (!confirmed) return;
     setIsMigrating(true);
     setMigrationResult(null);
     try {

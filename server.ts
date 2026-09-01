@@ -1799,14 +1799,10 @@ function injectDealOgMeta(html: string, deal: any): string {
 }
 
 async function startServer() {
-  // Sync data to Supabase PostgreSQL database
-  supabaseDb.syncAllDataToSupabase().then(res => {
-    if (res.success) {
-      console.log(`✅ Supabase database initialized and synced (${res.migratedDealsCount} deals).`);
-    }
-  }).catch(err => {
-    console.warn('Supabase initial sync notice:', err.message);
-  });
+  // NOTE: No automatic demo/local data import happens here. Production must
+  // only use real data from Supabase. Importing local/demo data is an explicit
+  // Admin action (Data Management -> "Migrate All Data Into Database" with a
+  // confirmation prompt) that calls POST /api/migrate-to-supabase.
 
   // Vite middleware for development vs Production static serving
   if (process.env.NODE_ENV !== "production") {
