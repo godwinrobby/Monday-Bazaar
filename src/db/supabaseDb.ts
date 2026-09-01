@@ -475,10 +475,10 @@ class SupabaseDatabaseService {
           .from('deals')
           .select('*')
           .eq('id', id)
-          .single();
+          .limit(1);
 
-        if (!error && data) {
-          const r = data;
+        if (!error && Array.isArray(data) && data[0]) {
+          const r = data[0];
           return {
             id: r.id,
             title: r.title,
@@ -525,11 +525,10 @@ class SupabaseDatabaseService {
         .from('deals')
         .select('*')
         .ilike('dealurl', `%${asin}%`)
-        .limit(1)
-        .single();
+        .limit(1);
 
-      if (!error && data) {
-        const r = data;
+      if (!error && Array.isArray(data) && data[0]) {
+        const r = data[0];
         return {
           id: r.id,
           title: r.title,
@@ -1048,9 +1047,9 @@ class SupabaseDatabaseService {
           .from('site_config')
           .select('config_value')
           .eq('config_key', 'site_banner')
-          .single();
-        if (!error && data?.config_value) {
-          return typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
+          .limit(1);
+        if (!error && Array.isArray(data) && data[0]?.config_value) {
+          return typeof data[0].config_value === 'string' ? JSON.parse(data[0].config_value) : data[0].config_value;
         }
       } catch (e: any) {}
     }
@@ -1079,9 +1078,9 @@ class SupabaseDatabaseService {
           .from('site_config')
           .select('config_value')
           .eq('config_key', 'store_images')
-          .single();
-        if (!error && data?.config_value) {
-          const parsed = typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
+          .limit(1);
+        if (!error && Array.isArray(data) && data[0]?.config_value) {
+          const parsed = typeof data[0].config_value === 'string' ? JSON.parse(data[0].config_value) : data[0].config_value;
           return (parsed && typeof parsed === 'object') ? parsed : {};
         }
       } catch (e: any) {}
@@ -1125,9 +1124,9 @@ class SupabaseDatabaseService {
           .from('site_config')
           .select('config_value')
           .eq('config_key', 'google_places_api_key')
-          .single();
-        if (!error && data?.config_value) {
-          const v = typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
+          .limit(1);
+        if (!error && Array.isArray(data) && data[0]?.config_value) {
+          const v = typeof data[0].config_value === 'string' ? JSON.parse(data[0].config_value) : data[0].config_value;
           return typeof v === 'string' ? v.trim() : '';
         }
       } catch (e: any) {}
@@ -1143,9 +1142,9 @@ class SupabaseDatabaseService {
           .from('site_config')
           .select('config_value')
           .eq('config_key', 'social_config')
-          .single();
-        if (!error && data?.config_value) {
-          const parsed = typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
+          .limit(1);
+        if (!error && Array.isArray(data) && data[0]?.config_value) {
+          const parsed = typeof data[0].config_value === 'string' ? JSON.parse(data[0].config_value) : data[0].config_value;
           return {
             facebookEnabled: false,
             facebookPageId: '',
@@ -1313,9 +1312,9 @@ class SupabaseDatabaseService {
           .from('site_config')
           .select('config_value')
           .eq('config_key', 'categories')
-          .single();
-        if (!error && data?.config_value) {
-          const parsed = typeof data.config_value === 'string' ? JSON.parse(data.config_value) : data.config_value;
+          .limit(1);
+        if (!error && Array.isArray(data) && data[0]?.config_value) {
+          const parsed = typeof data[0].config_value === 'string' ? JSON.parse(data[0].config_value) : data[0].config_value;
           if (Array.isArray(parsed)) return parsed;
         }
       } catch (e: any) {}
