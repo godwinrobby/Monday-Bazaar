@@ -59,6 +59,18 @@ CREATE TABLE IF NOT EXISTS public.site_config (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 4b. Create social_logs table (Facebook & Instagram auto-post history)
+CREATE TABLE IF NOT EXISTS public.social_logs (
+    id TEXT PRIMARY KEY,
+    platform TEXT NOT NULL DEFAULT 'facebook',
+    deal_id TEXT,
+    deal_title TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    post_url TEXT,
+    message TEXT,
+    posted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- 5. Create link_clicks table
 CREATE TABLE IF NOT EXISTS public.link_clicks (
     id BIGSERIAL PRIMARY KEY,
@@ -87,6 +99,7 @@ ALTER TABLE public.affiliate_configs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_config DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.link_clicks DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deal_views DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.social_logs DISABLE ROW LEVEL SECURITY;
 
 -- Grant full access to anon, authenticated, and service_role
 GRANT ALL ON TABLE public.deals TO anon, authenticated, service_role;
@@ -95,6 +108,7 @@ GRANT ALL ON TABLE public.affiliate_configs TO anon, authenticated, service_role
 GRANT ALL ON TABLE public.site_config TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.link_clicks TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.deal_views TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.social_logs TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
 
 -- Public permissive policies (in case RLS is re-enabled)
@@ -117,4 +131,7 @@ BEGIN
 
     EXECUTE 'DROP POLICY IF EXISTS "Allow public all on deal_views" ON public.deal_views';
     EXECUTE 'CREATE POLICY "Allow public all on deal_views" ON public.deal_views FOR ALL USING (true) WITH CHECK (true)';
+
+    EXECUTE 'DROP POLICY IF EXISTS "Allow public all on social_logs" ON public.social_logs';
+    EXECUTE 'CREATE POLICY "Allow public all on social_logs" ON public.social_logs FOR ALL USING (true) WITH CHECK (true)';
 END $$;

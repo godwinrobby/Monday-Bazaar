@@ -327,9 +327,10 @@ app.post("/api/deals", async (req, res) => {
   try {
     const newDeal = await supabaseDb.addDeal(req.body);
     
-    // Automatically trigger Facebook & Instagram Auto-Post if enabled
+    // Automatically trigger Facebook & Instagram Auto-Post if enabled (reads the
+    // persisted Supabase config so restarts/login changes are respected)
     try {
-      const socialConfig = dbManager.getSocialConfig();
+      const socialConfig = await supabaseDb.getSocialConfig();
       if (socialConfig.autoPostOnNewDeal && (socialConfig.facebookEnabled || socialConfig.instagramEnabled)) {
         triggerAutoPostForDeal(newDeal).catch(err => console.error('Auto post trigger background error:', err));
       }
@@ -863,6 +864,44 @@ async function triggerAutoPostForDeal(deal: any) {
   }
 }
 
+// Validate & sanitize the social auto-post config coming from the Admin UI.
+// Only known fields are accepted; types are coerced; sizes are limited.
+function validateSocialConfig(input: any): { ok: true; config: Record<string, any> } | { ok: false; error: string } {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    return { ok: false, error: "Request body must be a social config object" };
+  }
+  const boolKeys = ['facebookEnabled', 'instagramEnabled', 'autoPostOnNewDeal', 'autoPostLootOnly'] as const;
+  const strKeys = ['facebookPageId', 'facebookAccessToken', 'instagramAccountId', 'instagramAccessToken', 'postTemplate'] as const;
+  const out: Record<string, any> = {};
+
+  for (const k of boolKeys) {
+    if (input[k] !== undefined) {
+      if (typeof input[k] !== 'boolean') return { ok: false, error: `"${k}" must be a boolean` };
+      out[k] = input[k];
+    }
+  }
+  for (const k of strKeys) {
+    if (input[k] !== undefined) {
+      if (typeof input[k] !== 'string') return { ok: false, error: `"${k}" must be a string` };
+      const max = k === 'postTemplate' ? 2000 : 512;
+      if (input[k].length > max) return { ok: false, error: `"${k}" exceeds ${max} characters` };
+      out[k] = input[k].trim();
+    }
+  }
+  // Cross-field validation: enabling a channel requires its credentials
+  if (out.facebookEnabled === true) {
+    const pageId = out.facebookPageId ?? input.facebookPageId;
+    const token = out.facebookAccessToken ?? input.facebookAccessToken;
+    if (!pageId || !token) return { ok: false, error: "Facebook Page ID and Access Token are required when Facebook auto-posting is enabled" };
+  }
+  if (out.instagramEnabled === true) {
+    const accountId = out.instagramAccountId ?? input.instagramAccountId;
+    const token = out.instagramAccessToken ?? input.instagramAccessToken;
+    if (!accountId || !token) return { ok: false, error: "Instagram Account ID and Access Token are required when Instagram auto-posting is enabled" };
+  }
+  return { ok: true, config: out };
+}
+
 // GET /api/social/config - Fetch social auto-posting config from Supabase
 app.get("/api/social/config", async (req, res) => {
   try {
@@ -876,7 +915,12 @@ app.get("/api/social/config", async (req, res) => {
 // POST /api/social/config - Save social auto-posting config to Supabase
 app.post("/api/social/config", async (req, res) => {
   try {
-    const updated = await supabaseDb.saveSocialConfig(req.body);
+    const check = validateSocialConfig(req.body);
+    if (!check.ok) {
+      const msg = check.ok === false ? check.error : 'Invalid social config';
+      return res.status(400).json({ success: false, error: msg });
+    }
+    const updated = await supabaseDb.saveSocialConfig(check.config);
     res.json({ success: true, config: updated, message: "Facebook & Instagram settings saved successfully to Supabase!" });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

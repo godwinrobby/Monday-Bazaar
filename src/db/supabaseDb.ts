@@ -1180,12 +1180,16 @@ class SupabaseDatabaseService {
     const updated = { ...current, ...config };
     dbManager.updateSocialConfig(updated);
     if (this.client) {
-      try {
-        await this.client.from('site_config').upsert({
-          config_key: 'social_config',
-          config_value: JSON.stringify(updated)
-        }, { onConflict: 'config_key' });
-      } catch (e: any) {}
+      // Persist as a proper JSON object (config_value is a JSONB column).
+      // Errors are propagated so the Admin UI reports real save failures.
+      const { error } = await this.client.from('site_config').upsert({
+        config_key: 'social_config',
+        config_value: updated,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'config_key' });
+      if (error) {
+        throw new Error(`Failed to save social settings to Supabase: ${error.message}`);
+      }
     }
     return updated;
   }
@@ -1197,8 +1201,11 @@ class SupabaseDatabaseService {
         const { data, error } = await this.client
           .from('social_logs')
           .select('*')
-          .order('created_at', { ascending: false })
+          .order('posted_at', { ascending: false })
           .limit(100);
+        if (error) {
+          console.warn('⚠️ Supabase social_logs fetch error:', error.message);
+        }
         if (!error && Array.isArray(data)) {
           return data.map((l: any) => ({
             id: l.id || `log_${Date.now()}`,
@@ -1220,17 +1227,20 @@ class SupabaseDatabaseService {
   public async addSocialLog(logData: Partial<SocialLogRecord>): Promise<SocialLogRecord> {
     const log = dbManager.addSocialLog(logData);
     if (this.client) {
-      try {
-        await this.client.from('social_logs').upsert({
-          id: log.id,
-          platform: log.platform,
-          deal_id: log.dealId,
-          deal_title: log.dealTitle,
-          status: log.status,
-          post_url: log.postUrl || null,
-          message: log.message
-        });
-      } catch (e: any) {}
+      // Persist to Supabase; errors are propagated so broadcast failures are visible.
+      const { error } = await this.client.from('social_logs').upsert({
+        id: log.id,
+        platform: log.platform,
+        deal_id: log.dealId,
+        deal_title: log.dealTitle,
+        status: log.status,
+        post_url: log.postUrl || null,
+        message: log.message,
+        posted_at: log.postedAt || new Date().toISOString()
+      });
+      if (error) {
+        throw new Error(`Failed to write social log to Supabase: ${error.message}`);
+      }
     }
     return log;
   }
