@@ -79,48 +79,27 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
   // Selected deal for preview / broadcast
   const selectedDeal = deals.find(d => d.id === selectedDealId) || deals[0];
 
-  // The Express backend (/api/*) is only available when server.ts is running
-  // (local/dev). On the production static site it returns HTML, so the Admin UI
-  // talks to Supabase directly (client-side) and falls back to /api when needed.
+  // All social settings are persisted via Supabase (site_config table) directly
+  // from the browser. The Express /api endpoints are not used for config at all,
+  // so no request to /api/social/config is ever made.
 
-  // Fetch JSON or throw when the endpoint is not a real API (e.g. HTML SPA fallback)
-  const fetchApiJson = async (url: string, init?: RequestInit) => {
-    const res = await fetch(url, init);
-    const ct = (res.headers.get('content-type') || '').toLowerCase();
-    if (!ct.includes('application/json')) {
-      throw new Error('API_NOT_AVAILABLE');
-    }
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    return data;
-  };
-
-  // Load config & logs — Supabase first, Express API as fallback
+  // Load config & logs from Supabase
   const loadData = async () => {
     setIsLoadingConfig(true);
     try {
-      let loaded = false;
-      try {
-        const [config, logs] = await Promise.all([
-          supabaseDb.getSocialConfig(),
-          supabaseDb.getSocialLogs()
-        ]);
-        setConfig(prev => ({ ...prev, ...config }));
-        setLogs(logs as any);
-        loaded = true;
-      } catch (e: any) {
-        console.warn('Supabase social config load failed, falling back to API:', e?.message);
-      }
-      if (!loaded) {
-        const [resConfig, resLogs] = await Promise.all([
-          fetchApiJson('/api/social/config'),
-          fetchApiJson('/api/social/logs')
-        ]);
-        if (resConfig.success && resConfig.config) setConfig(resConfig.config);
-        if (resLogs.success && resLogs.logs) setLogs(resLogs.logs);
-      }
-    } catch (err) {
-      console.error('Failed to load social poster settings:', err);
+      const [config, logs] = await Promise.all([
+        supabaseDb.getSocialConfig(),
+        supabaseDb.getSocialLogs()
+      ]);
+      setConfig(prev => ({ ...prev, ...config }));
+      setLogs(logs as any);
+    } catch (err: any) {
+      console.error('Failed to load social poster settings from Supabase:', err);
+      addToast({
+        type: 'error',
+        title: 'Load Failed',
+        message: err?.message || 'Could not load social settings from Supabase.'
+      });
     } finally {
       setIsLoadingConfig(false);
     }
@@ -136,43 +115,22 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
     }
   }, [deals]);
 
-  // Save Social Settings — Supabase first, Express API as fallback
+  // Save Social Settings — persisted directly to Supabase (site_config)
   const handleSaveConfig = async () => {
     setIsSavingConfig(true);
     try {
-      let saved = false;
-      let data: any;
-      try {
-        const updated = await supabaseDb.saveSocialConfig(config);
-        data = { success: true, config: updated };
-        saved = true;
-      } catch (e: any) {
-        console.warn('Supabase social config save failed, falling back to API:', e?.message);
-      }
-      if (!saved) {
-        data = await fetchApiJson('/api/social/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(config)
-        });
-      }
-      if (data.success) {
-        setConfig(data.config);
-        addToast({
-          type: 'success',
-          title: 'Social Auto-Post Settings Saved',
-          message: 'Facebook & Instagram feed broadcasting rules saved & persisted to Supabase!'
-        });
-      } else {
-        throw new Error(data.error || 'Failed to save settings');
-      }
+      const updated = await supabaseDb.saveSocialConfig(config);
+      setConfig(updated);
+      addToast({
+        type: 'success',
+        title: 'Social Auto-Post Settings Saved',
+        message: 'Facebook & Instagram feed broadcasting rules saved & persisted to Supabase!'
+      });
     } catch (err: any) {
       addToast({
         type: 'error',
         title: 'Save Failed',
-        message: err.message === 'API_NOT_AVAILABLE'
-          ? 'Backend API is not available and Supabase save failed. Check your connection.'
-          : err.message
+        message: err?.message || 'Could not save social settings to Supabase.'
       });
     } finally {
       setIsSavingConfig(false);
@@ -203,28 +161,12 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
     }));
   };
 
-  // Manual Broadcast to Facebook
+  // Manual Broadcast to Facebook — direct to Meta Graph API via Supabase config
   const handleBroadcastFacebook = async () => {
     if (!selectedDeal) return;
     setIsPostingFb(true);
     try {
-      let data: any;
-      try {
-        const res = await fetch('/api/social/post-facebook', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            deal: selectedDeal
-          })
-        });
-        const ct = (res.headers.get('content-type') || '').toLowerCase();
-        if (!ct.includes('application/json')) throw new Error('API_NOT_AVAILABLE');
-        data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to post to Facebook');
-      } catch (apiErr: any) {
-        // Express backend not available (static hosting) → publish via Supabase + Graph API
-        data = await supabaseDb.publishSocialPost('facebook', selectedDeal, renderFormattedCaption(selectedDeal));
-      }
+      const data = await supabaseDb.publishSocialPost('facebook', selectedDeal, renderFormattedCaption(selectedDeal));
       if (data.success) {
         addToast({
           type: data.simulated ? 'info' : 'success',
@@ -233,7 +175,7 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
         });
         loadData();
       } else {
-        throw new Error(data.message || data.error || 'Failed to post to Facebook');
+        throw new Error(data.message || 'Failed to post to Facebook');
       }
     } catch (err: any) {
       addToast({
@@ -251,23 +193,7 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
     if (!selectedDeal) return;
     setIsPostingIg(true);
     try {
-      let data: any;
-      try {
-        const res = await fetch('/api/social/post-instagram', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            deal: selectedDeal
-          })
-        });
-        const ct = (res.headers.get('content-type') || '').toLowerCase();
-        if (!ct.includes('application/json')) throw new Error('API_NOT_AVAILABLE');
-        data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to post to Instagram');
-      } catch (apiErr: any) {
-        // Express backend not available (static hosting) → publish via Supabase + Graph API
-        data = await supabaseDb.publishSocialPost('instagram', selectedDeal, renderFormattedCaption(selectedDeal));
-      }
+      const data = await supabaseDb.publishSocialPost('instagram', selectedDeal, renderFormattedCaption(selectedDeal));
       if (data.success) {
         addToast({
           type: data.simulated ? 'info' : 'success',
@@ -276,7 +202,7 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
         });
         loadData();
       } else {
-        throw new Error(data.message || data.error || 'Failed to post to Instagram');
+        throw new Error(data.message || 'Failed to post to Instagram');
       }
     } catch (err: any) {
       addToast({
@@ -303,18 +229,10 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
     }
   };
 
-  // Clear Social Logs — Supabase first, Express API as fallback
+  // Clear Social Logs — directly in Supabase
   const handleClearLogs = async () => {
     try {
-      let cleared = false;
-      try {
-        cleared = await supabaseDb.clearSocialLogs();
-      } catch (e: any) {
-        console.warn('Supabase clear logs failed, falling back to API:', e?.message);
-      }
-      if (!cleared) {
-        await fetchApiJson('/api/social/logs', { method: 'DELETE' });
-      }
+      await supabaseDb.clearSocialLogs();
       setLogs([]);
       addToast({
         type: 'success',
