@@ -1174,10 +1174,34 @@ class SupabaseDatabaseService {
     };
   }
 
+  // Browser-safe variant of the social config: access tokens are redacted so
+  // they are never exposed to the client. Only "is a token saved?" flags and
+  // masked previews are returned.
+  public async getSocialConfigPublic(): Promise<SocialConfig & { facebookTokenSet?: boolean; instagramTokenSet?: boolean }> {
+    const cfg = await this.getSocialConfig();
+    const redact = (t: string) => (t ? `${t.slice(0, 4)}••••${t.slice(-4)}` : '');
+    return {
+      ...cfg,
+      facebookAccessToken: redact(cfg.facebookAccessToken),
+      instagramAccessToken: redact(cfg.instagramAccessToken),
+      facebookTokenSet: Boolean(cfg.facebookAccessToken),
+      instagramTokenSet: Boolean(cfg.instagramAccessToken),
+    };
+  }
+
   // Save social config
   public async saveSocialConfig(config: Partial<SocialConfig>): Promise<SocialConfig> {
     const current = await this.getSocialConfig();
-    const updated = { ...current, ...config };
+    const incoming = { ...config };
+    // Never let an empty/blank token WIPE an existing saved token (the browser
+    // only ever sees masked tokens). Passing a non-empty value overwrites it.
+    if (!incoming.facebookAccessToken || incoming.facebookAccessToken.includes('••••')) {
+      delete incoming.facebookAccessToken;
+    }
+    if (!incoming.instagramAccessToken || incoming.instagramAccessToken.includes('••••')) {
+      delete incoming.instagramAccessToken;
+    }
+    const updated = { ...current, ...incoming };
     dbManager.updateSocialConfig(updated);
     if (this.client) {
       // Persist as a proper JSON object (config_value is a JSONB column).
@@ -1256,107 +1280,28 @@ class SupabaseDatabaseService {
     return true;
   }
 
-  // Publish a deal directly to Facebook Page / Instagram Business feed via the
-  // Meta Graph API (used by the Admin UI when the Express backend is not
-  // available, e.g. on the statically hosted production site). Logs the result.
+  // Publish a deal to Facebook Page / Instagram Business feed via the
+  // server-side social-post Supabase Edge Function, so the Page/IG Access
+  // Tokens are used on the server only and never exposed to the browser.
+  // Flow: Admin UI -> Edge Function -> Meta Graph API -> Facebook/Instagram Page.
   public async publishSocialPost(
     platform: 'facebook' | 'instagram',
     deal: Deal,
     caption: string
   ): Promise<{ success: boolean; simulated?: boolean; postUrl?: string; postId?: string; message: string }> {
-    const config = await this.getSocialConfig();
-
-    const log = async (status: string, message: string, postUrl?: string) => {
-      try {
-        await this.addSocialLog({
-          platform,
-          dealId: deal.id,
-          dealTitle: deal.title,
-          status: status as any,
-          postUrl,
-          message,
-          postedAt: new Date().toISOString()
-        });
-      } catch (e: any) {
-        console.warn('⚠️ Social log write failed:', e?.message);
-      }
-    };
-
-    if (platform === 'facebook') {
-      if (!config.facebookPageId || !config.facebookAccessToken) {
-        const message = '[Test Mode] Post generated. Enter Facebook Page ID & Access Token in Admin to publish live.';
-        await log('SIMULATED', message);
-        return { success: true, simulated: true, message };
-      }
-      try {
-        // Photo post when an image is available, otherwise a plain feed post
-        const endpoint = deal.imageUrl
-          ? `https://graph.facebook.com/v19.0/${config.facebookPageId}/photos`
-          : `https://graph.facebook.com/v19.0/${config.facebookPageId}/feed`;
-        const body: Record<string, string> = { access_token: config.facebookAccessToken, caption };
-        if (deal.imageUrl) body.url = deal.imageUrl;
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || data.error) {
-          const message = `Facebook publish failed: ${data.error?.message || `HTTP ${res.status}`}`;
-          await log('FAILED', message);
-          return { success: false, message };
-        }
-        const postUrl = `https://facebook.com/${data.post_id || data.id}`;
-        await log('SUCCESS', 'Published to Facebook Page feed.', postUrl);
-        return { success: true, postId: data.post_id || data.id, postUrl, message: 'Published to Facebook Page feed!' };
-      } catch (e: any) {
-        const message = `Facebook publish failed: ${e?.message || 'network error'}`;
-        await log('FAILED', message);
-        return { success: false, message };
-      }
-    }
-
-    // Instagram (Business/Creator account): two-step container -> publish
-    if (!config.instagramAccountId || !config.instagramAccessToken) {
-      const message = '[Test Mode] Post generated. Enter Instagram Account ID & Access Token in Admin to publish live.';
-      await log('SIMULATED', message);
-      return { success: true, simulated: true, message };
-    }
-    if (!deal.imageUrl) {
-      const message = 'Instagram Feed requires a valid public image URL.';
-      await log('FAILED', message);
-      return { success: false, message };
+    if (!this.client) {
+      return { success: false, message: 'Supabase is not configured.' };
     }
     try {
-      const containerRes = await fetch(`https://graph.facebook.com/v19.0/${config.instagramAccountId}/media`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_url: deal.imageUrl, caption, access_token: config.instagramAccessToken })
+      const { data, error } = await this.client.functions.invoke('social-post', {
+        body: { platform, deal: { id: deal.id, title: deal.title, imageUrl: deal.imageUrl }, caption },
       });
-      const container = await containerRes.json().catch(() => ({}));
-      if (!containerRes.ok || container.error) {
-        const message = `Instagram media container failed: ${container.error?.message || `HTTP ${containerRes.status}`}`;
-        await log('FAILED', message);
-        return { success: false, message };
+      if (error) {
+        return { success: false, message: error.message || 'Publishing service failed.' };
       }
-      const publishRes = await fetch(`https://graph.facebook.com/v19.0/${config.instagramAccountId}/media_publish`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creation_id: container.id, access_token: config.instagramAccessToken })
-      });
-      const published = await publishRes.json().catch(() => ({}));
-      if (!publishRes.ok || published.error) {
-        const message = `Instagram publish failed: ${published.error?.message || `HTTP ${publishRes.status}`}`;
-        await log('FAILED', message);
-        return { success: false, message };
-      }
-      const postUrl = `https://instagram.com/p/${published.id}`;
-      await log('SUCCESS', 'Published to Instagram Business feed.', postUrl);
-      return { success: true, postId: published.id, postUrl, message: 'Published to Instagram Business feed!' };
+      return data;
     } catch (e: any) {
-      const message = `Instagram publish failed: ${e?.message || 'network error'}`;
-      await log('FAILED', message);
-      return { success: false, message };
+      return { success: false, message: e?.message || 'Publishing service unavailable.' };
     }
   }
 

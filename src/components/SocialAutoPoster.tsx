@@ -83,12 +83,12 @@ export const SocialAutoPoster: React.FC<SocialAutoPosterProps> = ({ deals, addTo
   // from the browser. The Express /api endpoints are not used for config at all,
   // so no request to /api/social/config is ever made.
 
-  // Load config & logs from Supabase
+  // Load config & logs from Supabase (tokens are redacted server-side)
   const loadData = async () => {
     setIsLoadingConfig(true);
     try {
       const [config, logs] = await Promise.all([
-        supabaseDb.getSocialConfig(),
+        supabaseDb.getSocialConfigPublic(),
         supabaseDb.getSocialLogs()
       ]);
       setConfig(prev => ({ ...prev, ...config }));

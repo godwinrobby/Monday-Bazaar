@@ -903,9 +903,10 @@ function validateSocialConfig(input: any): { ok: true; config: Record<string, an
 }
 
 // GET /api/social/config - Fetch social auto-posting config from Supabase
+// (tokens redacted - they are only used server-side by the publish functions)
 app.get("/api/social/config", async (req, res) => {
   try {
-    const config = await supabaseDb.getSocialConfig();
+    const config = await supabaseDb.getSocialConfigPublic();
     res.json({ success: true, config });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
