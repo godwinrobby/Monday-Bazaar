@@ -1256,6 +1256,110 @@ class SupabaseDatabaseService {
     return true;
   }
 
+  // Publish a deal directly to Facebook Page / Instagram Business feed via the
+  // Meta Graph API (used by the Admin UI when the Express backend is not
+  // available, e.g. on the statically hosted production site). Logs the result.
+  public async publishSocialPost(
+    platform: 'facebook' | 'instagram',
+    deal: Deal,
+    caption: string
+  ): Promise<{ success: boolean; simulated?: boolean; postUrl?: string; postId?: string; message: string }> {
+    const config = await this.getSocialConfig();
+
+    const log = async (status: string, message: string, postUrl?: string) => {
+      try {
+        await this.addSocialLog({
+          platform,
+          dealId: deal.id,
+          dealTitle: deal.title,
+          status: status as any,
+          postUrl,
+          message,
+          postedAt: new Date().toISOString()
+        });
+      } catch (e: any) {
+        console.warn('⚠️ Social log write failed:', e?.message);
+      }
+    };
+
+    if (platform === 'facebook') {
+      if (!config.facebookPageId || !config.facebookAccessToken) {
+        const message = '[Test Mode] Post generated. Enter Facebook Page ID & Access Token in Admin to publish live.';
+        await log('SIMULATED', message);
+        return { success: true, simulated: true, message };
+      }
+      try {
+        // Photo post when an image is available, otherwise a plain feed post
+        const endpoint = deal.imageUrl
+          ? `https://graph.facebook.com/v19.0/${config.facebookPageId}/photos`
+          : `https://graph.facebook.com/v19.0/${config.facebookPageId}/feed`;
+        const body: Record<string, string> = { access_token: config.facebookAccessToken, caption };
+        if (deal.imageUrl) body.url = deal.imageUrl;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error) {
+          const message = `Facebook publish failed: ${data.error?.message || `HTTP ${res.status}`}`;
+          await log('FAILED', message);
+          return { success: false, message };
+        }
+        const postUrl = `https://facebook.com/${data.post_id || data.id}`;
+        await log('SUCCESS', 'Published to Facebook Page feed.', postUrl);
+        return { success: true, postId: data.post_id || data.id, postUrl, message: 'Published to Facebook Page feed!' };
+      } catch (e: any) {
+        const message = `Facebook publish failed: ${e?.message || 'network error'}`;
+        await log('FAILED', message);
+        return { success: false, message };
+      }
+    }
+
+    // Instagram (Business/Creator account): two-step container -> publish
+    if (!config.instagramAccountId || !config.instagramAccessToken) {
+      const message = '[Test Mode] Post generated. Enter Instagram Account ID & Access Token in Admin to publish live.';
+      await log('SIMULATED', message);
+      return { success: true, simulated: true, message };
+    }
+    if (!deal.imageUrl) {
+      const message = 'Instagram Feed requires a valid public image URL.';
+      await log('FAILED', message);
+      return { success: false, message };
+    }
+    try {
+      const containerRes = await fetch(`https://graph.facebook.com/v19.0/${config.instagramAccountId}/media`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_url: deal.imageUrl, caption, access_token: config.instagramAccessToken })
+      });
+      const container = await containerRes.json().catch(() => ({}));
+      if (!containerRes.ok || container.error) {
+        const message = `Instagram media container failed: ${container.error?.message || `HTTP ${containerRes.status}`}`;
+        await log('FAILED', message);
+        return { success: false, message };
+      }
+      const publishRes = await fetch(`https://graph.facebook.com/v19.0/${config.instagramAccountId}/media_publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creation_id: container.id, access_token: config.instagramAccessToken })
+      });
+      const published = await publishRes.json().catch(() => ({}));
+      if (!publishRes.ok || published.error) {
+        const message = `Instagram publish failed: ${published.error?.message || `HTTP ${publishRes.status}`}`;
+        await log('FAILED', message);
+        return { success: false, message };
+      }
+      const postUrl = `https://instagram.com/p/${published.id}`;
+      await log('SUCCESS', 'Published to Instagram Business feed.', postUrl);
+      return { success: true, postId: published.id, postUrl, message: 'Published to Instagram Business feed!' };
+    } catch (e: any) {
+      const message = `Instagram publish failed: ${e?.message || 'network error'}`;
+      await log('FAILED', message);
+      return { success: false, message };
+    }
+  }
+
   // Get categories from site_config
   public async getCategories(): Promise<string[]> {
     if (this.client) {
