@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Flame, Tag, Store, Heart, Sparkles, ShoppingBag } from 'lucide-react';
+import { Flame, Tag, Heart, Sparkles, ShoppingBag } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 interface NavbarProps {
@@ -26,11 +26,6 @@ export const Navbar: React.FC<NavbarProps> = ({ savedCount }) => {
       to: '/categories',
       label: 'Categories',
       icon: <Tag className="w-4 h-4 text-orange-500" />,
-    },
-    {
-      to: '/stores',
-      label: 'Stores',
-      icon: <Store className="w-4 h-4 text-blue-500" />,
     },
     {
       to: '/shop',
