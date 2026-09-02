@@ -148,17 +148,23 @@ export const ProfilePage: React.FC = () => {
           <p className="text-xs text-slate-500">Login or create an account to manage your orders &amp; profile.</p>
         </div>
 
-        {/* Mode tabs */}
+        {/* Mode tabs: Login / Register */}
         <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
-          {(['login', 'register', 'forgot'] as const).map(m => (
+          {(['login', 'register'] as const).map(m => (
             <button key={m} onClick={() => { setMode(m); setError(null); setSuccess(null); }}
               className={`flex-1 py-2 rounded-xl text-xs font-bold capitalize transition-all ${mode === m ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>
-              {m === 'forgot' ? 'Forgot' : m}
+              {m === 'login' ? 'Login' : 'Register / Sign Up'}
             </button>
           ))}
         </div>
 
         <form onSubmit={submit} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+          {mode === 'forgot' && (
+            <div className="text-xs text-slate-500 bg-indigo-50 border border-indigo-100 rounded-xl p-3 flex items-center gap-2">
+              <Mail className="w-4 h-4 text-indigo-500 shrink-0" />
+              Enter your email and a new password below to reset your password.
+            </div>
+          )}
           {mode === 'register' && (
             <Field icon={<User className="w-4 h-4" />}>
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Full Name *" className="w-full bg-transparent focus:outline-none text-sm" />
@@ -179,6 +185,14 @@ export const ProfilePage: React.FC = () => {
               {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </Field>
+          {mode === 'login' && (
+            <div className="flex justify-end">
+              <button type="button" onClick={() => { setMode('forgot'); setError(null); setSuccess(null); }}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
+                Forgot Password?
+              </button>
+            </div>
+          )}
           {mode === 'register' && (
             <Field icon={<Lock className="w-4 h-4" />}>
               <input type={showPass ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Confirm Password *" className="w-full bg-transparent focus:outline-none text-sm" />
