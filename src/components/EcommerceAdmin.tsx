@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Package, Tags, Award, ShoppingCart, Tag, CreditCard, Truck, Settings,
   Plus, Search, Edit2, Trash2, X, Star, RefreshCw, Eye,
   AlertCircle, Save, PackagePlus, ClipboardList, Store, BarChart3, Boxes, Layers, ExternalLink, Check,
-  Users, UserCheck, UserX, Mail, Phone, MapPin, KeyRound, Calendar, ExternalLink as ExtLink,
+  Users, UserCheck, UserX, Mail, Phone, MapPin, KeyRound, Calendar, ExternalLink as ExtLink, ChevronRight,
 } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
 import {

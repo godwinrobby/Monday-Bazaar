@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
-  EcCategory, EcBrand, EcProduct, EcVariant, EcCoupon, EcCustomer,
+  EcCategory, EcBrand, EcProduct, EcVariant, EcCoupon, EcCustomer, EcAddress,
   EcPaymentMethod, EcShippingMethod, EcOrder, EcOrderItem, EcProductType,
 } from '../types/ecommerce';
 import { generateSalt, hashPassword, verifyPassword } from '../utils/auth';

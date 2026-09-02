@@ -117,7 +117,7 @@ export interface EcCustomer {
 }
 
 export interface EcOrder {
-  id: string;
+  id?: string;
   order_number?: string;
   customer_id?: string;
   customer_name?: string;
