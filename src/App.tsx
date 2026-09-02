@@ -9,6 +9,7 @@ const TelegramBanner = lazy(() => import('./components/TelegramBanner').then(m =
 const StatsBar = lazy(() => import('./components/StatsBar').then(m => ({ default: m.StatsBar })));
 const Header = lazy(() => import('./components/Header').then(m => ({ default: m.Header })));
 const Navbar = lazy(() => import('./components/Navbar').then(m => ({ default: m.Navbar })));
+const BottomNav = lazy(() => import('./components/BottomNav').then(m => ({ default: m.BottomNav })));
 
 const DealsPage = lazy(() => import('./pages/DealsPage').then(m => ({ default: m.DealsPage })));
 const DealDetailsRoute = lazy(() => import('./pages/DealDetailsRoute').then(m => ({ default: m.DealDetailsRoute })));
@@ -27,6 +28,7 @@ const EcCheckoutConfirmationPage = lazy(() => import('./pages/EcCheckoutConfirma
 const EcOrdersPage = lazy(() => import('./pages/EcOrdersPage').then(m => ({ default: m.EcOrdersPage })));
 const EcOrderDetailPage = lazy(() => import('./pages/EcOrderDetailPage').then(m => ({ default: m.EcOrderDetailPage })));
 const EcTrackingPage = lazy(() => import('./pages/EcTrackingPage').then(m => ({ default: m.EcTrackingPage })));
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
 
 import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
@@ -355,7 +357,7 @@ export default function App() {
   }, [deals, savedDealIds]);
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans text-slate-900 flex flex-col selection:bg-orange-500 selection:text-white max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-slate-100 font-sans text-slate-900 flex flex-col selection:bg-orange-500 selection:text-white max-w-full overflow-x-hidden pb-16 md:pb-0">
       
       {/* Show Banners, Header & Navbar on non-admin routes */}
       {!isAdminRoute && (
@@ -370,6 +372,7 @@ export default function App() {
             totalDealsCount={deals.length}
           />
           <Navbar savedCount={savedDealIds.length} />
+          <BottomNav savedCount={savedDealIds.length} />
         </Suspense>
       )}
 
@@ -506,6 +509,7 @@ export default function App() {
             <Route path="/orders" element={<EcOrdersPage />} />
             <Route path="/orders/:id" element={<EcOrderDetailPage />} />
             <Route path="/orders/:id/track" element={<EcTrackingPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
