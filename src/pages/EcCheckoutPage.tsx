@@ -2,12 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Truck, MapPin, CreditCard, Check, Loader2, ShoppingBag, X } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { ecommerce } from '../db/ecommerce';
 import { EcCoupon, EcShippingMethod, EcPaymentMethod, EcAddress, EcOrderItem } from '../types/ecommerce';
 
 export const EcCheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const { items, itemCount, subtotal, clearCart } = useCart();
+  const { customer: authCustomer } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [shippingMethods, setShippingMethods] = useState<EcShippingMethod[]>([]);
@@ -101,8 +103,9 @@ export const EcCheckoutPage: React.FC = () => {
       }));
 
       const orderId = await ecommerce.placeOrder({
+        customer_id: authCustomer?.id,
         customer_name: address.name,
-        customer_email: 'customer@example.com',
+        customer_email: authCustomer?.email || 'customer@example.com',
         customer_phone: address.phone,
         address: address,
         status: 'pending',

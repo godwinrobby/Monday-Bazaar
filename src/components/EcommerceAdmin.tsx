@@ -3,14 +3,15 @@ import {
   Package, Tags, Award, ShoppingCart, Tag, CreditCard, Truck, Settings,
   Plus, Search, Edit2, Trash2, X, Star, RefreshCw, Eye,
   AlertCircle, Save, PackagePlus, ClipboardList, Store, BarChart3, Boxes, Layers, ExternalLink, Check,
+  Users, UserCheck, UserX, Mail, Phone, MapPin, KeyRound, Calendar, ExternalLink as ExtLink,
 } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
 import {
-  EcProduct, EcCategory, EcBrand, EcVariant, EcOrder, EcCoupon,
+  EcProduct, EcCategory, EcBrand, EcVariant, EcOrder, EcCoupon, EcCustomer,
   EcPaymentMethod, EcShippingMethod, EcProductType, EcOrderStatus,
 } from '../types/ecommerce';
 
-type EcTab = 'products' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'settings';
+type EcTab = 'products' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -868,6 +869,312 @@ const ShopPanel: React.FC<{ addToast: Props['addToast']; setError: (s: string | 
   );
 };
 
+/* ==================== CUSTOMERS PANEL ==================== */
+const CUSTOMER_STATUSES = ['active', 'inactive', 'blocked'];
+
+const CustomersPanel: React.FC<{ addToast: Props['addToast']; setError: (s: string | null) => void }> = ({ addToast, setError }) => {
+  const [customers, setCustomers] = useState<EcCustomer[]>([]);
+  const [orders, setOrders] = useState<EcOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [selected, setSelected] = useState<EcCustomer | null>(null);
+  const [selectedOrders, setSelectedOrders] = useState<EcOrder[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<EcOrder | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [cs, os] = await Promise.all([ecommerce.listCustomers(), ecommerce.listOrders()]);
+      setCustomers(cs); setOrders(os);
+    } catch (e: any) { setError(e.message); } finally { setLoading(false); }
+  }, [setError]);
+  useEffect(() => { load(); }, [load]);
+
+  // Derive per-customer order stats
+  const stats = useMemo(() => {
+    const map = new Map<string, { count: number; total: number }>();
+    for (const o of orders) {
+      if (!o.customer_id) continue;
+      const cur = map.get(o.customer_id) || { count: 0, total: 0 };
+      cur.count += 1;
+      cur.total += Number(o.total || 0);
+      map.set(o.customer_id, cur);
+    }
+    return map;
+  }, [orders]);
+
+  const filtered = customers.filter(c => {
+    const term = search.toLowerCase();
+    const matches = !term || (c.name || '').toLowerCase().includes(term) || (c.email || '').toLowerCase().includes(term) || (c.phone || '').toLowerCase().includes(term);
+    const matchesStatus = !statusFilter || c.status === statusFilter;
+    return matches && matchesStatus;
+  });
+
+  const openDetail = async (c: EcCustomer) => {
+    setSelected(c);
+    setSelectedOrder(null);
+    setDetailLoading(true);
+    try {
+      const os = await ecommerce.listOrdersByCustomer(c.id);
+      setSelectedOrders(os);
+    } catch (e: any) { setError(e.message); setSelectedOrders([]); } finally { setDetailLoading(false); }
+  };
+
+  const openOrder = async (o: EcOrder) => {
+    setDetailLoading(true);
+    try {
+      const full = await ecommerce.getOrder(o.id);
+      setSelectedOrder(full || o);
+    } catch (e: any) { setError(e.message); setSelectedOrder(o); } finally { setDetailLoading(false); }
+  };
+
+  const updateOrder = async (patch: Partial<EcOrder>) => {
+    if (!selectedOrder) return;
+    setSavingId(selectedOrder.id);
+    try {
+      await ecommerce.saveOrder({ ...selectedOrder, ...patch });
+      const fresh = await ecommerce.getOrder(selectedOrder.id);
+      setSelectedOrder(fresh || selectedOrder);
+      // refresh order lists
+      if (selected) { const os = await ecommerce.listOrdersByCustomer(selected.id); setSelectedOrders(os); }
+      await load();
+      addToast('Order updated', 'success');
+    } catch (e: any) { addToast(e.message, 'error'); } finally { setSavingId(null); }
+  };
+
+  const updateCustomerStatus = async (c: EcCustomer, status: EcCustomer['status']) => {
+    setSavingId(c.id);
+    try {
+      await ecommerce.updateCustomer(c.id, { status });
+      addToast(`Customer ${status}`, 'success');
+      await load();
+      if (selected?.id === c.id) setSelected({ ...selected, status });
+    } catch (e: any) { addToast(e.message, 'error'); } finally { setSavingId(null); }
+  };
+
+  const remove = async (c: EcCustomer) => {
+    if (!window.confirm(`Delete customer ${c.email}?`)) return;
+    setLoading(true);
+    try { await ecommerce.deleteCustomer(c.id); addToast('Customer deleted', 'success'); await load(); } catch (e: any) { addToast(e.message, 'error'); } finally { setLoading(false); }
+  };
+
+  const statusColor: Record<string, string> = {
+    active: 'bg-emerald-100 text-emerald-700',
+    inactive: 'bg-amber-100 text-amber-700',
+    blocked: 'bg-red-100 text-red-700',
+  };
+  const orderStatusColor: Record<string, string> = {
+    pending: 'bg-amber-100 text-amber-700', confirmed: 'bg-sky-100 text-sky-700',
+    shipped: 'bg-indigo-100 text-indigo-700', delivered: 'bg-emerald-100 text-emerald-700',
+    cancelled: 'bg-red-100 text-red-700',
+  };
+  const payStatusColor: Record<string, string> = {
+    pending: 'bg-amber-100 text-amber-700', paid: 'bg-emerald-100 text-emerald-700',
+    failed: 'bg-red-100 text-red-700', refunded: 'bg-slate-100 text-slate-600',
+  };
+
+  const totalCustomers = customers.length;
+  const activeCustomers = customers.filter(c => c.status === 'active').length;
+  const totalRevenue = orders.reduce((a, o) => a + Number(o.total || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h4 className="font-extrabold text-slate-900 flex items-center gap-2"><Users className="w-5 h-5 text-indigo-500" /> Customer Management</h4>
+          <p className="text-[11px] text-slate-500">View registered customers, their account status and full order history.</p>
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-slate-600 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+          <span className="flex items-center gap-1.5"><Users className="w-4 h-4 text-indigo-500" /> {totalCustomers} customers</span>
+          <span className="flex items-center gap-1.5"><UserCheck className="w-4 h-4 text-emerald-500" /> {activeCustomers} active</span>
+          <span className="flex items-center gap-1.5"><ShoppingCart className="w-4 h-4 text-blue-500" /> ₹{totalRevenue.toLocaleString('en-IN')} revenue</span>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex flex-col sm:flex-row gap-2 sm:items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, email or phone..." className="pl-9 pr-3 py-2 w-full border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+        </div>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={`${inputCls} !py-2`}>
+          <option value="">All Status</option>
+          {CUSTOMER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="p-10 text-center text-slate-400 text-xs"><RefreshCw className="w-5 h-5 mx-auto animate-spin mb-2" />Loading customers…</div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                <tr><th className="text-left p-3 font-bold">Customer</th><th className="text-left p-3 font-bold">Contact</th><th className="text-right p-3 font-bold">Orders</th><th className="text-right p-3 font-bold">Total Spent</th><th className="text-left p-3 font-bold">Status</th><th className="text-right p-3 font-bold">Actions</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map(c => {
+                  const st = stats.get(c.id);
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50/60">
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-black text-sm flex-shrink-0">{(c.name || c.email || '?').charAt(0).toUpperCase()}</div>
+                          <div className="min-w-0"><div className="font-bold text-slate-900 line-clamp-1 max-w-[180px]">{c.name || '—'}</div><div className="text-[10px] text-slate-400">{c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : ''}</div></div>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="text-slate-600 flex items-center gap-1"><Mail className="w-3 h-3 text-slate-400" /> {c.email}</div>
+                        {c.phone && <div className="text-slate-400 flex items-center gap-1 mt-0.5"><Phone className="w-3 h-3" /> {c.phone}</div>}
+                      </td>
+                      <td className="p-3 text-right font-bold text-slate-900">{st?.count || 0}</td>
+                      <td className="p-3 text-right font-bold text-slate-900">₹{Number(st?.total || 0).toLocaleString('en-IN')}</td>
+                      <td className="p-3"><span className={`px-2 py-0.5 rounded-full font-bold text-[10px] capitalize ${statusColor[c.status] || 'bg-slate-100 text-slate-600'}`}>{c.status}</span></td>
+                      <td className="p-3"><div className="flex justify-end gap-1.5">
+                        <button onClick={() => openDetail(c)} title="View customer" className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => remove(c)} title="Delete customer" className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                      </div></td>
+                    </tr>
+                  );
+                })}
+                {filtered.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-slate-400">No customers match your filters.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Customer detail drawer */}
+      {selected && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setSelected(null)}>
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-4xl my-8 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center font-black text-lg">{(selected.name || selected.email || '?').charAt(0).toUpperCase()}</div>
+                <div><h4 className="font-black text-slate-900">{selected.name || 'Customer'}</h4><p className="text-[11px] text-slate-500">{selected.email}</p></div>
+              </div>
+              <button onClick={() => setSelected(null)} className="p-2 text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* Profile + status */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2 bg-slate-50 rounded-xl p-4 text-xs space-y-2">
+                  <p className="font-extrabold text-slate-700 uppercase tracking-wide text-[10px]">Customer Profile</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="flex items-center gap-1.5 text-slate-600"><Mail className="w-3.5 h-3.5 text-slate-400" /> <span className="font-bold">{selected.email}</span></div>
+                    <div className="flex items-center gap-1.5 text-slate-600"><Phone className="w-3.5 h-3.5 text-slate-400" /> {selected.phone || '—'}</div>
+                    <div className="flex items-center gap-1.5 text-slate-600"><KeyRound className="w-3.5 h-3.5 text-slate-400" /> Password: <span className="font-bold">•••••••• (secured)</span></div>
+                    <div className="flex items-center gap-1.5 text-slate-600"><Calendar className="w-3.5 h-3.5 text-slate-400" /> Joined: {selected.created_at ? new Date(selected.created_at).toLocaleDateString('en-IN') : '—'}</div>
+                  </div>
+                  {selected.address?.line1 && (
+                    <div className="flex items-start gap-1.5 text-slate-600 pt-1"><MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5" /><span>{selected.address.line1}{selected.address.line2 ? `, ${selected.address.line2}` : ''}, {selected.address.city}{selected.address.state ? `, ${selected.address.state}` : ''} - {selected.address.pincode}</span></div>
+                  )}
+                </div>
+                <div className="bg-slate-50 rounded-xl p-4 text-xs space-y-2">
+                  <p className="font-extrabold text-slate-700 uppercase tracking-wide text-[10px]">Account Status</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] capitalize ${statusColor[selected.status] || 'bg-slate-100 text-slate-600'}`}>{selected.status}</span>
+                  </div>
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-slate-500 block">Set Status</label>
+                    <select value={selected.status} disabled={savingId === selected.id} onChange={e => updateCustomerStatus(selected, e.target.value as EcCustomer['status'])} className={`${inputCls} w-full`}>
+                      {CUSTOMER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="pt-1 text-slate-500">
+                    <div><b>{stats.get(selected.id)?.count || 0}</b> orders</div>
+                    <div>Spent: <b>₹{Number(stats.get(selected.id)?.total || 0).toLocaleString('en-IN')}</b></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order history */}
+              <div>
+                <h5 className="font-extrabold text-slate-900 text-sm mb-3 flex items-center gap-1.5"><ShoppingCart className="w-4 h-4 text-indigo-500" /> Order History</h5>
+                {detailLoading ? (
+                  <div className="py-8 text-center text-slate-400 text-xs"><RefreshCw className="w-5 h-5 mx-auto animate-spin mb-2" />Loading orders...</div>
+                ) : selectedOrders.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-400">This customer has no orders yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedOrders.map(o => (
+                      <button key={o.id} onClick={() => openOrder(o)} className="w-full flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors text-left">
+                        <div>
+                          <div className="font-bold text-slate-900 text-xs">#{o.order_number?.slice(-8) || o.id.slice(-8)}</div>
+                          <div className="text-[10px] text-slate-500">{o.created_at ? new Date(o.created_at).toLocaleString('en-IN') : ''}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] capitalize ${orderStatusColor[o.status] || 'bg-slate-100'}`}>{o.status}</span>
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] capitalize ${payStatusColor[o.payment_status || 'pending'] || 'bg-slate-100'}`}>{o.payment_status || 'pending'}</span>
+                          <span className="font-black text-slate-900 text-sm">₹{Number(o.total || 0).toLocaleString('en-IN')}</span>
+                          <ChevronRight className="w-4 h-4 text-slate-300" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Selected order detail */}
+              {selectedOrder && (
+                <div className="border border-slate-200 rounded-2xl p-4 bg-white">
+                  <div className="flex items-center justify-between mb-3">
+                    <h5 className="font-extrabold text-slate-900 text-sm">Order #{selectedOrder.order_number?.slice(-8) || selectedOrder.id.slice(-8)}</h5>
+                    <button onClick={() => setSelectedOrder(null)} className="p-1 text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs mb-3">
+                    <div className="bg-slate-50 rounded-xl p-3"><span className="text-slate-500 block text-[10px] uppercase">Order Status</span>
+                      <select value={selectedOrder.status} disabled={savingId === selectedOrder.id} onChange={e => updateOrder({ status: e.target.value as EcOrderStatus })} className={`${inputCls} w-full mt-1`}>{ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-3"><span className="text-slate-500 block text-[10px] uppercase">Payment Status</span>
+                      <select value={selectedOrder.payment_status || 'pending'} disabled={savingId === selectedOrder.id} onChange={e => updateOrder({ payment_status: e.target.value as any })} className={`${inputCls} w-full mt-1`}>{PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-3"><span className="text-slate-500 block text-[10px] uppercase">Shipping</span>
+                      <div className="font-bold text-slate-900 mt-1">{selectedOrder.shipping_method || '—'}</div>
+                      <div className="text-slate-500">{selectedOrder.payment_method || '—'}</div>
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 text-xs mb-3">
+                    <span className="text-slate-500 block text-[10px] uppercase mb-1">Tracking / Shipment</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input value={selectedOrder.tracking_number || ''} disabled={savingId === selectedOrder.id} onChange={e => updateOrder({ tracking_number: e.target.value })} placeholder="Tracking number" className={`${inputCls} w-full`} />
+                      <input value={selectedOrder.tracking_company || ''} disabled={savingId === selectedOrder.id} onChange={e => updateOrder({ tracking_company: e.target.value })} placeholder="Courier company" className={`${inputCls} w-full`} />
+                    </div>
+                    {selectedOrder.tracking_number && (
+                      <a href={`/orders/${selectedOrder.id}/track`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-2 text-indigo-600 font-bold"><ExtLink className="w-3.5 h-3.5" /> View Tracking</a>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 text-slate-500 border-b border-slate-100"><tr><th className="text-left p-2 font-bold">Item</th><th className="text-right p-2 font-bold">Qty</th><th className="text-right p-2 font-bold">Price</th><th className="text-right p-2 font-bold">Total</th></tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {(selectedOrder.items || []).map((it, i) => (
+                          <tr key={i}><td className="p-2 font-bold text-slate-900">{it.product_name}</td><td className="p-2 text-right">{it.quantity}</td><td className="p-2 text-right">₹{Number(it.unit_price).toLocaleString('en-IN')}</td><td className="p-2 text-right font-bold">₹{Number(it.total).toLocaleString('en-IN')}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex justify-end mt-3 text-xs space-y-1">
+                    <div className="text-right space-y-1">
+                      <div className="flex justify-between gap-6 text-slate-600"><span>Subtotal</span><span>₹{Number(selectedOrder.subtotal || 0).toLocaleString('en-IN')}</span></div>
+                      <div className="flex justify-between gap-6 text-slate-600"><span>Shipping</span><span>₹{Number(selectedOrder.shipping_charge || 0).toLocaleString('en-IN')}</span></div>
+                      {selectedOrder.discount > 0 && <div className="flex justify-between gap-6 text-emerald-600"><span>Discount</span><span>-₹{Number(selectedOrder.discount || 0).toLocaleString('en-IN')}</span></div>}
+                      <div className="flex justify-between gap-6 font-black text-slate-900 border-t border-slate-200 pt-1"><span>Total</span><span>₹{Number(selectedOrder.total || 0).toLocaleString('en-IN')}</span></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ==================== ECADMIN (MAIN COMPONENT, DEFINED LAST) ==================== */
 export const EcAdmin: React.FC<Props> = ({ addToast }) => {
   const [tab, setTab] = useState<EcTab>('products');
@@ -882,6 +1189,7 @@ export const EcAdmin: React.FC<Props> = ({ addToast }) => {
     { id: 'payments', label: 'Payments', icon: <CreditCard className="w-4 h-4" /> },
     { id: 'shipping', label: 'Shipping', icon: <Truck className="w-4 h-4" /> },
     { id: 'shop', label: 'Shop', icon: <Store className="w-4 h-4" /> },
+    { id: 'customers', label: 'Customers', icon: <Users className="w-4 h-4" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
   ];
 
@@ -895,6 +1203,7 @@ export const EcAdmin: React.FC<Props> = ({ addToast }) => {
       case 'payments': return <PaymentsPanel addToast={addToast} setError={setError} />;
       case 'shipping': return <ShippingPanel addToast={addToast} setError={setError} />;
       case 'shop': return <ShopPanel addToast={addToast} setError={setError} />;
+      case 'customers': return <CustomersPanel addToast={addToast} setError={setError} />;
       case 'settings': return <SettingsPanel addToast={addToast} />;
       default: return null;
     }

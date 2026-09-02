@@ -98,10 +98,28 @@ export interface EcAddress {
 
 export type EcOrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
 export type EcPaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
+export type EcCustomerStatus = 'active' | 'inactive' | 'blocked';
+
+export interface EcCustomer {
+  id: string;
+  name?: string;
+  email: string;
+  phone?: string;
+  password_hash?: string;
+  password_salt?: string;
+  status: EcCustomerStatus;
+  address?: EcAddress;
+  last_login_at?: string | null;
+  created_at?: string;
+  // joined / derived
+  order_count?: number;
+  total_spent?: number;
+}
 
 export interface EcOrder {
   id: string;
   order_number?: string;
+  customer_id?: string;
   customer_name?: string;
   customer_email?: string;
   customer_phone?: string;

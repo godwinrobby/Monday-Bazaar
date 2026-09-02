@@ -1,8 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
-  EcCategory, EcBrand, EcProduct, EcVariant, EcCoupon,
+  EcCategory, EcBrand, EcProduct, EcVariant, EcCoupon, EcCustomer,
   EcPaymentMethod, EcShippingMethod, EcOrder, EcOrderItem, EcProductType,
 } from '../types/ecommerce';
+import { generateSalt, hashPassword, verifyPassword } from '../utils/auth';
 
 // E-commerce data service — client-side Supabase integration shared by the
 // Admin and User apps (products, variants, categories, brands, orders,
@@ -41,7 +42,8 @@ class SupabaseEcommerce {
 
   private mapOrder(r: any): EcOrder {
     return {
-      id: r.id, order_number: r.order_number, customer_name: r.customer_name,
+      id: r.id, order_number: r.order_number, customer_id: r.customer_id,
+      customer_name: r.customer_name,
       customer_email: r.customer_email, customer_phone: r.customer_phone,
       address: r.address || {}, status: r.status, payment_method: r.payment_method,
       payment_status: r.payment_status, shipping_method: r.shipping_method,
@@ -207,6 +209,7 @@ class SupabaseEcommerce {
     const { error } = await this.client.from('ec_orders').upsert({
       id: order.id || `ec-order-${Date.now()}`,
       order_number: order.order_number || this.genOrderNumber(),
+      customer_id: order.customer_id || null,
       customer_name: order.customer_name, customer_email: order.customer_email,
       customer_phone: order.customer_phone, address: order.address || {},
       status: order.status || 'pending', payment_method: order.payment_method,
@@ -320,6 +323,119 @@ class SupabaseEcommerce {
   async deleteCoupon(id: string): Promise<void> {
     const { error } = await this.client.from('ec_coupons').delete().eq('id', id);
     if (error) this.error(error);
+  }
+
+  /* ==================== CUSTOMERS / AUTH ==================== */
+
+  private mapCustomer(r: any): EcCustomer {
+    return {
+      id: r.id, name: r.name, email: r.email, phone: r.phone,
+      password_hash: r.password_hash, password_salt: r.password_salt,
+      status: r.status || 'active', address: r.address || {},
+      last_login_at: r.last_login_at, created_at: r.created_at,
+    };
+  }
+
+  async listCustomers(): Promise<EcCustomer[]> {
+    const { data, error } = await this.client.from('ec_customers').select('*').order('created_at', { ascending: false });
+    if (error) this.error(error);
+    return (data || []).map((r: any) => this.mapCustomer(r));
+  }
+
+  async getCustomer(id: string): Promise<EcCustomer | null> {
+    const { data, error } = await this.client.from('ec_customers').select('*').eq('id', id).limit(1);
+    if (error) this.error(error);
+    return Array.isArray(data) && data[0] ? this.mapCustomer(data[0]) : null;
+  }
+
+  async getCustomerByEmail(email: string): Promise<EcCustomer | null> {
+    const { data, error } = await this.client.from('ec_customers').select('*').ilike('email', String(email).trim()).limit(1);
+    if (error) this.error(error);
+    return Array.isArray(data) && data[0] ? this.mapCustomer(data[0]) : null;
+  }
+
+  // Register a new customer. Passwords are hashed (PBKDF2 + salt) — never stored plaintext.
+  async registerCustomer(input: { name?: string; email: string; phone?: string; password: string; address?: EcAddress }): Promise<EcCustomer> {
+    const email = String(input.email).trim().toLowerCase();
+    if (!email) throw new Error('Email is required');
+    if (!input.password || input.password.length < 6) throw new Error('Password must be at least 6 characters');
+    const existing = await this.getCustomerByEmail(email);
+    if (existing) throw new Error('An account with this email already exists');
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(input.password, salt);
+    const id = `ec-cust-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data, error } = await this.client.from('ec_customers').insert({
+      id, name: input.name || '', email, phone: input.phone || '',
+      password_hash: passwordHash, password_salt: salt,
+      status: 'active', address: input.address || {},
+    }).select().single();
+    if (error) this.error(error);
+    const c = this.mapCustomer(data);
+    delete (c as any).password_hash;
+    delete (c as any).password_salt;
+    return c;
+  }
+
+  // Verify credentials. Returns the customer (without sensitive fields) or null.
+  async loginCustomer(email: string, password: string): Promise<EcCustomer | null> {
+    const customer = await this.getCustomerByEmail(email);
+    if (!customer) return null;
+    if (customer.status === 'blocked') throw new Error('This account has been blocked');
+    if (customer.status === 'inactive') throw new Error('This account is inactive');
+    const ok = await verifyPassword(password, customer.password_salt || '', customer.password_hash || '');
+    if (!ok) return null;
+    await this.client.from('ec_customers').update({ last_login_at: new Date().toISOString() }).eq('id', customer.id);
+    const fresh = await this.getCustomer(customer.id);
+    const result = fresh || customer;
+    delete (result as any).password_hash;
+    delete (result as any).password_salt;
+    return result;
+  }
+
+  async updateCustomer(id: string, patch: Partial<EcCustomer>): Promise<EcCustomer> {
+    const { data, error } = await this.client.from('ec_customers').update({
+      name: patch.name, phone: patch.phone, address: patch.address, status: patch.status,
+    }).eq('id', id).select().single();
+    if (error) this.error(error);
+    const c = this.mapCustomer(data);
+    delete (c as any).password_hash;
+    delete (c as any).password_salt;
+    return c;
+  }
+
+  // Change password (requires current password).
+  async changePassword(id: string, currentPassword: string, newPassword: string): Promise<void> {
+    if (!newPassword || newPassword.length < 6) throw new Error('New password must be at least 6 characters');
+    const customer = await this.getCustomer(id);
+    if (!customer) throw new Error('Customer not found');
+    const ok = await verifyPassword(currentPassword, customer.password_salt || '', customer.password_hash || '');
+    if (!ok) throw new Error('Current password is incorrect');
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(newPassword, salt);
+    const { error } = await this.client.from('ec_customers').update({ password_hash: passwordHash, password_salt: salt }).eq('id', id);
+    if (error) this.error(error);
+  }
+
+  // Forgot password: verify the email matches the account and set a new password.
+  async resetPassword(email: string, newPassword: string): Promise<void> {
+    if (!newPassword || newPassword.length < 6) throw new Error('New password must be at least 6 characters');
+    const customer = await this.getCustomerByEmail(email);
+    if (!customer) throw new Error('No account found with this email');
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(newPassword, salt);
+    const { error } = await this.client.from('ec_customers').update({ password_hash: passwordHash, password_salt: salt }).eq('id', customer.id);
+    if (error) this.error(error);
+  }
+
+  async deleteCustomer(id: string): Promise<void> {
+    const { error } = await this.client.from('ec_customers').delete().eq('id', id);
+    if (error) this.error(error);
+  }
+
+  async listOrdersByCustomer(customerId: string): Promise<EcOrder[]> {
+    const { data, error } = await this.client.from('ec_orders').select('*').eq('customer_id', customerId).order('created_at', { ascending: false });
+    if (error) this.error(error);
+    return (data || []).map((r: any) => this.mapOrder(r));
   }
 }
 
