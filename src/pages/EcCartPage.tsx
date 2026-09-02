@@ -5,6 +5,33 @@ import { useCart } from '../context/CartContext';
 import { ecommerce } from '../db/ecommerce';
 import { EcCoupon } from '../types/ecommerce';
 
+const CartItemRow: React.FC<{
+  item: any;
+  removeItem: (productId: string, variantId?: string) => void;
+  updateQuantity: (productId: string, variantId?: string, quantity?: number) => void;
+}> = ({ item, removeItem, updateQuantity }) => (
+  <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
+    <img src={item.image || 'https://placehold.co/80x80'} alt={item.productName}
+      className="w-20 h-20 rounded-xl object-cover bg-slate-50"
+      onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/80x80?text=No+Img'; }} />
+    <div className="flex-1 space-y-1">
+      <h3 className="font-bold text-slate-900 text-sm line-clamp-1">{item.productName}</h3>
+      {item.variantId && <div className="text-xs text-slate-500">Variant: {item.attributes && Object.entries(item.attributes).map(([k, v]) => `${k}: ${v}`).join(', ')}</div>}
+      {item.sku && <div className="text-xs text-slate-400 font-mono">SKU: {item.sku}</div>}
+      <div className="flex items-center gap-2"><span className="text-sm font-bold text-indigo-600">₹{Number(item.price).toLocaleString('en-IN')}</span></div>
+    </div>
+    <div className="flex flex-col items-end gap-2">
+      <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
+        <button onClick={() => updateQuantity(item.productId, item.variantId, item.quantity - 1)} className="px-2 py-1 hover:bg-slate-50 text-slate-600"><Minus className="w-3 h-3" /></button>
+        <span className="px-2 font-bold text-sm">{item.quantity}</span>
+        <button onClick={() => updateQuantity(item.productId, item.variantId, item.quantity + 1)} disabled={item.quantity >= item.stock && item.stock > 0} className="px-2 py-1 hover:bg-slate-50 text-slate-600 disabled:opacity-50"><Plus className="w-3 h-3" /></button>
+      </div>
+      <span className="text-sm font-bold text-slate-900">₹{(item.price * item.quantity).toLocaleString('en-IN')}</span>
+      <button onClick={() => removeItem(item.productId, item.variantId)} className="p-1 text-red-500 hover:bg-red-50 rounded-lg" title="Remove from cart"><Trash2 className="w-4 h-4" /></button>
+    </div>
+  </div>
+);
+
 export const EcCartPage: React.FC = () => {
   const navigate = useNavigate();
   const { items, removeItem, updateQuantity, itemCount, subtotal } = useCart();
@@ -123,30 +150,3 @@ export const EcCartPage: React.FC = () => {
     </div>
   );
 };
-
-const CartItemRow: React.FC<{
-  item: any;
-  removeItem: (productId: string, variantId?: string) => void;
-  updateQuantity: (productId: string, variantId?: string, quantity?: number) => void;
-}> = ({ item, removeItem, updateQuantity }) => (
-  <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
-    <img src={item.image || 'https://placehold.co/80x80'} alt={item.productName}
-      className="w-20 h-20 rounded-xl object-cover bg-slate-50"
-      onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/80x80?text=No+Img'; }} />
-    <div className="flex-1 space-y-1">
-      <h3 className="font-bold text-slate-900 text-sm line-clamp-1">{item.productName}</h3>
-      {item.variantId && <div className="text-xs text-slate-500">Variant: {item.attributes && Object.entries(item.attributes).map(([k, v]) => `${k}: ${v}`).join(', ')}</div>}
-      {item.sku && <div className="text-xs text-slate-400 font-mono">SKU: {item.sku}</div>}
-      <div className="flex items-center gap-2"><span className="text-sm font-bold text-indigo-600">₹{Number(item.price).toLocaleString('en-IN')}</span></div>
-    </div>
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
-        <button onClick={() => updateQuantity(item.productId, item.variantId, item.quantity - 1)} className="px-2 py-1 hover:bg-slate-50 text-slate-600"><Minus className="w-3 h-3" /></button>
-        <span className="px-2 font-bold text-sm">{item.quantity}</span>
-        <button onClick={() => updateQuantity(item.productId, item.variantId, item.quantity + 1)} disabled={item.quantity >= item.stock && item.stock > 0} className="px-2 py-1 hover:bg-slate-50 text-slate-600 disabled:opacity-50"><Plus className="w-3 h-3" /></button>
-      </div>
-      <span className="text-sm font-bold text-slate-900">₹{(item.price * item.quantity).toLocaleString('en-IN')}</span>
-      <button onClick={() => removeItem(item.productId, item.variantId)} className="p-1 text-red-500 hover:bg-red-50 rounded-lg" title="Remove from cart"><Trash2 className="w-4 h-4" /></button>
-    </div>
-  </div>
-);

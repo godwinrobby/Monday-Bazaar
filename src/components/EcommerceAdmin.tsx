@@ -18,63 +18,6 @@ interface Props {
 
 const inputCls = 'px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white';
 
-export const EcAdmin: React.FC<Props> = ({ addToast }) => {
-  const [tab, setTab] = useState<EcTab>('products');
-  const [error, setError] = useState<string | null>(null);
-
-  const tabs: { id: EcTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'products', label: 'Products', icon: <Package className="w-4 h-4" /> },
-    { id: 'categories', label: 'Categories', icon: <Tags className="w-4 h-4" /> },
-    { id: 'brands', label: 'Brands', icon: <Award className="w-4 h-4" /> },
-    { id: 'orders', label: 'Orders', icon: <ShoppingCart className="w-4 h-4" /> },
-    { id: 'coupons', label: 'Coupons', icon: <Tag className="w-4 h-4" /> },
-    { id: 'payments', label: 'Payments', icon: <CreditCard className="w-4 h-4" /> },
-    { id: 'shipping', label: 'Shipping', icon: <Truck className="w-4 h-4" /> },
-    { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
-  ];
-
-  const renderTab = () => {
-    switch (tab) {
-      case 'products': return <ProductsPanel addToast={addToast} setError={setError} />;
-      case 'categories': return <CategoriesPanel addToast={addToast} setError={setError} />;
-      case 'brands': return <BrandsPanel addToast={addToast} setError={setError} />;
-      case 'orders': return <OrdersPanel addToast={addToast} setError={setError} />;
-      case 'coupons': return <CouponsPanel addToast={addToast} setError={setError} />;
-      case 'payments': return <PaymentsPanel addToast={addToast} setError={setError} />;
-      case 'shipping': return <ShippingPanel addToast={addToast} setError={setError} />;
-      case 'settings': return <SettingsPanel addToast={addToast} />;
-      default: return null;
-    }
-  };
-
-  return (
-    <div className="space-y-4 animate-in fade-in duration-200">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600"><Package className="w-5 h-5" /></div>
-          <div>
-            <h3 className="font-extrabold text-slate-900">E-Commerce Module</h3>
-            <p className="text-[11px] text-slate-500">Products, categories, orders, payments, shipping &amp; coupons</p>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-1.5 flex-wrap bg-white border border-slate-200 rounded-2xl p-1.5 shadow-sm">
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => { setTab(t.id); setError(null); }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${tab === t.id ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}>
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs">
-          <AlertCircle className="w-4 h-4 shrink-0" />{error}
-          <button onClick={() => setError(null)} className="ml-auto"><X className="w-3 h-3" /></button>
-        </div>
-      )}
-      {renderTab()}
-    </div>
-  );
 /* ==================== PRODUCTS PANEL ==================== */
 const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: string | null) => void }> = ({ addToast, setError }) => {
   const [products, setProducts] = useState<EcProduct[]>([]);
@@ -701,4 +644,63 @@ const SettingsPanel: React.FC<{ addToast: Props['addToast'] }> = ({ addToast }) 
     </div>
   );
 };
+
+/* ==================== ECADMIN (MAIN COMPONENT, DEFINED LAST) ==================== */
+export const EcAdmin: React.FC<Props> = ({ addToast }) => {
+  const [tab, setTab] = useState<EcTab>('products');
+  const [error, setError] = useState<string | null>(null);
+
+  const tabs: { id: EcTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'products', label: 'Products', icon: <Package className="w-4 h-4" /> },
+    { id: 'categories', label: 'Categories', icon: <Tags className="w-4 h-4" /> },
+    { id: 'brands', label: 'Brands', icon: <Award className="w-4 h-4" /> },
+    { id: 'orders', label: 'Orders', icon: <ShoppingCart className="w-4 h-4" /> },
+    { id: 'coupons', label: 'Coupons', icon: <Tag className="w-4 h-4" /> },
+    { id: 'payments', label: 'Payments', icon: <CreditCard className="w-4 h-4" /> },
+    { id: 'shipping', label: 'Shipping', icon: <Truck className="w-4 h-4" /> },
+    { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
+  ];
+
+  const renderTab = () => {
+    switch (tab) {
+      case 'products': return <ProductsPanel addToast={addToast} setError={setError} />;
+      case 'categories': return <CategoriesPanel addToast={addToast} setError={setError} />;
+      case 'brands': return <BrandsPanel addToast={addToast} setError={setError} />;
+      case 'orders': return <OrdersPanel addToast={addToast} setError={setError} />;
+      case 'coupons': return <CouponsPanel addToast={addToast} setError={setError} />;
+      case 'payments': return <PaymentsPanel addToast={addToast} setError={setError} />;
+      case 'shipping': return <ShippingPanel addToast={addToast} setError={setError} />;
+      case 'settings': return <SettingsPanel addToast={addToast} />;
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="space-y-4 animate-in fade-in duration-200">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600"><Package className="w-5 h-5" /></div>
+          <div>
+            <h3 className="font-extrabold text-slate-900">E-Commerce Module</h3>
+            <p className="text-[11px] text-slate-500">Products, categories, orders, payments, shipping &amp; coupons</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap bg-white border border-slate-200 rounded-2xl p-1.5 shadow-sm">
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => { setTab(t.id); setError(null); }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${tab === t.id ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}>
+            {t.icon}{t.label}
+          </button>
+        ))}
+      </div>
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs">
+          <AlertCircle className="w-4 h-4 shrink-0" />{error}
+          <button onClick={() => setError(null)} className="ml-auto"><X className="w-3 h-3" /></button>
+        </div>
+      )}
+      {renderTab()}
+    </div>
+  );
 };
