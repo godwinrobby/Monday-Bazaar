@@ -138,6 +138,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
         <Route path="social-autopost" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
         <Route path="affiliation" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
         <Route path="settings" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
+        <Route path="ecommerce" element={<AdminDashboard deals={deals} onAddDeal={onAddDeal} onUpdateDeal={onUpdateDeal} onDeleteDeal={onDeleteDeal} onCloseAdmin={() => navigate('/')} adminUser={adminUser} onLogout={handleLogout} />} />
       </Routes>
     </div>
   );

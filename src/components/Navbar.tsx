@@ -1,12 +1,14 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Flame, Tag, Store, Heart, Sparkles, ShoppingBag } from 'lucide-react';
+import { useCart } from '../context/CartContext';
 
 interface NavbarProps {
   savedCount: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ savedCount }) => {
+  const { itemCount } = useCart();
   const navItems = [
     {
       to: '/',
@@ -29,6 +31,17 @@ export const Navbar: React.FC<NavbarProps> = ({ savedCount }) => {
       to: '/stores',
       label: 'Stores',
       icon: <Store className="w-4 h-4 text-blue-500" />,
+    },
+    {
+      to: '/shop',
+      label: 'E-Commerce',
+      icon: <ShoppingBag className="w-4 h-4 text-indigo-500" />,
+    },
+    {
+      to: '/cart',
+      label: 'Cart',
+      icon: <ShoppingBag className="w-4 h-4 text-emerald-500" />,
+      count: itemCount,
     },
     {
       to: '/watchlist',

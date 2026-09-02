@@ -19,6 +19,15 @@ const WatchlistPage = lazy(() => import('./pages/WatchlistPage').then(m => ({ de
 const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
 
+const EcShopPage = lazy(() => import('./pages/EcShopPage').then(m => ({ default: m.EcShopPage })));
+const EcProductPage = lazy(() => import('./pages/EcProductPage').then(m => ({ default: m.EcProductPage })));
+const EcCartPage = lazy(() => import('./pages/EcCartPage').then(m => ({ default: m.EcCartPage })));
+const EcCheckoutPage = lazy(() => import('./pages/EcCheckoutPage').then(m => ({ default: m.EcCheckoutPage })));
+const EcCheckoutConfirmationPage = lazy(() => import('./pages/EcCheckoutConfirmationPage').then(m => ({ default: m.EcCheckoutConfirmationPage })));
+const EcOrdersPage = lazy(() => import('./pages/EcOrdersPage').then(m => ({ default: m.EcOrdersPage })));
+const EcOrderDetailPage = lazy(() => import('./pages/EcOrderDetailPage').then(m => ({ default: m.EcOrderDetailPage })));
+const EcTrackingPage = lazy(() => import('./pages/EcTrackingPage').then(m => ({ default: m.EcTrackingPage })));
+
 import { PriceAlertModal } from './components/PriceAlertModal';
 import { WatchlistDrawer } from './components/WatchlistDrawer';
 import { ToastContainer, ToastMessage } from './components/Toast';
@@ -477,7 +486,7 @@ export default function App() {
                 />
               }
             />
-            <Route
+                                    <Route
               path="/admin/*"
               element={
                 <AdminPage
@@ -488,6 +497,15 @@ export default function App() {
                 />
               }
             />
+            {/* E-Commerce Routes (User App) */}
+            <Route path="/shop" element={<EcShopPage />} />
+            <Route path="/shop/:id" element={<EcProductPage />} />
+            <Route path="/cart" element={<EcCartPage />} />
+            <Route path="/checkout" element={<EcCheckoutPage />} />
+            <Route path="/checkout/confirmation" element={<EcCheckoutConfirmationPage />} />
+            <Route path="/orders" element={<EcOrdersPage />} />
+            <Route path="/orders/:id" element={<EcOrderDetailPage />} />
+            <Route path="/orders/:id/track" element={<EcTrackingPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>

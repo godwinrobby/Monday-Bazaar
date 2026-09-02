@@ -46,11 +46,13 @@ import {
   LogOut,
   KeyRound,
   Lock,
-  User
+  User,
+  Package
 } from 'lucide-react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { AmazonAffiliateImporter } from './AmazonAffiliateImporter';
 import { SocialAutoPoster } from './SocialAutoPoster';
+import { EcAdmin } from './EcommerceAdmin';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { ToastContainer, ToastMessage } from './Toast';
 import { parseDealsCSV, DealCSVRow } from '../utils/csvImport';
@@ -1246,6 +1248,19 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
           </Link>
 
           <Link
+            to="/admin/ecommerce"
+            className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
+              currentTab === 'ecommerce'
+                ? 'bg-indigo-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+            }`}
+          >
+            <Package className="w-4 h-4 shrink-0 text-indigo-400" />
+            <span className="text-left flex-1">E-Commerce</span>
+            <span className="px-1.5 py-0.2 bg-indigo-500/20 text-indigo-300 rounded text-[9px] shrink-0">Module</span>
+          </Link>
+
+          <Link
             to="/admin/deals"
             className={`w-full px-3 py-2.5 font-bold text-xs flex items-center gap-2.5 rounded-xl transition-all ${
               currentTab === 'deals'
@@ -1399,6 +1414,15 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
           >
             <Layers className="w-3 h-3" />
             <span>Categories</span>
+          </Link>
+          <Link
+            to="/admin/ecommerce"
+            className={`px-3 py-1.5 font-bold text-[10px] flex items-center gap-1.5 rounded-lg whitespace-nowrap ${
+              currentTab === 'ecommerce' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Package className="w-3 h-3" />
+            <span>E-Commerce</span>
           </Link>
           <Link
             to="/admin/deals"
@@ -1954,6 +1978,13 @@ CREATE POLICY "Public deal_views access" ON public.deal_views FOR ALL USING (tru
           <SocialAutoPoster
             deals={deals}
             addToast={addToast}
+          />
+        )}
+
+        {/* ==================== TAB: E-COMMERCE MODULE ==================== */}
+        {currentTab === 'ecommerce' && (
+          <EcAdmin
+            addToast={(msg, type) => addToast({ type: type || 'info', title: msg, message: msg })}
           />
         )}
 

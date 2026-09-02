@@ -20,7 +20,7 @@
       "aiScore": 96,
       "aiVerdict": "Rare 27% price collapse on flagship iPhone 15. Historical lowest recorded price with additional HDFC card discount.",
       "aiPros": [
-        "Flat \u20b95,000 SBI/HDFC Card Discount",
+        "Flat ₹5,000 SBI/HDFC Card Discount",
         "Type-C Port & Dynamic Island",
         "Highest resale value"
       ],
@@ -162,7 +162,7 @@
       "upvotes": 890,
       "downvotes": 45,
       "aiScore": 91,
-      "aiVerdict": "Loot Deal! True wireless ANC earbuds under \u20b91,300 with 42 hours battery.",
+      "aiVerdict": "Loot Deal! True wireless ANC earbuds under ₹1,300 with 42 hours battery.",
       "aiPros": [
         "Massive 71% discount",
         "Active Noise Cancellation included",
@@ -493,10 +493,31 @@
       "notes": "Apple Performance Network"
     }
   },
+  "categories": [
+    "Mobiles & Tablets",
+    "Electronics & Laptops",
+    "Audio & Headphones",
+    "Fashion & Apparel",
+    "Home & Kitchen",
+    "Gaming & Accessories",
+    "Beauty & Grooming",
+    "Smartwatches"
+  ],
   "stats": {
     "totalClicks": 1250,
     "totalViews": 4500,
     "totalSavingsGenerated": 485000,
     "updatedAt": "2026-08-19T15:21:31.362Z"
+  },
+  "socialConfig": {
+    "facebookEnabled": false,
+    "facebookPageId": "10123456789012",
+    "facebookAccessToken": "",
+    "instagramEnabled": false,
+    "instagramAccountId": "17841400012345678",
+    "instagramAccessToken": "",
+    "autoPostOnNewDeal": false,
+    "autoPostLootOnly": false,
+    "postTemplate": ""
   }
 }
