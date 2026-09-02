@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Package, Tags, Award, ShoppingCart, Tag, CreditCard, Truck, Settings,
   Plus, Search, Edit2, Trash2, X, Star, RefreshCw, Eye,
-  AlertCircle, Save, PackagePlus, ClipboardList,
+  AlertCircle, Save, PackagePlus, ClipboardList, Store, BarChart3, Boxes, Layers, ExternalLink, Check,
 } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
 import {
@@ -10,7 +10,7 @@ import {
   EcPaymentMethod, EcShippingMethod, EcProductType, EcOrderStatus,
 } from '../types/ecommerce';
 
-type EcTab = 'products' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'settings';
+type EcTab = 'products' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'settings';
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -645,6 +645,229 @@ const SettingsPanel: React.FC<{ addToast: Props['addToast'] }> = ({ addToast }) 
   );
 };
 
+/* ==================== SHOP MANAGEMENT PANEL ==================== */
+const ShopPanel: React.FC<{ addToast: Props['addToast']; setError: (s: string | null) => void }> = ({ addToast, setError }) => {
+  const [products, setProducts] = useState<EcProduct[]>([]);
+  const [variants, setVariants] = useState<EcVariant[]>([]);
+  const [categories, setCategories] = useState<EcCategory[]>([]);
+  const [brands, setBrands] = useState<EcBrand[]>([]);
+  const [orders, setOrders] = useState<EcOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [pr, v, c, b, o] = await Promise.all([
+        ecommerce.listProducts(),
+        ecommerce.listVariants(),
+        ecommerce.listCategories(),
+        ecommerce.listBrands(),
+        ecommerce.listOrders(),
+      ]);
+      setProducts(pr); setVariants(v); setCategories(c); setBrands(b); setOrders(o);
+    } catch (e: any) { setError(e.message); } finally { setLoading(false); }
+  }, [setError]);
+  useEffect(() => { load(); }, [load]);
+
+  const catMap = useMemo(() => new Map(categories.map(c => [c.id, c.name])), [categories]);
+  const brandMap = useMemo(() => new Map(brands.map(b => [b.id, b.name])), [brands]);
+
+  const variantsByProduct = useMemo(() => {
+    const map = new Map<string, EcVariant[]>();
+    for (const v of variants) { const arr = map.get(v.product_id) || []; arr.push(v); map.set(v.product_id, arr); }
+    return map;
+  }, [variants]);
+
+  const effectiveStock = (p: EcProduct): number => {
+    if (p.product_type === 'variable') {
+      const vs = variantsByProduct.get(p.id) || [];
+      return vs.reduce((acc, v) => acc + (v.stock || 0), 0);
+    }
+    return p.stock || 0;
+  };
+
+  const effectivePrice = (p: EcProduct): number => {
+    if (p.product_type === 'variable') {
+      const vs = variantsByProduct.get(p.id) || [];
+      const arr = vs.map(v => v.sale_price ?? v.price).filter(Number.isFinite);
+      if (arr.length) return Math.min(...arr);
+    }
+    return p.sale_price ?? p.price;
+  };
+
+  const stats = useMemo(() => {
+    const total = products.length;
+    const active = products.filter(p => p.is_active !== false).length;
+    const inactive = total - active;
+    const variable = products.filter(p => p.product_type === 'variable').length;
+    const simple = total - variable;
+    const outOfStock = products.filter(p => effectiveStock(p) <= 0).length;
+    const lowStock = products.filter(p => { const s = effectiveStock(p); return s > 0 && s <= 10; }).length;
+    const inventoryValue = products.reduce((acc, p) => acc + (effectiveStock(p) * effectivePrice(p)), 0);
+    const totalOrders = orders.length;
+    const revenue = orders.reduce((acc, o) => acc + (o.total || 0), 0);
+    return { total, active, inactive, variable, simple, outOfStock, lowStock, inventoryValue, totalOrders, revenue };
+  }, [products, variantsByProduct, orders]);
+
+  const toggleActive = async (p: EcProduct) => {
+    setSavingId(p.id);
+    try {
+      await ecommerce.saveProduct({ ...p, is_active: !(p.is_active !== false) });
+      addToast(p.is_active !== false ? 'Product deactivated' : 'Product activated', 'success');
+      await load();
+    } catch (e: any) { addToast(e.message, 'error'); } finally { setSavingId(null); }
+  };
+
+  const toggleFeatured = async (p: EcProduct) => {
+    setSavingId(p.id);
+    try {
+      await ecommerce.saveProduct({ ...p, featured: !p.featured });
+      addToast(p.featured ? 'Removed from featured' : 'Marked as featured', 'success');
+      await load();
+    } catch (e: any) { addToast(e.message, 'error'); } finally { setSavingId(null); }
+  };
+
+  const filtered = products.filter(p => {
+    const term = search.toLowerCase();
+    const matchesTerm = !term || (p.name || '').toLowerCase().includes(term) || (p.sku || '').toLowerCase().includes(term);
+    const matchesType = !typeFilter || p.product_type === typeFilter;
+    const matchesStatus = !statusFilter ? true : statusFilter === 'active' ? p.is_active !== false : p.is_active === false;
+    return matchesTerm && matchesType && matchesStatus;
+  });
+
+  const statCards = [
+    { label: 'Total Products', value: stats.total, icon: <Boxes className="w-5 h-5 text-indigo-500" /> },
+    { label: 'Active', value: stats.active, icon: <Check className="w-5 h-5 text-emerald-500" />, sub: `${stats.inactive} inactive` },
+    { label: 'Variable', value: stats.variable, icon: <Layers className="w-5 h-5 text-purple-500" />, sub: `${stats.simple} simple` },
+    { label: 'Out of Stock', value: stats.outOfStock, icon: <X className="w-5 h-5 text-red-500" />, sub: `${stats.lowStock} low stock` },
+    { label: 'Inventory Value', value: `₹${stats.inventoryValue.toLocaleString('en-IN')}`, icon: <BarChart3 className="w-5 h-5 text-amber-500" /> },
+    { label: 'Orders', value: stats.totalOrders, icon: <ShoppingCart className="w-5 h-5 text-blue-500" />, sub: `₹${stats.revenue.toLocaleString('en-IN')} revenue` },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h4 className="font-extrabold text-slate-900 flex items-center gap-2"><Store className="w-5 h-5 text-indigo-500" /> Shop Management</h4>
+          <p className="text-[11px] text-slate-500">Monitor &amp; manage storefront products, stock and status. Fully synced with the user-facing Shop.</p>
+        </div>
+        <a href="/shop" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50 shadow-sm"><ExternalLink className="w-4 h-4" /> View Storefront</a>
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {statCards.map(c => (
+          <div key={c.label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-slate-50 shrink-0">{c.icon}</div>
+            <div className="min-w-0">
+              <div className="text-lg font-black text-slate-900 truncate">{c.value}</div>
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{c.label}</div>
+              {c.sub && <div className="text-[10px] text-slate-400 truncate">{c.sub}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Category / Brand breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <h5 className="font-extrabold text-slate-900 text-sm mb-3 flex items-center gap-1.5"><Tags className="w-4 h-4 text-indigo-500" /> Category Breakdown</h5>
+          <div className="space-y-2">
+            {categories.length === 0 && <p className="text-xs text-slate-400">No categories yet.</p>}
+            {categories.map(c => {
+              const count = products.filter(p => p.category_id === c.id).length;
+              const pct = products.length ? Math.round((count / products.length) * 100) : 0;
+              return (
+                <div key={c.id}>
+                  <div className="flex items-center justify-between text-xs mb-0.5">
+                    <span className="font-bold text-slate-700">{c.name}</span>
+                    <span className="text-slate-500">{count}</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }}></div></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <h5 className="font-extrabold text-slate-900 text-sm mb-3 flex items-center gap-1.5"><Award className="w-4 h-4 text-amber-500" /> Brand Breakdown</h5>
+          <div className="space-y-2">
+            {brands.length === 0 && <p className="text-xs text-slate-400">No brands yet.</p>}
+            {brands.map(b => {
+              const count = products.filter(p => p.brand_id === b.id).length;
+              const pct = products.length ? Math.round((count / products.length) * 100) : 0;
+              return (
+                <div key={b.id}>
+                  <div className="flex items-center justify-between text-xs mb-0.5">
+                    <span className="font-bold text-slate-700">{b.name}</span>
+                    <span className="text-slate-500">{count}</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-amber-500 rounded-full" style={{ width: `${pct}%` }}></div></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Product monitor */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-3 border-b border-slate-100 flex flex-col sm:flex-row gap-2 sm:items-center">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or SKU..." className="pl-9 pr-3 py-2 w-full border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          </div>
+          <div className="flex items-center gap-2">
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className={`${inputCls} !py-2`}><option value="">All Types</option><option value="simple">Simple</option><option value="variable">Variable</option></select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={`${inputCls} !py-2`}><option value="">All Status</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+          </div>
+        </div>
+        {loading ? (
+          <div className="p-10 text-center text-slate-400 text-xs"><RefreshCw className="w-5 h-5 mx-auto animate-spin mb-2" />Loading shop data…</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                <tr><th className="text-left p-3 font-bold">Product</th><th className="text-left p-3 font-bold">Category</th><th className="text-left p-3 font-bold">Type</th><th className="text-right p-3 font-bold">Price</th><th className="text-right p-3 font-bold">Stock</th><th className="text-left p-3 font-bold">Status</th><th className="text-center p-3 font-bold">Featured</th><th className="text-right p-3 font-bold">Store</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map(p => (
+                  <tr key={p.id} className="hover:bg-slate-50/60">
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <img src={p.images?.[0] || 'https://placehold.co/32x32'} alt="" className="w-8 h-8 rounded-lg object-cover bg-slate-100 flex-shrink-0" onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/32x32'; }} />
+                        <div className="min-w-0"><div className="font-bold text-slate-900 line-clamp-1 max-w-[220px]">{p.name}</div>{p.sku && <div className="text-[10px] text-slate-400 font-mono">{p.sku}</div>}</div>
+                      </div>
+                    </td>
+                    <td className="p-3 text-slate-500">{catMap.get(p.category_id || '') || '—'}</td>
+                    <td className="p-3"><span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${p.product_type === 'variable' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>{p.product_type}</span></td>
+                    <td className="p-3 text-right font-bold text-slate-900">₹{Number(effectivePrice(p)).toLocaleString('en-IN')}</td>
+                    <td className="p-3 text-right"><span className={`font-bold ${effectiveStock(p) <= 0 ? 'text-red-500' : effectiveStock(p) <= 10 ? 'text-amber-500' : 'text-emerald-600'}`}>{effectiveStock(p)}</span></td>
+                    <td className="p-3">
+                      <button onClick={() => toggleActive(p)} disabled={savingId === p.id} className={`px-2 py-0.5 rounded-full font-bold text-[10px] transition-colors ${p.is_active !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>{p.is_active !== false ? 'Active' : 'Inactive'}</button>
+                    </td>
+                    <td className="p-3 text-center">
+                      <button onClick={() => toggleFeatured(p)} disabled={savingId === p.id} title="Toggle featured" className={`p-1 rounded-lg transition-colors ${p.featured ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500'}`}><Star className={`w-4 h-4 ${p.featured ? 'fill-amber-400' : ''}`} /></button>
+                    </td>
+                    <td className="p-3"><div className="flex justify-end gap-1.5">
+                      <a href={`/shop/${p.id}`} target="_blank" rel="noreferrer" title="View in store" className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"><ExternalLink className="w-4 h-4" /></a>
+                    </div></td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-slate-400">No products match your filters.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 /* ==================== ECADMIN (MAIN COMPONENT, DEFINED LAST) ==================== */
 export const EcAdmin: React.FC<Props> = ({ addToast }) => {
   const [tab, setTab] = useState<EcTab>('products');
@@ -658,6 +881,7 @@ export const EcAdmin: React.FC<Props> = ({ addToast }) => {
     { id: 'coupons', label: 'Coupons', icon: <Tag className="w-4 h-4" /> },
     { id: 'payments', label: 'Payments', icon: <CreditCard className="w-4 h-4" /> },
     { id: 'shipping', label: 'Shipping', icon: <Truck className="w-4 h-4" /> },
+    { id: 'shop', label: 'Shop', icon: <Store className="w-4 h-4" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
   ];
 
@@ -670,6 +894,7 @@ export const EcAdmin: React.FC<Props> = ({ addToast }) => {
       case 'coupons': return <CouponsPanel addToast={addToast} setError={setError} />;
       case 'payments': return <PaymentsPanel addToast={addToast} setError={setError} />;
       case 'shipping': return <ShippingPanel addToast={addToast} setError={setError} />;
+      case 'shop': return <ShopPanel addToast={addToast} setError={setError} />;
       case 'settings': return <SettingsPanel addToast={addToast} />;
       default: return null;
     }
