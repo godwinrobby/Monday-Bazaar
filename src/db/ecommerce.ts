@@ -11,11 +11,16 @@ import { generateSalt, hashPassword, verifyPassword } from '../utils/auth';
 
 class SupabaseEcommerce {
   client: SupabaseClient;
+  private storageUrl: string;
+  private storageKey: string;
+  private uploadCache = new Map<string, string>();
 
   constructor() {
     const url = (typeof process !== 'undefined' && process.env?.SUPABASE_URL) || 'https://pmvnyxpyypifneqojlqq.supabase.co';
     const key = (typeof process !== 'undefined' && (process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY)) || 'sb_publishable_QdwxI3KvRW5Ro-vY5XPuQg_Cg4mLVdD';
     this.client = createClient(String(url).trim(), String(key).trim(), { auth: { persistSession: false } });
+    this.storageUrl = String(url).trim();
+    this.storageKey = String(key).trim();
   }
 
   private error(e: any): never {
@@ -33,10 +38,14 @@ class SupabaseEcommerce {
   }
 
   private mapVariant(r: any): EcVariant {
+    const images: string[] = Array.isArray(r.images)
+      ? r.images
+      : (r.image ? [r.image] : []);
     return {
       id: r.id, product_id: r.product_id, sku: r.sku, price: Number(r.price || 0),
       sale_price: r.sale_price != null ? Number(r.sale_price) : null, stock: Number(r.stock || 0),
-      attributes: r.attributes || {}, image: r.image, is_active: r.is_active !== false,
+      attributes: r.attributes || {}, image: r.image || (images[0] || ''),
+      images, is_active: r.is_active !== false,
     };
   }
 
@@ -105,6 +114,88 @@ class SupabaseEcommerce {
     return { rows: (data || []).map(map), total: count ?? 0 };
   }
 
+  /* ==================== IMAGE UPLOAD / STORAGE ==================== */
+
+  private readonly IMAGE_BUCKET = 'ecommerce-images';
+  private readonly MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB, mirrors bucket policy
+  private readonly ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
+
+  /** Resolve a public URL for a path inside the ecommerce-images bucket. */
+  imagePublicUrl(path: string): string {
+    return `${this.storageUrl}/storage/v1/object/public/${this.IMAGE_BUCKET}/${path}`;
+  }
+
+  /**
+   * Upload a single image to the ecommerce-images bucket. Reports byte-level
+   * upload progress via `onProgress` (0-100) and validates type/size before the
+   * request is sent. Returns the public URL of the uploaded file. Never stores
+   * raw base64 — only a storage reference URL is returned to the caller.
+   */
+  uploadImage(file: File, folder: string, onProgress?: (pct: number) => void): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!this.ALLOWED_TYPES.includes(file.type)) {
+        reject(new Error('Unsupported image type. Use JPG, PNG, WEBP, GIF or AVIF.'));
+        return;
+      }
+      if (file.size > this.MAX_FILE_BYTES) {
+        reject(new Error(`Image is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max 10 MB.`));
+        return;
+      }
+
+      const sanitized = file.name.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
+      const path = `${folder}/${Date.now()}_${sanitized}`;
+      const url = `${this.storageUrl}/storage/v1/object/${this.IMAGE_BUCKET}/${path}`;
+
+      const form = new FormData();
+      form.append("cacheControl", "3600");
+      form.append("", file);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.setRequestHeader("Authorization", `Bearer ${this.storageKey}`);
+      xhr.setRequestHeader("apikey", this.storageKey);
+      xhr.withCredentials = false;
+
+      let settled = false;
+      const done = () => { if (settled) return; settled = true; };
+
+      xhr.upload.onprogress = (e: ProgressEvent) => {
+        if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded * 100) / e.total));
+      };
+      xhr.upload.onerror = () => { done(); reject(new Error('Upload failed — network error.')); };
+      xhr.onerror = () => { done(); reject(new Error('Upload failed — network error.')); };
+
+      xhr.onload = () => {
+        done();
+        let resp: any = {};
+        try { resp = JSON.parse(xhr.responseText); } catch { /* ignore parse */ }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const pub = this.imagePublicUrl(path);
+          this.uploadCache.set(sanitized, pub);
+          if (onProgress) onProgress(100);
+          resolve(pub);
+        } else {
+          let msg = `Upload failed (HTTP ${xhr.status}).`;
+          try { msg = resp?.error?.message || resp?.message || msg; } catch { /* ignore */ }
+          reject(new Error(msg));
+        }
+      };
+
+      xhr.send(form);
+    });
+  }
+
+  /** Remove a previously uploaded image from the bucket (public path or storage path). */
+  async deleteImage(imageUrl: string): Promise<void> {
+    const clean = imageUrl.replace(/.*\?.*$/, '').replace(/\/$/, '');
+    const suffix = `/${this.IMAGE_BUCKET}/`;
+    const idx = clean.indexOf(suffix);
+    if (idx === -1) return; // external URL — nothing to delete from our bucket
+    const path = clean.slice(idx + suffix.length);
+    const { error } = await this.client.storage.from(this.IMAGE_BUCKET).remove([path]);
+    if (error) this.error(error);
+  }
+
   async listProducts(): Promise<EcProduct[]> {
     const { data, error } = await this.client.from('ec_products').select('*').order('created_at', { ascending: false });
     if (error) this.error(error);
@@ -165,6 +256,7 @@ class SupabaseEcommerce {
   }
 
   async saveVariant(v: EcVariant): Promise<void> {
+    const images = Array.isArray(v.images) ? v.images : (v.image ? [v.image] : []);
     const { error } = await this.client.from('ec_variants').upsert({
       id: v.id || `ec-var-${Date.now()}`,
       product_id: v.product_id,
@@ -173,7 +265,8 @@ class SupabaseEcommerce {
       sale_price: v.sale_price,
       stock: v.stock,
       attributes: v.attributes || {},
-      image: v.image || '',
+      image: v.image || (images[0] || ''),
+      images,
       is_active: v.is_active !== false,
     }, { onConflict: 'id' });
     if (error) this.error(error);

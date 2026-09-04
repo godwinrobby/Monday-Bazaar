@@ -15,6 +15,7 @@ import { ProductCsvImport } from './ProductCsvImport';
 import { ProductDeleteModal } from './ProductDeleteModal';
 import { Pagination } from './Pagination';
 import { FormDrawer } from './FormDrawer';
+import { ImageUploader } from './ImageUploader';
 
 type EcTab = 'products' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
 
@@ -85,7 +86,12 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
     if (showImport) ecommerce.listProducts().then(setImportCheckProducts).catch(() => { /* non-fatal */ });
   }, [showImport]);
 
-  const openNew = () => { setEditId(null); setShowVariants(false); setForm({ id: '', name: '', product_type: 'simple', price: 0, stock: 0, is_active: true, images: [] }); setVariants([]); setShowForm(true); };
+  const openNew = () => {
+    const newId = `ec-prod-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setEditId(null); setShowVariants(false);
+    setForm({ id: newId, name: '', product_type: 'simple', price: 0, stock: 0, is_active: true, images: [] });
+    setVariants([]); setShowForm(true);
+  };
 
   const openEdit = async (p: EcProduct) => {
     setEditId(p.id); setForm(p); setShowVariants(p.product_type === 'variable'); setShowForm(true);
@@ -206,22 +212,43 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
           )}
         </div>
         <textarea value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} placeholder="Description" className={`${inputCls} w-full`} />
-        <input value={(form.images || []).join(', ')} onChange={e => setForm({ ...form, images: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} placeholder="Image URLs (comma separated)" className={`${inputCls} w-full`} />
+        <ImageUploader
+          value={form.images || []}
+          onChange={(imgs) => setForm({ ...form, images: imgs })}
+          folder={`products/${editId || form.id || 'unknown'}`}
+          maxFiles={12}
+          label="Product Images"
+          placeholder="Upload product images or drag & drop"
+        />
         {showVariants && (
-          <div className="border border-slate-100 rounded-xl bg-slate-50 p-3 space-y-2">
+          <div className="border border-slate-100 rounded-xl bg-slate-50 p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <h5 className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-indigo-500" /> Variants (SKU, price, stock, attributes, image)</h5>
-              <button type="button" onClick={() => setVariants([...variants, { id: '', product_id: editId || form.id || '', sku: '', price: 0, sale_price: null, stock: 0, attributes: {}, image: '', is_active: true }])} className="flex items-center gap-1 text-[11px] font-bold text-indigo-600"><Plus className="w-3.5 h-3.5" /> Add Variant</button>
+              <h5 className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-indigo-500" /> Variants (SKU, price, stock, attributes, images)</h5>
+              <button type="button" onClick={() => setVariants([...variants, { id: '', product_id: editId || form.id || '', sku: '', price: 0, sale_price: null, stock: 0, attributes: {}, image: '', images: [], is_active: true }])} className="flex items-center gap-1 text-[11px] font-bold text-indigo-600"><Plus className="w-3.5 h-3.5" /> Add Variant</button>
             </div>
             {variants.length === 0 && <p className="text-[11px] text-slate-400">No variants yet — add at least one for a variable product.</p>}
             {variants.map((v, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-center bg-white border border-slate-200 rounded-lg p-2">
-                <input value={v.sku || ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sku: e.target.value }; setVariants(vv); }} placeholder="SKU" className={`${inputCls} col-span-12 sm:col-span-3`} />
-                <input type="number" value={v.price || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], price: Number(e.target.value) }; setVariants(vv); }} placeholder="Price" className={`${inputCls} col-span-4 sm:col-span-2`} />
-                <input type="number" value={v.sale_price ?? ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sale_price: e.target.value ? Number(e.target.value) : null }; setVariants(vv); }} placeholder="Sale" className={`${inputCls} col-span-4 sm:col-span-2`} />
-                <input type="number" value={v.stock || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], stock: Number(e.target.value) }; setVariants(vv); }} placeholder="Stock" className={`${inputCls} col-span-4 sm:col-span-2`} />
-                <input value={Object.entries(v.attributes || {}).map(([k, val]) => `${k}:${val}`).join(', ')} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], attributes: Object.fromEntries(e.target.value.split(',').map(s => s.trim()).filter(Boolean).map(part => { const [k, ...rest] = part.split(':'); return [k, rest.join(':')]; })) }; setVariants(vv); }} placeholder="color:Black, size:UK 9" className={`${inputCls} col-span-10 sm:col-span-2`} />
-                <button type="button" onClick={() => setVariants(variants.filter((_, x) => x !== i))} className="col-span-2 sm:col-span-1 text-red-500 hover:text-red-700 justify-self-end"><Trash2 className="w-4 h-4" /></button>
+              <div key={i} className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2 items-end">
+                  <input value={v.sku || ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sku: e.target.value }; setVariants(vv); }} placeholder="SKU" className={`${inputCls} col-span-1 sm:col-span-2`} />
+                  <input type="number" value={v.price || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], price: Number(e.target.value) }; setVariants(vv); }} placeholder="Price" className={`${inputCls} col-span-2`} />
+                  <input type="number" value={v.sale_price ?? ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sale_price: e.target.value ? Number(e.target.value) : null }; setVariants(vv); }} placeholder="Sale" className={`${inputCls} col-span-2`} />
+                  <input type="number" value={v.stock || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], stock: Number(e.target.value) }; setVariants(vv); }} placeholder="Stock" className={`${inputCls} col-span-2`} />
+                  <input value={Object.entries(v.attributes || {}).map(([k, val]) => `${k}:${val}`).join(', ')} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], attributes: Object.fromEntries(e.target.value.split(',').map(s => s.trim()).filter(Boolean).map(part => { const [k, ...rest] = part.split(':'); return [k, rest.join(':')]; })) }; setVariants(vv); }} placeholder="color:Black, size:UK 9" className={`${inputCls} col-span-2`} />
+                  <button type="button" onClick={() => setVariants(variants.filter((_, x) => x !== i))} className="col-span-1 md:col-span-6 text-red-500 hover:text-red-700 font-bold text-[11px] justify-start"><Trash2 className="w-4 h-4 inline-block mr-1" /> Remove variant</button>
+                </div>
+                <ImageUploader
+                  value={(v.images && v.images.length ? v.images : (v.image ? [v.image] : []))}
+                  onChange={(imgs) => {
+                    const vv = [...variants];
+                    vv[i] = { ...vv[i], images: imgs, image: imgs[0] || '' };
+                    setVariants(vv);
+                  }}
+                  folder={`variants/${editId || form.id || 'unknown'}`}
+                  maxFiles={8}
+                  label={`Variant #${i + 1} Images`}
+                  placeholder="Upload variant images or drag & drop"
+                />
               </div>
             ))}
           </div>

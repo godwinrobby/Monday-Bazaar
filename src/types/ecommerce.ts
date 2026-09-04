@@ -51,6 +51,7 @@ export interface EcVariant {
   stock: number;
   attributes?: Record<string, string>;
   image?: string;
+  images?: string[];
   is_active?: boolean;
 }
 
