@@ -4,12 +4,14 @@ import {
   Plus, Search, Edit2, Trash2, X, Star, RefreshCw, Eye,
   AlertCircle, Save, PackagePlus, ClipboardList, Store, BarChart3, Boxes, Layers, ExternalLink, Check,
   Users, UserCheck, UserX, Mail, Phone, MapPin, KeyRound, Calendar, ExternalLink as ExtLink, ChevronRight,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
 import {
   EcProduct, EcCategory, EcBrand, EcVariant, EcOrder, EcCoupon, EcCustomer,
   EcPaymentMethod, EcShippingMethod, EcProductType, EcOrderStatus,
 } from '../types/ecommerce';
+import { ProductCsvImport } from './ProductCsvImport';
 
 type EcTab = 'products' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
 
@@ -27,6 +29,7 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [showVariants, setShowVariants] = useState(false);
   const [form, setForm] = useState<EcProduct>({ id: '', name: '', product_type: 'simple', price: 0, stock: 0, is_active: true, images: [] });
@@ -81,7 +84,17 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search products..." className="pl-9 pr-3 py-2 w-full border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
         </div>
         <button onClick={openNew} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl hover:bg-indigo-600 transition-colors shadow-sm"><Plus className="w-4 h-4" /> Add Product</button>
+        <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-colors shadow-sm"><FileSpreadsheet className="w-4 h-4" /> Import CSV</button>
       </div>
+      <ProductCsvImport
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        categories={categories}
+        brands={brands}
+        existingProducts={products}
+        addToast={addToast}
+        onImported={() => { setShowImport(false); load(); }}
+      />
 {showForm && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-4 animate-in fade-in duration-200">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">

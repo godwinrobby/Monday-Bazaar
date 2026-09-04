@@ -129,6 +129,11 @@ class SupabaseEcommerce {
     if (error) this.error(error);
   }
 
+  async deleteVariantsByProduct(productId: string): Promise<void> {
+    const { error } = await this.client.from('ec_variants').delete().eq('product_id', productId);
+    if (error) this.error(error);
+  }
+
   async listCategories(): Promise<EcCategory[]> {
     const { data, error } = await this.client.from('ec_categories').select('*').order('sort_order');
     if (error) this.error(error);
