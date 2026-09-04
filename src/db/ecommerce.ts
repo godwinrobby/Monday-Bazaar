@@ -63,10 +63,65 @@ class SupabaseEcommerce {
     };
   }
 
+  private mapCustomerPublic(r: any): EcCustomer {
+    const c = this.mapCustomer(r);
+    delete (c as any).password_hash;
+    delete (c as any).password_salt;
+    return c;
+  }
+
+  /**
+   * Server-side paged query using PostgREST range + exact count. Returns the
+   * requested page and the total number of matching rows so the UI can render
+   * pagination controls. Filters, search (ILIKE across columns) and ordering
+   * are all applied on the server/database so large datasets perform well.
+   */
+  private async paged<T>(
+    table: string,
+    opts: {
+      page: number;
+      perPage: number;
+      search?: string;
+      searchColumns?: string[];
+      filters?: Record<string, string | boolean | number>;
+      orderBy?: string;
+      orderDir?: 'asc' | 'desc';
+    },
+    map: (r: any) => T,
+  ): Promise<{ rows: T[]; total: number }> {
+    const start = (opts.page - 1) * opts.perPage;
+    let q = this.client.from(table).select('*', { count: 'exact' });
+    if (opts.search && opts.searchColumns?.length) {
+      const orClause = opts.searchColumns.map(c => `${c}.ilike.%${opts.search}%`).join(',');
+      q = q.or(orClause);
+    }
+    for (const [k, v] of Object.entries(opts.filters || {})) {
+      if (v !== undefined && v !== null && v !== '') q = q.eq(k, v);
+    }
+    if (opts.orderBy) q = q.order(opts.orderBy, { ascending: (opts.orderDir || 'asc') === 'asc' });
+    q = q.range(start, start + opts.perPage - 1);
+    const { data, count, error } = await q;
+    if (error) this.error(error);
+    return { rows: (data || []).map(map), total: count ?? 0 };
+  }
+
   async listProducts(): Promise<EcProduct[]> {
     const { data, error } = await this.client.from('ec_products').select('*').order('created_at', { ascending: false });
     if (error) this.error(error);
     return (data || []).map((r: any) => this.mapProduct(r));
+  }
+
+  async listProductsPaged(o: { page?: number; perPage?: number; search?: string; category_id?: string; brand_id?: string; product_type?: string; status?: string; orderBy?: string; orderDir?: 'asc' | 'desc' }): Promise<{ rows: EcProduct[]; total: number }> {
+    const filters: Record<string, string | boolean> = {};
+    if (o.category_id) filters.category_id = o.category_id;
+    if (o.brand_id) filters.brand_id = o.brand_id;
+    if (o.product_type) filters.product_type = o.product_type;
+    if (o.status === 'active') filters.is_active = true;
+    else if (o.status === 'inactive') filters.is_active = false;
+    return this.paged('ec_products', {
+      page: o.page || 1, perPage: o.perPage || 10, search: o.search,
+      searchColumns: ['name', 'sku'], filters, orderBy: o.orderBy || 'created_at', orderDir: o.orderDir || 'desc',
+    }, this.mapProduct);
   }
 
   async getProduct(id: string): Promise<EcProduct | null> {
@@ -143,6 +198,19 @@ class SupabaseEcommerce {
     }));
   }
 
+  async listCategoriesPaged(o: { page?: number; perPage?: number; search?: string; status?: string }): Promise<{ rows: EcCategory[]; total: number }> {
+    const filters: Record<string, boolean> = {};
+    if (o.status === 'active') filters.is_active = true;
+    else if (o.status === 'inactive') filters.is_active = false;
+    return this.paged('ec_categories', {
+      page: o.page || 1, perPage: o.perPage || 10, search: o.search, searchColumns: ['name'],
+      filters, orderBy: 'sort_order', orderDir: 'asc',
+    }, (r: any) => ({
+      id: r.id, name: r.name, slug: r.slug, parent_id: r.parent_id, image: r.image,
+      sort_order: r.sort_order, is_active: r.is_active !== false,
+    }));
+  }
+
   async saveCategory(c: EcCategory): Promise<void> {
     const { error } = await this.client.from('ec_categories').upsert({
       id: c.id || `ec-cat-${Date.now()}`,
@@ -169,6 +237,18 @@ class SupabaseEcommerce {
     }));
   }
 
+  async listBrandsPaged(o: { page?: number; perPage?: number; search?: string; status?: string }): Promise<{ rows: EcBrand[]; total: number }> {
+    const filters: Record<string, boolean> = {};
+    if (o.status === 'active') filters.is_active = true;
+    else if (o.status === 'inactive') filters.is_active = false;
+    return this.paged('ec_brands', {
+      page: o.page || 1, perPage: o.perPage || 10, search: o.search, searchColumns: ['name'],
+      filters, orderBy: 'name', orderDir: 'asc',
+    }, (r: any) => ({
+      id: r.id, name: r.name, slug: r.slug, logo: r.logo, description: r.description, is_active: r.is_active !== false,
+    }));
+  }
+
   async saveBrand(b: EcBrand): Promise<void> {
     const { error } = await this.client.from('ec_brands').upsert({
       id: b.id || `ec-brand-${Date.now()}`,
@@ -188,6 +268,17 @@ class SupabaseEcommerce {
     const { data, error } = await this.client.from('ec_orders').select('*').order('created_at', { ascending: false });
     if (error) this.error(error);
     return (data || []).map((r: any) => this.mapOrder(r));
+  }
+
+  async listOrdersPaged(o: { page?: number; perPage?: number; search?: string; status?: string; payment_status?: string; orderBy?: string; orderDir?: 'asc' | 'desc' }): Promise<{ rows: EcOrder[]; total: number }> {
+    const filters: Record<string, string> = {};
+    if (o.status) filters.status = o.status;
+    if (o.payment_status) filters.payment_status = o.payment_status;
+    return this.paged('ec_orders', {
+      page: o.page || 1, perPage: o.perPage || 10, search: o.search,
+      searchColumns: ['order_number', 'customer_name', 'customer_email'], filters,
+      orderBy: o.orderBy || 'created_at', orderDir: o.orderDir || 'desc',
+    }, this.mapOrder);
   }
 
   async getOrder(id: string): Promise<EcOrder | null> {
@@ -279,6 +370,19 @@ class SupabaseEcommerce {
     }));
   }
 
+  async listShippingMethodsPaged(o: { page?: number; perPage?: number; search?: string; status?: string }): Promise<{ rows: EcShippingMethod[]; total: number }> {
+    const filters: Record<string, string> = {};
+    if (o.status === 'active') filters.enabled = 'true';
+    else if (o.status === 'inactive') filters.enabled = 'false';
+    return this.paged('ec_shipping_methods', {
+      page: o.page || 1, perPage: o.perPage || 10, search: o.search, searchColumns: ['name'],
+      filters, orderBy: 'sort_order', orderDir: 'asc',
+    }, (r: any) => ({
+      id: r.id, name: r.name, charge: Number(r.charge || 0), min_order_free: Number(r.min_order_free || 0),
+      estimated_days: r.estimated_days, enabled: r.enabled !== false, sort_order: r.sort_order,
+    }));
+  }
+
   async saveShippingMethod(s: EcShippingMethod): Promise<void> {
     const { error } = await this.client.from('ec_shipping_methods').upsert({
       id: s.id || `ec-ship-${Date.now()}`, name: s.name, charge: s.charge,
@@ -296,6 +400,18 @@ class SupabaseEcommerce {
     }));
   }
 
+  async listPaymentMethodsPaged(o: { page?: number; perPage?: number; search?: string; status?: string }): Promise<{ rows: EcPaymentMethod[]; total: number }> {
+    const filters: Record<string, string> = {};
+    if (o.status === 'active') filters.enabled = 'true';
+    else if (o.status === 'inactive') filters.enabled = 'false';
+    return this.paged('ec_payment_methods', {
+      page: o.page || 1, perPage: o.perPage || 10, search: o.search, searchColumns: ['name'],
+      filters, orderBy: 'sort_order', orderDir: 'asc',
+    }, (r: any) => ({
+      id: r.id, name: r.name, enabled: r.enabled !== false, sort_order: r.sort_order,
+    }));
+  }
+
   async savePaymentMethod(p: EcPaymentMethod): Promise<void> {
     const { error } = await this.client.from('ec_payment_methods').upsert({
       id: p.id || `ec-pay-${Date.now()}`, name: p.name, enabled: p.enabled !== false, sort_order: p.sort_order || 0,
@@ -307,6 +423,16 @@ class SupabaseEcommerce {
     const { data, error } = await this.client.from('ec_coupons').select('*').order('code');
     if (error) this.error(error);
     return (data || []).map((r: any) => this.mapCoupon(r));
+  }
+
+  async listCouponsPaged(o: { page?: number; perPage?: number; search?: string; status?: string }): Promise<{ rows: EcCoupon[]; total: number }> {
+    const filters: Record<string, boolean> = {};
+    if (o.status === 'active') filters.is_active = true;
+    else if (o.status === 'inactive') filters.is_active = false;
+    return this.paged('ec_coupons', {
+      page: o.page || 1, perPage: o.perPage || 10, search: o.search, searchColumns: ['code'],
+      filters, orderBy: 'code', orderDir: 'asc',
+    }, this.mapCoupon);
   }
 
   async getCouponByCode(code: string): Promise<EcCoupon | null> {
@@ -344,7 +470,16 @@ class SupabaseEcommerce {
   async listCustomers(): Promise<EcCustomer[]> {
     const { data, error } = await this.client.from('ec_customers').select('*').order('created_at', { ascending: false });
     if (error) this.error(error);
-    return (data || []).map((r: any) => this.mapCustomer(r));
+    return (data || []).map((r: any) => this.mapCustomerPublic(r));
+  }
+
+  async listCustomersPaged(o: { page?: number; perPage?: number; search?: string; status?: string }): Promise<{ rows: EcCustomer[]; total: number }> {
+    const filters: Record<string, string> = {};
+    if (o.status) filters.status = o.status;
+    return this.paged('ec_customers', {
+      page: o.page || 1, perPage: o.perPage || 10, search: o.search,
+      searchColumns: ['name', 'email', 'phone'], filters, orderBy: 'created_at', orderDir: 'desc',
+    }, this.mapCustomerPublic);
   }
 
   async getCustomer(id: string): Promise<EcCustomer | null> {
