@@ -12,6 +12,7 @@ import {
   EcPaymentMethod, EcShippingMethod, EcProductType, EcOrderStatus,
 } from '../types/ecommerce';
 import { ProductCsvImport } from './ProductCsvImport';
+import { ProductDeleteModal } from './ProductDeleteModal';
 
 type EcTab = 'products' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
 
@@ -30,6 +31,8 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<EcProduct | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [showVariants, setShowVariants] = useState(false);
   const [form, setForm] = useState<EcProduct>({ id: '', name: '', product_type: 'simple', price: 0, stock: 0, is_active: true, images: [] });
@@ -68,10 +71,25 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
     } catch (e: any) { addToast(e.message, 'error'); } finally { setLoading(false); }
   };
 
-  const remove = async (id: string) => {
-    if (!window.confirm('Delete this product (and its variants)?')) return;
-    setLoading(true);
-    try { await ecommerce.deleteProduct(id); addToast('Product deleted', 'success'); await load(); } catch (e: any) { addToast(e.message, 'error'); } finally { setLoading(false); }
+  // Opens the delete confirmation modal for a product.
+  const requestDelete = (p: EcProduct) => {
+    setDeleteTarget(p);
+  };
+
+  // Performs the delete after the admin confirms in the modal.
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await ecommerce.deleteProduct(deleteTarget.id); // also deletes variants
+      addToast('Product deleted', 'success');
+      setDeleteTarget(null); // close modal on success
+      await load();
+    } catch (e: any) {
+      addToast(e?.message || 'Failed to delete product', 'error');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku || '').toLowerCase().includes(search.toLowerCase()));
@@ -193,7 +211,7 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
                   <td className="p-3">
                     <div className="flex items-center justify-end gap-1.5">
                       <button onClick={() => openEdit(p)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg" title="Edit"><Edit2 className="w-4 h-4" /></button>
-                      <button onClick={() => remove(p.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => requestDelete(p)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -202,6 +220,12 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
           </table>
         )}
       </div>
+      <ProductDeleteModal
+        product={deleteTarget}
+        deleting={deleting}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 };
