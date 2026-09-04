@@ -78,13 +78,15 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative flex-1 min-w-[220px] max-w-md">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1 min-w-0 sm:max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search products..." className="pl-9 pr-3 py-2 w-full border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
         </div>
-        <button onClick={openNew} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl hover:bg-indigo-600 transition-colors shadow-sm"><Plus className="w-4 h-4" /> Add Product</button>
-        <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-colors shadow-sm"><FileSpreadsheet className="w-4 h-4" /> Import CSV</button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+          <button onClick={openNew} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl hover:bg-indigo-600 transition-colors shadow-sm whitespace-nowrap"><Plus className="w-4 h-4 shrink-0" /> Add Product</button>
+          <button onClick={() => setShowImport(true)} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-colors shadow-sm whitespace-nowrap"><FileSpreadsheet className="w-4 h-4 shrink-0" /> Import CSV</button>
+        </div>
       </div>
       <ProductCsvImport
         open={showImport}
