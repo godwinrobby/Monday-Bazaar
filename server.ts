@@ -12,10 +12,24 @@ dotenv.config();
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { dbManager } from "./src/db/dbManager";
 import { supabaseDb } from "./src/db/supabaseDb";
 import { fetchAmazonProductDetails } from "./src/utils/amazonFetcher";
 import { collectBody, getBoundary, parseMultipart, MultipartResult } from "./src/utils/multipart";
+
+/** Cloudflare R2 (S3-compatible) client for product image uploads. */
+const r2Client = new S3Client({
+  region: "auto",
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
+  },
+});
+
+const R2_BUCKET = process.env.R2_BUCKET || "";
+const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
 
 const app = express();
 const PORT = 3000;
@@ -526,8 +540,9 @@ async function verifyAdmin(req: express.Request): Promise<any | null> {
 }
 
 // POST /api/admin/ecommerce/images/upload - Upload a product/variant image file
-// (multipart/form-data) to local server storage. Auth-gated to admins. Returns
-// the relative URL (/storage/ecommerce/<folder>/<file>) stored in the DB.
+// (multipart/form-data) to Cloudflare R2. Auth-gated to admins. Returns the public
+// R2 URL (https://<account>.r2.cloudflarestorage.com/<bucket>/ecommerce/products/<file>)
+// that is stored in the DB, or the legacy local /storage/ path as a fallback.
 app.post("/api/admin/ecommerce/images/upload", async (req, res) => {
   const admin = await verifyAdmin(req);
   if (!admin) return res.status(401).json({ success: false, error: "Admin session required." });
@@ -564,42 +579,98 @@ app.post("/api/admin/ecommerce/images/upload", async (req, res) => {
       return res.status(400).json({ success: false, error: "Folder must start with 'products/'." });
     }
 
-    const dir = path.join(ECOMMERCE_STORAGE_ROOT, folder);
-    fs.mkdirSync(dir, { recursive: true });
-
+    // Generate a unique, safe filename and build the R2 object key.
     const safeBase = (file.filename || "image").replace(/[^a-z0-9._-]/gi, "_").toLowerCase();
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeBase}`;
-    const relPath = `${folder}/${unique}`;
-    const absPath = path.join(ECOMMERCE_STORAGE_ROOT, relPath);
-    fs.writeFileSync(absPath, file.content);
+    const key = `${folder}/${unique}`;
 
-    const url = `/storage/ecommerce/${relPath}`;
-    res.json({ success: true, url, path: relPath });
+    if (R2_BUCKET && process.env.R2_ACCOUNT_ID) {
+      // Upload to Cloudflare R2 via the S3-compatible API.
+      await r2Client.send(new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+        Body: file.content,
+        ContentType: file.contentType,
+        Metadata: { uploadedBy: "monday-bazaar-admin" },
+      }));
+
+      // Prefer the configured public URL; fall back to a /storage/R2 proxy so
+      // images work even when public access is not directly configured.
+      const url = R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${key}` : `/storage/r2/${key}`;
+      res.json({ success: true, url, path: key });
+    } else {
+      // Fallback: write to local server storage (legacy behaviour).
+      const dir = path.join(ECOMMERCE_STORAGE_ROOT, folder);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(ECOMMERCE_STORAGE_ROOT, key), file.content);
+      const url = `/storage/ecommerce/${key}`;
+      res.json({ success: true, url, path: key });
+    }
   } catch (err: any) {
     res.status(500).json({ success: false, error: `Upload failed: ${err && err.message ? err.message : "Unknown error"}` });
   }
 });
 
 // DELETE /api/admin/ecommerce/images - Remove a previously uploaded image.
-// Body: { path } (the relative path stored in the DB, e.g. "products/123/file.jpg").
+// Body: { imageUrl } — the public URL returned by the upload endpoint (R2 or legacy).
+// Also accepts { path } for backward compatibility with locally stored images.
 app.delete("/api/admin/ecommerce/images", async (req, res) => {
   const admin = await verifyAdmin(req);
   if (!admin) return res.status(401).json({ success: false, error: "Admin session required." });
 
   try {
-    const { path: relPath } = req.body || {};
-    const clean = (typeof relPath === "string" ? relPath : "").trim().replace(/^\/+/, "");
-    if (!clean || !clean.startsWith("products/")) {
+    const imageUrl = (req.body && typeof req.body.imageUrl === "string" ? req.body.imageUrl : "").trim().replace(/\?.*$/, "").replace(/\/$/, "");
+    const legacyPath = (req.body && typeof req.body.path === "string" ? req.body.path : "").trim().replace(/^\/+/, "");
+
+    let key: string | null = null;
+
+    // Case 1: R2 public URL — strip the configured public base to derive the key.
+    if (imageUrl && R2_PUBLIC_URL && imageUrl.startsWith(R2_PUBLIC_URL)) {
+      key = imageUrl.slice(R2_PUBLIC_URL.length + 1); // +1 for the trailing "/"
+    }
+
+    // Case 2: legacy local-storage URL — strip the marker.
+    if (!key && imageUrl) {
+      const marker = "/storage/ecommerce/";
+      const idx = imageUrl.indexOf(marker);
+      if (idx !== -1) {
+        key = imageUrl.slice(idx + marker.length);
+      }
+    }
+
+    // Case 3: legacy /storage/r2 proxy URL.
+    if (!key && imageUrl && imageUrl.startsWith("/storage/r2/")) {
+      key = imageUrl.slice("/storage/r2/".length);
+    }
+
+    // Case 4: raw path from the body (backward compat).
+    if (!key && legacyPath) {
+      key = legacyPath;
+    }
+
+    if (!key) {
+      // External URL (e.g. Unsplash) — nothing to delete from our storage.
+      return res.json({ success: true, deleted: false });
+    }
+
+    // Confinement: only allow product image keys (no traversal).
+    if (!key.startsWith("products/")) {
       return res.status(400).json({ success: false, error: "Invalid image path." });
     }
-    // Hard confinement: resolve & ensure it stays inside the ecommerce root.
-    const abs = path.resolve(ECOMMERCE_STORAGE_ROOT, clean);
-    if (!abs.startsWith(ECOMMERCE_STORAGE_ROOT + path.sep) && abs !== ECOMMERCE_STORAGE_ROOT) {
-      return res.status(400).json({ success: false, error: "Invalid image path." });
+
+    if (R2_BUCKET && process.env.R2_ACCOUNT_ID) {
+      await r2Client.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+      res.json({ success: true, deleted: true });
+    } else {
+      // Fallback: delete from local filesystem.
+      const abs = path.resolve(ECOMMERCE_STORAGE_ROOT, key);
+      if (!abs.startsWith(ECOMMERCE_STORAGE_ROOT + path.sep) && abs !== ECOMMERCE_STORAGE_ROOT) {
+        return res.status(400).json({ success: false, error: "Invalid image path." });
+      }
+      if (!fs.existsSync(abs)) return res.json({ success: true, deleted: false });
+      fs.unlinkSync(abs);
+      res.json({ success: true, deleted: true });
     }
-    if (!fs.existsSync(abs)) return res.json({ success: true, deleted: false });
-    fs.unlinkSync(abs);
-    res.json({ success: true, deleted: true });
   } catch (err: any) {
     res.status(500).json({ success: false, error: `Delete failed: ${err && err.message ? err.message : "Unknown error"}` });
   }

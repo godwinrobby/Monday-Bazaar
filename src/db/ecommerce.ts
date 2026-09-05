@@ -134,11 +134,12 @@ class SupabaseEcommerce {
   /* ==================== IMAGE UPLOAD / LOCAL STORAGE ==================== */
 
   /**
-   * Upload a single image to the local server storage via the Express upload
-   * endpoint (POST multipart/form-data). Reports byte-level upload progress via
+   * Upload a single image to Cloudflare R2 via the Express upload endpoint
+   * (POST multipart/form-data). Reports byte-level upload progress via
    * `onProgress` (0-100) and validates type/size before the request is sent.
-   * Returns the relative URL served by the server (e.g.
-   * `/storage/ecommerce/products/<id>/<file>`). No base64 is ever stored in the DB.
+   * Returns the public R2 URL (e.g.
+   * `https://<account>.r2.cloudflarestorage.com/<bucket>/ecommerce/products/<id>/<file>`)
+   * stored in the DB. No base64 is ever stored in the DB.
    */
   uploadImage(file: File, folder: string, onProgress?: (pct: number) => void): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -191,20 +192,19 @@ class SupabaseEcommerce {
     });
   }
 
-  /** Remove a previously uploaded image from local server storage. */
+  /** Remove a previously uploaded image from server storage (R2 or legacy local). */
   async deleteImage(imageUrl: string): Promise<void> {
     if (typeof window === 'undefined') return;
     const clean = (imageUrl || '').replace(/.*\?.*$/, '').replace(/\/$/, '');
-    const marker = '/storage/ecommerce/';
-    const idx = clean.indexOf(marker);
-    if (idx === -1) return; // external URL (e.g. Unsplash) — nothing to delete from local storage
-    const relPath = clean.slice(idx + marker.length);
+    if (!clean) return;
+    // External URLs (e.g. Unsplash) have no server-side storage to delete.
+    if (!clean.startsWith('/storage/') && !clean.startsWith('http')) return;
 
     const token = this.getAdminToken();
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${this.apiBase()}/admin/ecommerce/images`, {
-      method: 'DELETE', headers, body: JSON.stringify({ path: relPath }),
+      method: 'DELETE', headers, body: JSON.stringify({ imageUrl: clean }),
     });
     let resp: any = {};
     try { resp = await res.json(); } catch { /* ignore */ }
