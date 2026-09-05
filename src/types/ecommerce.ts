@@ -61,6 +61,7 @@ export interface EcAttribute {
   slug: string;
   has_presets?: boolean;
   is_active?: boolean;
+  description?: string;
 }
 
 /** Attribute Group — an alias for EcAttribute that represents a group

@@ -305,6 +305,7 @@ class SupabaseEcommerce {
     return {
       id: r.id, name: r.name, slug: r.slug,
       has_presets: Boolean(r.has_presets), is_active: r.is_active !== false,
+      description: r.description ?? undefined,
     };
   }
 
@@ -398,18 +399,29 @@ class SupabaseEcommerce {
   }
 
   /** Upsert an attribute group. Returns the saved group (with id).
-   * Throws if a different group already uses the same slug (case-insensitive). */
+   * Throws if another group already uses the same name or slug (case-insensitive). */
   async saveAttribute(a: EcAttribute): Promise<EcAttribute> {
     const slug = a.slug || a.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     // Check for duplicate slug (case-insensitive) — the DB enforces this via a
     // unique index, but we provide a friendly error before the upsert.
-    const existing = await this.getAttributeBySlug(slug);
-    if (existing && existing.id !== a.id) {
-      throw new Error(`Attribute group "${existing.name}" already uses slug "${slug}". Choose a different name.`);
+    const existingBySlug = await this.getAttributeBySlug(slug);
+    if (existingBySlug && existingBySlug.id !== a.id) {
+      throw new Error(`Attribute group "${existingBySlug.name}" already uses slug "${slug}". Choose a different name.`);
+    }
+    // Check for duplicate name (case-insensitive).
+    if (a.name && a.name.trim()) {
+      const nameQuery = await this.client.from('ec_attributes')
+        .select('id, name').ilike('name', a.name.trim()).limit(1);
+      if (nameQuery.error) this.error(nameQuery.error);
+      const dup = Array.isArray(nameQuery.data) && nameQuery.data[0];
+      if (dup && dup.id !== a.id) {
+        throw new Error(`Attribute group "${dup.name}" already exists. Use a different name.`);
+      }
     }
     const { data, error } = await this.client.from('ec_attributes').upsert({
       id: a.id || `ec-attr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: a.name, slug, has_presets: a.has_presets ?? true, is_active: a.is_active !== false,
+      description: a.description ?? null,
     }, { onConflict: 'id' }).select().single();
     if (error) this.error(error);
     return this.mapAttribute(data);

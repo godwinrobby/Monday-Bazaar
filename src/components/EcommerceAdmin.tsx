@@ -1756,8 +1756,8 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
       <FormDrawer
         open={!!edit}
         onClose={() => setEdit(null)}
-        title={edit?.attr.id ? 'Edit Attribute Group' : 'New Attribute Group'}
-        subtitle={edit?.attr.id ? 'Update name, slug and permitted values' : 'Create a new attribute group (e.g. Size, Color, Storage)'}
+         title={edit?.attr.id ? 'Edit Attribute Group' : 'New Attribute Group'}
+         subtitle={edit?.attr.id ? 'Update name, slug, description and terms' : 'Create a new attribute group (e.g. Size, Color, Storage)'}
         saving={loading}
         error={error}
         width="lg"
@@ -1772,14 +1772,15 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
       >
         {edit && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input value={edit.attr.name || ''} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, name: e.target.value } })} placeholder="Name e.g. Size, Color" className={inputCls} />
-              <input value={edit.attr.slug || slugFromName(edit.attr.name)} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, slug: e.target.value } })} placeholder="Slug" className={inputCls} />
-              <label className="flex items-center gap-1.5 text-xs text-slate-600 col-span-2"><input type="checkbox" checked={edit.attr.has_presets !== false} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, has_presets: e.target.checked } })} className="w-3.5 h-3.5 accent-indigo-500" /> Has preset values (suggests a controlled list in the product form)</label>
-              <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={edit.attr.is_active !== false} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, is_active: e.target.checked } })} className="w-3.5 h-3.5 accent-indigo-500" /> Active</label>
-            </div>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+               <input value={edit.attr.name || ''} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, name: e.target.value } })} placeholder="Name e.g. Size, Color" className={inputCls} />
+               <input value={edit.attr.slug || slugFromName(edit.attr.name)} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, slug: e.target.value } })} placeholder="Slug" className={inputCls} />
+               <textarea value={edit.attr.description || ''} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, description: e.target.value } })} placeholder="Description (optional)" rows={2} className={`${inputCls} col-span-2 resize-none`} />
+               <label className="flex items-center gap-1.5 text-xs text-slate-600 col-span-2"><input type="checkbox" checked={edit.attr.has_presets !== false} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, has_presets: e.target.checked } })} className="w-3.5 h-3.5 accent-indigo-500" /> Used for variations (enable in variable product forms)</label>
+               <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={edit.attr.is_active !== false} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, is_active: e.target.checked } })} className="w-3.5 h-3.5 accent-indigo-500" /> Active</label>
+             </div>
             <div>
-              <p className="text-xs font-extrabold text-slate-700 uppercase mb-1.5">Permitted Values</p>
+               <p className="text-xs font-extrabold text-slate-700 uppercase mb-1.5">Terms</p>
               <div className="space-y-1.5">
                 {edit.values.map((v, i) => (
                   <div
@@ -1797,9 +1798,13 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
                 ))}
                 <button type="button" onClick={() => { const next = [...(edit.values || []), { value: '', sort_order: edit.values.length * 10 }]; setEdit({ ...edit, values: next }); }} className="flex items-center gap-1 text-[11px] font-bold text-indigo-600"><Plus className="w-3.5 h-3.5" /> Add value</button>
               </div>
-              {edit.values.some((v) => !v.value.trim()) && (
-                <p className="text-[10px] text-red-500 mt-1">Empty values will be skipped on save.</p>
-              )}
+               {edit.values.some((v) => !v.value.trim()) && (
+                 <p className="text-[10px] text-red-500 mt-1">Empty values will be skipped on save.</p>
+               )}
+               {(() => {
+                 const dups = edit.values.map(v => v.value.trim().toLowerCase()).filter((v, i, a) => v && a.indexOf(v) !== i);
+                 return dups.length > 0 ? <p className="text-[10px] text-amber-600 mt-1">Duplicate terms ({[...new Set(dups)].join(', ')}) will be de-duplicated on save.</p> : null;
+               })()}
             </div>
           </div>
         )}
@@ -1823,7 +1828,7 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
           <>
             <table className={`w-full text-xs transition-opacity ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
-                <tr><th className="text-left p-3 font-bold">Attribute Group</th><th className="text-left p-3 font-bold">Slug</th><th className="text-left p-3 font-bold">Values</th><th className="text-left p-3 font-bold">Presets</th><th className="text-left p-3 font-bold">Status</th><th className="text-right p-3 font-bold">Actions</th></tr>
+                 <tr><th className="text-left p-3 font-bold">Name</th><th className="text-left p-3 font-bold">Slug</th><th className="text-left p-3 font-bold">Terms</th><th className="text-left p-3 font-bold">For Variations</th><th className="text-left p-3 font-bold">Status</th><th className="text-right p-3 font-bold">Actions</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {attrs.map(a => (
