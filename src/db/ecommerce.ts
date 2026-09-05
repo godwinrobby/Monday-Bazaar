@@ -305,7 +305,7 @@ class SupabaseEcommerce {
     return {
       id: r.id, name: r.name, slug: r.slug,
       has_presets: Boolean(r.has_presets), is_active: r.is_active !== false,
-      description: r.description ?? undefined,
+      description: r?.description ?? undefined,
     };
   }
 
@@ -418,14 +418,21 @@ class SupabaseEcommerce {
         throw new Error(`Attribute group "${dup.name}" already exists. Use a different name.`);
       }
     }
-    const { data, error } = await this.client.from('ec_attributes').upsert({
-      id: a.id || `ec-attr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      name: a.name, slug, has_presets: a.has_presets ?? true, is_active: a.is_active !== false,
-      description: a.description ?? null,
-    }, { onConflict: 'id' }).select().single();
-    if (error) this.error(error);
-    return this.mapAttribute(data);
-  }
+     // Upsert without description (column may not exist on older DBs).
+     const { data, error } = await this.client.from('ec_attributes').upsert({
+       id: a.id || `ec-attr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+       name: a.name, slug, has_presets: a.has_presets ?? true, is_active: a.is_active !== false,
+     }, { onConflict: 'id' }).select().single();
+     if (error) this.error(error);
+     const saved = this.mapAttribute(data);
+     // Separately update description (graceful if column doesn't exist yet).
+     try {
+       await this.client.from('ec_attributes')
+         .update({ description: a.description ?? null })
+         .eq('id', saved.id);
+     } catch { /* column may not exist until migration runs — non-fatal */ }
+     return saved;
+   }
 
   /** Sync an attribute group's value set: create new, update existing (by id), delete removed.
    * Duplicate values (case-insensitive) within the same group are de-duplicated
