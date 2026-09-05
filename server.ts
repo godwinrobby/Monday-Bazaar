@@ -15,6 +15,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { dbManager } from "./src/db/dbManager";
 import { supabaseDb } from "./src/db/supabaseDb";
 import { fetchAmazonProductDetails } from "./src/utils/amazonFetcher";
+import { collectBody, getBoundary, parseMultipart, MultipartResult } from "./src/utils/multipart";
 
 const app = express();
 const PORT = 3000;
@@ -30,8 +31,18 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
-  next();
+   next();
 });
+
+// Local storage for uploaded e-commerce images, served at /storage/ecommerce/...
+const STORAGE_ROOT = path.join(process.cwd(), "storage");
+const ECOMMERCE_STORAGE_ROOT = path.join(STORAGE_ROOT, "ecommerce");
+fs.mkdirSync(ECOMMERCE_STORAGE_ROOT, { recursive: true });
+app.use("/storage/ecommerce", express.static(ECOMMERCE_STORAGE_ROOT));
+app.use("/storage", express.static(STORAGE_ROOT));
+// Do not let the SPA fallback swallow missing asset requests — return 404 instead
+// so client-side <img> onError handlers can fall back to a placeholder cleanly.
+app.use("/storage", (_req, res) => res.sendStatus(404));
 
 // Helper to initialize Gemini server-side safely
 function getGeminiClient() {
@@ -497,6 +508,100 @@ app.post("/api/admin/verify", async (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Verify an admin session token (same scheme as /api/admin/verify) and return the
+// matching admin user, or null. Used to gate admin-only write endpoints.
+async function verifyAdmin(req: express.Request): Promise<any | null> {
+  const auth = req.headers["authorization"];
+  const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7).trim() : (req.body && typeof req.body.token === "string" ? req.body.token : "");
+  if (!token) return null;
+  try {
+    const users = await supabaseDb.getUsers();
+    return users.find((u: any) => u.role === "admin" && token.includes(Buffer.from(u.id).toString("hex"))) || null;
+  } catch {
+    return null;
+  }
+}
+
+// POST /api/admin/ecommerce/images/upload - Upload a product/variant image file
+// (multipart/form-data) to local server storage. Auth-gated to admins. Returns
+// the relative URL (/storage/ecommerce/<folder>/<file>) stored in the DB.
+app.post("/api/admin/ecommerce/images/upload", async (req, res) => {
+  const admin = await verifyAdmin(req);
+  if (!admin) return res.status(401).json({ success: false, error: "Admin session required." });
+
+  try {
+    const contentType = req.headers["content-type"] || "";
+    const boundary = getBoundary(contentType);
+    if (!boundary) return res.status(400).json({ success: false, error: "Expected multipart/form-data." });
+
+    const body = await collectBody(req);
+    let parsed: MultipartResult;
+    try { parsed = parseMultipart(body, boundary); }
+    catch (e: any) { return res.status(400).json({ success: false, error: e.message || "Malformed multipart payload." }); }
+
+    const file = parsed.files[0];
+    if (!file) return res.status(400).json({ success: false, error: "No file provided." });
+
+    // Validate image type + size (10 MB cap, mirrors the old bucket policy).
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
+    if (!allowed.includes(file.contentType)) {
+      return res.status(400).json({ success: false, error: `Unsupported image type: ${file.contentType}. Use JPG, PNG, WEBP, GIF or AVIF.` });
+    }
+    if (file.content.length > 10 * 1024 * 1024) {
+      return res.status(400).json({ success: false, error: `Image too large (${(file.content.length / 1024 / 1024).toFixed(1)} MB). Max 10 MB.` });
+    }
+
+    // Sanitize and confine the folder to the ecommerce storage root (no traversal).
+    let folder = (parsed.fields.folder || "").trim();
+    folder = folder.replace(/\\/g, "/");
+    const parts = folder.split("/").map((p) => p.replace(/[^a-z0-9._-]/gi, "_")).filter(Boolean);
+    folder = parts.join("/");
+
+    if (!folder.startsWith("products/")) {
+      return res.status(400).json({ success: false, error: "Folder must start with 'products/'." });
+    }
+
+    const dir = path.join(ECOMMERCE_STORAGE_ROOT, folder);
+    fs.mkdirSync(dir, { recursive: true });
+
+    const safeBase = (file.filename || "image").replace(/[^a-z0-9._-]/gi, "_").toLowerCase();
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeBase}`;
+    const relPath = `${folder}/${unique}`;
+    const absPath = path.join(ECOMMERCE_STORAGE_ROOT, relPath);
+    fs.writeFileSync(absPath, file.content);
+
+    const url = `/storage/ecommerce/${relPath}`;
+    res.json({ success: true, url, path: relPath });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: `Upload failed: ${err && err.message ? err.message : "Unknown error"}` });
+  }
+});
+
+// DELETE /api/admin/ecommerce/images - Remove a previously uploaded image.
+// Body: { path } (the relative path stored in the DB, e.g. "products/123/file.jpg").
+app.delete("/api/admin/ecommerce/images", async (req, res) => {
+  const admin = await verifyAdmin(req);
+  if (!admin) return res.status(401).json({ success: false, error: "Admin session required." });
+
+  try {
+    const { path: relPath } = req.body || {};
+    const clean = (typeof relPath === "string" ? relPath : "").trim().replace(/^\/+/, "");
+    if (!clean || !clean.startsWith("products/")) {
+      return res.status(400).json({ success: false, error: "Invalid image path." });
+    }
+    // Hard confinement: resolve & ensure it stays inside the ecommerce root.
+    const abs = path.resolve(ECOMMERCE_STORAGE_ROOT, clean);
+    if (!abs.startsWith(ECOMMERCE_STORAGE_ROOT + path.sep) && abs !== ECOMMERCE_STORAGE_ROOT) {
+      return res.status(400).json({ success: false, error: "Invalid image path." });
+    }
+    if (!fs.existsSync(abs)) return res.json({ success: true, deleted: false });
+    fs.unlinkSync(abs);
+    res.json({ success: true, deleted: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: `Delete failed: ${err && err.message ? err.message : "Unknown error"}` });
   }
 });
 

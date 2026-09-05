@@ -249,7 +249,7 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
                     vv[i] = { ...vv[i], images: imgs, image: imgs[0] || '' };
                     setVariants(vv);
                   }}
-                  folder={`variants/${editId || form.id || 'unknown'}`}
+                  folder={`products/${editId || form.id || 'unknown'}/variants/${v.id || `variant-${i}`}`}
                   maxFiles={8}
                   label={`Variant #${i + 1} Images`}
                   placeholder="Upload variant images or drag & drop"

@@ -20,13 +20,29 @@ class SupabaseEcommerce {
     const url = (typeof process !== 'undefined' && process.env?.SUPABASE_URL) || 'https://pmvnyxpyypifneqojlqq.supabase.co';
     const key = (typeof process !== 'undefined' && (process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY)) || 'sb_publishable_QdwxI3KvRW5Ro-vY5XPuQg_Cg4mLVdD';
     this.client = createClient(String(url).trim(), String(key).trim(), { auth: { persistSession: false } });
-    this.storageUrl = String(url).trim();
-    this.storageKey = String(key).trim();
   }
 
   private error(e: any): never {
     throw new Error(e?.message || 'E-commerce database error');
   }
+
+  /** Read the admin session token from sessionStorage (browser only). */
+  private getAdminToken(): string | null {
+    if (typeof window === 'undefined' || !window.sessionStorage) return null;
+    try { return window.sessionStorage.getItem('admin_token') || null; } catch { return null; }
+  }
+
+  /** Resolve the base URL for the running Express server (relative, same origin). */
+  private apiBase(): string {
+    if (typeof window === 'undefined' || !window.location) return '/api';
+    const origin = `${window.location.protocol}//${window.location.host}`;
+    return `${origin}/api`;
+  }
+
+  /* ==================== IMAGE UPLOAD / LOCAL STORAGE ==================== */
+
+  private readonly MAX_FILE_BYTES = 10 * 1024 * 1024;
+  private readonly ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
 
   private mapProduct(r: any): EcProduct {
     return {
@@ -115,22 +131,14 @@ class SupabaseEcommerce {
     return { rows: (data || []).map(map), total: count ?? 0 };
   }
 
-  /* ==================== IMAGE UPLOAD / STORAGE ==================== */
-
-  private readonly IMAGE_BUCKET = 'ecommerce-images';
-  private readonly MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB, mirrors bucket policy
-  private readonly ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
-
-  /** Resolve a public URL for a path inside the ecommerce-images bucket. */
-  imagePublicUrl(path: string): string {
-    return `${this.storageUrl}/storage/v1/object/public/${this.IMAGE_BUCKET}/${path}`;
-  }
+  /* ==================== IMAGE UPLOAD / LOCAL STORAGE ==================== */
 
   /**
-   * Upload a single image to the ecommerce-images bucket. Reports byte-level
-   * upload progress via `onProgress` (0-100) and validates type/size before the
-   * request is sent. Returns the public URL of the uploaded file. Never stores
-   * raw base64 — only a storage reference URL is returned to the caller.
+   * Upload a single image to the local server storage via the Express upload
+   * endpoint (POST multipart/form-data). Reports byte-level upload progress via
+   * `onProgress` (0-100) and validates type/size before the request is sent.
+   * Returns the relative URL served by the server (e.g.
+   * `/storage/ecommerce/products/<id>/<file>`). No base64 is ever stored in the DB.
    */
   uploadImage(file: File, folder: string, onProgress?: (pct: number) => void): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -143,18 +151,19 @@ class SupabaseEcommerce {
         return;
       }
 
-      const sanitized = file.name.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
-      const path = `${folder}/${Date.now()}_${sanitized}`;
-      const url = `${this.storageUrl}/storage/v1/object/${this.IMAGE_BUCKET}/${path}`;
-
+      const token = this.getAdminToken();
       const form = new FormData();
-      form.append("cacheControl", "3600");
-      form.append("", file);
+      form.append('file', file, file.name);
+      // Normalize folder: relative to products root, traversal-safe.
+      const rawFolder = (folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+      const segs = rawFolder.split('/').map((p) => p.replace(/[^a-z0-9._-]/gi, '_')).filter(Boolean);
+      let folderPath = segs.join('/');
+      if (!folderPath.startsWith('products/')) folderPath = 'products/' + folderPath;
+      form.append('folder', folderPath);
 
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", url);
-      xhr.setRequestHeader("Authorization", `Bearer ${this.storageKey}`);
-      xhr.setRequestHeader("apikey", this.storageKey);
+      xhr.open('POST', `${this.apiBase()}/admin/ecommerce/images/upload`);
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       xhr.withCredentials = false;
 
       let settled = false;
@@ -171,14 +180,10 @@ class SupabaseEcommerce {
         let resp: any = {};
         try { resp = JSON.parse(xhr.responseText); } catch { /* ignore parse */ }
         if (xhr.status >= 200 && xhr.status < 300) {
-          const pub = this.imagePublicUrl(path);
-          this.uploadCache.set(sanitized, pub);
           if (onProgress) onProgress(100);
-          resolve(pub);
+          resolve(resp.url || '');
         } else {
-          let msg = `Upload failed (HTTP ${xhr.status}).`;
-          try { msg = resp?.error?.message || resp?.message || msg; } catch { /* ignore */ }
-          reject(new Error(msg));
+          reject(new Error((resp && (resp.error || resp.message)) || `Upload failed (HTTP ${xhr.status}).`));
         }
       };
 
@@ -186,16 +191,26 @@ class SupabaseEcommerce {
     });
   }
 
-  /** Remove a previously uploaded image from the bucket (public path or storage path). */
+  /** Remove a previously uploaded image from local server storage. */
   async deleteImage(imageUrl: string): Promise<void> {
-    const clean = imageUrl.replace(/.*\?.*$/, '').replace(/\/$/, '');
-    const suffix = `/${this.IMAGE_BUCKET}/`;
-    const idx = clean.indexOf(suffix);
-    if (idx === -1) return; // external URL — nothing to delete from our bucket
-    const path = clean.slice(idx + suffix.length);
-    const { error } = await this.client.storage.from(this.IMAGE_BUCKET).remove([path]);
-    if (error) this.error(error);
+    if (typeof window === 'undefined') return;
+    const clean = (imageUrl || '').replace(/.*\?.*$/, '').replace(/\/$/, '');
+    const marker = '/storage/ecommerce/';
+    const idx = clean.indexOf(marker);
+    if (idx === -1) return; // external URL (e.g. Unsplash) — nothing to delete from local storage
+    const relPath = clean.slice(idx + marker.length);
+
+    const token = this.getAdminToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${this.apiBase()}/admin/ecommerce/images`, {
+      method: 'DELETE', headers, body: JSON.stringify({ path: relPath }),
+    });
+    let resp: any = {};
+    try { resp = await res.json(); } catch { /* ignore */ }
+    if (!res.ok) throw new Error((resp && (resp.error || resp.message)) || `Delete failed (HTTP ${res.status}).`);
   }
+
 
   async listProducts(): Promise<EcProduct[]> {
     const { data, error } = await this.client.from('ec_products').select('*').order('created_at', { ascending: false });
