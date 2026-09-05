@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Plus, Tag, RefreshCw } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
+import { EcAttribute, EcAttributeValue } from '../types/ecommerce';
 
 interface Props {
   value: Record<string, string>;
@@ -18,21 +19,35 @@ const parsePairs = (raw: string): { key: string; value: string }[] =>
     })
     .filter(Boolean) as { key: string; value: string }[];
 
+interface LoadedAttr {
+  attr: EcAttribute;
+  values: string[];
+}
+
 export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange }) => {
   const attrs = value || {};
   const [text, setText] = useState('');
-  const [sizes, setSizes] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState<LoadedAttr[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newSize, setNewSize] = useState('');
-  const [savingSize, setSavingSize] = useState(false);
+  const [savingSize, setSavingSize] = useState<string | null>(null);
+  const [newCustom, setNewCustom] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const loadSizes = useCallback(async () => {
-    try { setSizes(await ecommerce.listSizes()); } catch { /* non-fatal */ }
+  const loadAll = useCallback(async () => {
+    try {
+      const list = await ecommerce.listAttributes();
+      const preset = list.filter((a) => a.is_active !== false && a.has_presets);
+      const loadedAttrs: LoadedAttr[] = [];
+      for (const a of preset) {
+        const vals = await ecommerce.listAttributeValues(a.id).then((v) => v.map((x) => x.value));
+        if (vals.length) loadedAttrs.push({ attr: a, values: vals });
+      }
+      setLoaded(loadedAttrs);
+    } catch { /* non-fatal — falls back to freeform only */ }
     setLoading(false);
   }, []);
 
-  useEffect(() => { let cancelled = false; (async () => { await loadSizes(); if (cancelled) return; })(); return () => { cancelled = true; }; }, [loadSizes]);
+  useEffect(() => { let cancelled = false; (async () => { await loadAll(); if (cancelled) return; })(); return () => { cancelled = true; }; }, [loadAll]);
 
   const commitText = () => {
     const pairs = parsePairs(text);
@@ -48,34 +63,34 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange }) =>
     onChange(rest);
   };
 
-  const toggleSize = (sz: string) => {
-    const key = 'size';
+  const setPreset = (key: string, val: string) => {
     const next: Record<string, string> = { ...attrs };
-    if (next[key] === sz) { delete next[key]; } else { next[key] = sz; }
+    if (next[key] === val) delete next[key]; else next[key] = val;
     onChange(next);
   };
 
-  const addSize = async () => {
-    const v = newSize.trim();
+  const addCustomSize = async () => {
+    const v = newCustom.trim();
     if (!v || savingSize) return;
-    setSavingSize(true);
+    setSavingSize(v);
     try {
       const attr = await ecommerce.getOrCreateAttribute('Size');
       await ecommerce.getOrCreateAttributeValue(attr.id, v);
-      setNewSize('');
-      await loadSizes();
-    } catch (e: any) {
-      // best-effort: still allow typing the size into the variant attributes
+      await loadAll();
+      setNewCustom('');
+    } catch {
+      // keep typing the value into the variant attributes as a fallback
       const next = { ...attrs };
       if (!next.size) next.size = v;
       onChange(next);
     } finally {
-      setSavingSize(false);
+      setSavingSize(null);
     }
   };
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
+      {/* Current attribute chips */}
       <div className="flex flex-wrap gap-1.5">
         {Object.entries(attrs).map(([k, val]) => (
           <span key={k} className="flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-mono">
@@ -87,48 +102,56 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange }) =>
         {!Object.keys(attrs).length && <span className="text-[10px] text-slate-400">No attributes set</span>}
       </div>
 
+      {/* Freeform key:value editor (flexible for any attribute) */}
       <input
         ref={inputRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') { commitText(); e.preventDefault(); } }}
         onBlur={commitText}
-        placeholder="Add attribute: color:Black, size:M (Enter to add)"
+        placeholder="Add attribute: color:Black, size:M, ram:8GB (Enter to add)"
         className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-[10px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
       />
 
+      {/* Registered preset attribute selectors (Size, Color, Storage, RAM, Material, …) */}
       {loading ? (
-        <div className="flex items-center gap-1 text-[10px] text-slate-400"><RefreshCw className="w-3 h-3 animate-spin" /> Loading registered sizes…</div>
+        <div className="flex items-center gap-1 text-[10px] text-slate-400"><RefreshCw className="w-3 h-3 animate-spin" /> Loading attributes…</div>
+      ) : loaded.length === 0 ? (
+        <div className="text-[10px] text-slate-400">No registered attributes yet. Manage them in the Attributes tab.</div>
       ) : (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] font-bold text-slate-500">Size:</span>
-          {sizes.map((sz) => {
-            const active = attrs.size === sz;
-            return (
-              <button
-                key={sz}
-                type="button"
-                onClick={() => toggleSize(sz)}
-                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${active ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
-              >
-                {sz}
-              </button>
-            );
-          })}
-          <div className="flex items-center gap-1">
-            <input
-              value={newSize}
-              onChange={(e) => setNewSize(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSize(); } }}
-              placeholder="+ new size"
-              className="w-20 px-1.5 py-0.5 border border-slate-200 rounded text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
-            />
-            <button type="button" onClick={addSize} disabled={savingSize || !newSize.trim()} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40">
-              <Plus className="w-3 h-3" />
-            </button>
+        loaded.map(({ attr, values }) => (
+          <div key={attr.id} className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-bold text-slate-500">{attr.name}:</span>
+            {values.map((sz) => {
+              const active = attrs[attr.name.toLowerCase()] === sz;
+              return (
+                <button
+                  key={sz}
+                  type="button"
+                  onClick={() => setPreset(attr.name.toLowerCase(), sz)}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${active ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
+                >
+                  {sz}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        ))
       )}
+
+      {/* Inline "add new value" for Size (keeps CSV import / admin in sync) */}
+      <div className="flex items-center gap-1.5 pt-1">
+        <input
+          value={newCustom}
+          onChange={(e) => setNewCustom(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') addCustomSize(); }}
+          placeholder="+ new size value…"
+          className="w-32 px-1.5 py-0.5 border border-slate-200 rounded text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
+        />
+        <button type="button" onClick={addCustomSize} disabled={savingSize || !newCustom.trim()} className="p-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40" title="Register a new Size value">
+          <Plus className="w-3 h-3" />
+        </button>
+      </div>
     </div>
   );
 };

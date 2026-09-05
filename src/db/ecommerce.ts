@@ -352,7 +352,7 @@ class SupabaseEcommerce {
     return this.mapAttributeValue(ins);
   }
 
-  /** Convenience: ordered list of known Size values (reuses the registry). */
+   /** Convenience: ordered list of known Size values (reuses the registry). */
   async listSizes(): Promise<string[]> {
     const attr = await this.getAttributeBySlug('size');
     if (!attr) return [];
@@ -360,6 +360,70 @@ class SupabaseEcommerce {
     return vals.map((v) => v.value);
   }
 
+  async listAttributesPaged(o: { page?: number; perPage?: number; search?: string }): Promise<{ rows: EcAttribute[]; total: number }> {
+    return this.paged('ec_attributes', {
+      page: o.page || 1, perPage: o.perPage || 10, search: o.search, searchColumns: ['name', 'slug'],
+      orderBy: 'name', orderDir: 'asc',
+    }, this.mapAttribute);
+  }
+
+  async listAttributeValuesPaged(o: { attributeId: string; page?: number; perPage?: number; search?: string }): Promise<{ rows: EcAttributeValue[]; total: number }> {
+    return this.paged('ec_attribute_values', {
+      page: o.page || 1, perPage: o.perPage || 20, search: o.search, searchColumns: ['value'],
+      filters: { attribute_id: o.attributeId }, orderBy: 'sort_order', orderDir: 'asc',
+    }, this.mapAttributeValue);
+  }
+
+  /** Upsert an attribute. Returns the saved attribute (with id). */
+  async saveAttribute(a: EcAttribute): Promise<EcAttribute> {
+    const slug = a.slug || a.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const { data, error } = await this.client.from('ec_attributes').upsert({
+      id: a.id || `ec-attr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: a.name, slug, has_presets: a.has_presets ?? true, is_active: a.is_active !== false,
+    }, { onConflict: 'id' }).select().single();
+    if (error) this.error(error);
+    return this.mapAttribute(data);
+  }
+
+  /** Sync an attribute's value set: create new, update existing (by id), delete removed. */
+  async saveAttributeValues(attributeId: string, values: { id?: string; value: string; sort_order?: number }[]): Promise<EcAttributeValue[]> {
+    const existing = await this.listAttributeValues(attributeId);
+    const keepIds = new Set<string>();
+    const result: EcAttributeValue[] = [];
+
+    for (const v of values) {
+      const trimmed = String(v.value).trim();
+      if (!trimmed) continue;
+      if (v.id) {
+        const { error } = await this.client.from('ec_attribute_values')
+          .update({ value: trimmed, sort_order: Number(v.sort_order || 0), is_active: true })
+          .eq('id', v.id);
+        if (error) this.error(error);
+        const updated = existing.find((e) => e.id === v.id);
+        if (updated) { updated.value = trimmed; updated.sort_order = Number(v.sort_order || 0); result.push(updated); }
+        keepIds.add(v.id);
+      } else {
+        const created = await this.getOrCreateAttributeValue(attributeId, trimmed);
+        result.push(created);
+        keepIds.add(created.id);
+      }
+    }
+
+    // Remove values that are no longer present.
+    for (const e of existing) {
+      if (!keepIds.has(e.id)) {
+        const { error } = await this.client.from('ec_attribute_values').delete().eq('id', e.id);
+        if (error) this.error(error);
+      }
+    }
+    return result;
+  }
+
+  /** Delete an attribute (and its values, which cascade-delete via FK). */
+  async deleteAttribute(id: string): Promise<void> {
+    const { error } = await this.client.from('ec_attributes').delete().eq('id', id);
+    if (error) this.error(error);
+  }
 
   async listCategories(): Promise<EcCategory[]> {
     const { data, error } = await this.client.from('ec_categories').select('*').order('sort_order');

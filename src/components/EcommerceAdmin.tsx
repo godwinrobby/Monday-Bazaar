@@ -4,12 +4,13 @@ import {
   Plus, Search, Edit2, Trash2, X, Star, RefreshCw, Eye,
   AlertCircle, Save, PackagePlus, ClipboardList, Store, BarChart3, Boxes, Layers, ExternalLink, Check,
   Users, UserCheck, UserX, Mail, Phone, MapPin, KeyRound, Calendar, ExternalLink as ExtLink, ChevronRight,
-  FileSpreadsheet,
+  FileSpreadsheet, GripVertical,
 } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
 import {
   EcProduct, EcCategory, EcBrand, EcVariant, EcOrder, EcCoupon, EcCustomer,
   EcPaymentMethod, EcShippingMethod, EcProductType, EcOrderStatus,
+  EcAttribute, EcAttributeValue,
 } from '../types/ecommerce';
 import { ProductCsvImport } from './ProductCsvImport';
 import { ProductDeleteModal } from './ProductDeleteModal';
@@ -18,7 +19,7 @@ import { FormDrawer } from './FormDrawer';
 import { ImageUploader } from './ImageUploader';
 import { VariantAttributesEditor } from './VariantAttributesEditor';
 
-type EcTab = 'products' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
+type EcTab = 'products' | 'attributes' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -1051,8 +1052,9 @@ const SettingsPanel: React.FC<{ addToast: Props['addToast'] }> = ({ addToast }) 
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800 space-y-1">
         <p className="font-bold flex items-center gap-1.5"><AlertCircle className="w-4 h-4" /> How this module maps together</p>
         <ul className="list-disc list-inside text-amber-700 space-y-0.5">
-          <li><b>Admin → API → Database → User App:</b> Admin CRUD writes to Supabase tables (<code>ec_products</code>, <code>ec_variants</code>, <code>ec_categories</code>, <code>ec_brands</code>, <code>ec_coupons</code>, <code>ec_payment_methods</code>, <code>ec_shipping_methods</code>, <code>ec_orders</code>, <code>ec_order_items</code>) via the shared <code>src/db/ecommerce.ts</code> service.</li>
-          <li>Simple products carry price/stock directly; Variable products manage price/stock/SKU per variant.</li>
+          <li><b>Admin → API → Database → User App:</b> Admin CRUD writes to Supabase tables (<code>ec_products</code>, <code>ec_variants</code>, <code>ec_categories</code>, <code>ec_brands</code>, <code>ec_attributes</code>, <code>ec_attribute_values</code>, <code>ec_coupons</code>, <code>ec_payment_methods</code>, <code>ec_shipping_methods</code>, <code>ec_orders</code>, <code>ec_order_items</code>) via the shared <code>src/db/ecommerce.ts</code> service.</li>
+          <li>Simple products carry price/stock directly; Variable products manage price/stock/SKU per variant. Both can carry images (gallery per product, plus per-variant image galleries).</li>
+          <li>Attributes (e.g. Size, Color) are managed in the Attributes tab, registered once and reused across products and CSV import without duplicates.</li>
           <li>Orders placed in the User App flow straight into the Admin Orders tab, where you can manage status, payment status, shipment and tracking numbers.</li>
           <li>Payment &amp; shipping methods configured here are offered during checkout in the User App.</li>
           <li>Coupons created here are validated (min order, expiry, usage) at checkout.</li>
@@ -1624,13 +1626,208 @@ const CustomersPanel: React.FC<{ addToast: Props['addToast']; setError: (s: stri
   );
 };
 
-/* ==================== ECADMIN (MAIN COMPONENT, DEFINED LAST) ==================== */
+/* ==================== ATTRIBUTES PANEL ==================== */
+interface AttrValueForm {
+  id?: string;
+  value: string;
+  sort_order: number;
+}
+
+const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: string | null) => void }> = ({ addToast, setError }) => {
+  const [attrs, setAttrs] = useState<EcAttribute[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setErrorState] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [edit, setEdit] = useState<{ attr: EcAttribute; values: AttrValueForm[] } | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [savingValues, setSavingValues] = useState<string | null>(null); // value id being toggled
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setErrorState(null);
+    try {
+      const res = await ecommerce.listAttributesPaged({ page, perPage, search: searchQuery });
+      setAttrs(res.rows); setTotal(res.total);
+      if (res.rows.length === 0 && res.total > 0 && page > 1) setPage(1);
+    } catch (e: any) { setErrorState(e?.message || 'Failed to load attributes'); setError(e?.message || null); }
+    finally { setLoading(false); }
+  }, [setError, searchQuery, page, perPage]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const t = setTimeout(() => { setSearchQuery(search.trim()); setPage(1); }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const openNew = () => setEdit({ attr: { id: '', name: 'Size', slug: '', has_presets: true, is_active: true }, values: [] });
+  const openEdit = async (a: EcAttribute) => {
+    const vals = await ecommerce.listAttributeValues(a.id);
+    setEdit({
+      attr: { ...a },
+      values: vals.map((v) => ({ id: v.id, value: v.value, sort_order: v.sort_order || 0 })),
+    });
+  };
+
+  const slugFromName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'attr';
+
+  const save = async () => {
+    if (!edit?.attr.name?.trim()) return addToast('Attribute name required', 'error');
+    const name = edit.attr.name.trim();
+    const patch: EcAttribute = { ...edit.attr, name, slug: edit.attr.slug || slugFromName(name), has_presets: edit.attr.has_presets !== false, is_active: edit.attr.is_active !== false };
+    setLoading(true);
+    try {
+      const saved = await ecommerce.saveAttribute(patch);
+      await ecommerce.saveAttributeValues(saved.id, edit.values.filter((v) => v.value.trim()));
+      addToast(edit.attr.id ? 'Attribute updated' : 'Attribute created', 'success');
+      setEdit(null);
+      await load();
+    } catch (e: any) { addToast(e.message, 'error'); } finally { setLoading(false); }
+  };
+
+  const remove = async (a: EcAttribute) => {
+    if (!window.confirm(`Delete attribute "${a.name}" and all its values? This cannot be undone.`)) return;
+    setLoading(true);
+    try { await ecommerce.deleteAttribute(a.id); addToast('Deleted', 'success'); await load(); } catch (e: any) { addToast(e.message, 'error'); } finally { setLoading(false); }
+  };
+
+  const reorderValues = (from: number, to: number) => {
+    if (!edit || from === to) return;
+    const v = [...edit.values];
+    const [m] = v.splice(from, 1);
+    v.splice(to, 0, m);
+    v.forEach((x, i) => { x.sort_order = i * 10; });
+    setEdit({ ...edit, values: v });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1 min-w-0 sm:max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search attributes..." className="pl-9 pr-3 py-2 w-full border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+        </div>
+        <button onClick={load} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl disabled:opacity-40 transition-colors shrink-0" disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
+        <button onClick={openNew} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl hover:bg-indigo-600 shadow-sm shrink-0"><Plus className="w-4 h-4" /> Add Attribute</button>
+      </div>
+
+      <FormDrawer
+        open={!!edit}
+        onClose={() => setEdit(null)}
+        title={edit?.attr.id ? 'Edit Attribute' : 'New Attribute'}
+        subtitle={edit?.attr.id ? 'Update name, slug and permitted values' : 'Create a new product attribute (e.g. Size, Color)'}
+        saving={loading}
+        error={error}
+        width="lg"
+        footer={
+          <div className="flex items-center gap-2 justify-end">
+            <button type="button" onClick={() => setEdit(null)} disabled={loading} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50">Cancel</button>
+            <button type="button" onClick={save} disabled={loading} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl hover:bg-indigo-600 disabled:opacity-50">
+              {loading ? <><RefreshCw className="w-4 h-4 animate-spin" /> Saving…</> : <><Save className="w-4 h-4" /> Save Attribute</>}
+            </button>
+          </div>
+        }
+      >
+        {edit && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input value={edit.attr.name || ''} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, name: e.target.value } })} placeholder="Name e.g. Size, Color" className={inputCls} />
+              <input value={edit.attr.slug || slugFromName(edit.attr.name)} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, slug: e.target.value } })} placeholder="Slug" className={inputCls} />
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 col-span-2"><input type="checkbox" checked={edit.attr.has_presets !== false} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, has_presets: e.target.checked } })} className="w-3.5 h-3.5 accent-indigo-500" /> Has preset values (suggests a controlled list in the product form)</label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={edit.attr.is_active !== false} onChange={e => setEdit({ ...edit, attr: { ...edit.attr, is_active: e.target.checked } })} className="w-3.5 h-3.5 accent-indigo-500" /> Active</label>
+            </div>
+            <div>
+              <p className="text-xs font-extrabold text-slate-700 uppercase mb-1.5">Permitted Values</p>
+              <div className="space-y-1.5">
+                {edit.values.map((v, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-1.5"
+                    draggable
+                    onDragStart={() => setDragIdx(i)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => { if (dragIdx !== null) { reorderValues(dragIdx, i); setDragIdx(null); } }}
+                  >
+                    <GripVertical className="w-4 h-4 text-slate-400 cursor-grab" title="Drag to reorder" />
+                    <input value={v.value} onChange={e => { const vv = [...edit.values]; vv[i] = { ...vv[i], value: e.target.value }; setEdit({ ...edit, values: vv }); }} placeholder="e.g. M" className={`${inputCls} flex-1`} />
+                    <button type="button" onClick={() => setEdit({ ...edit, values: edit.values.filter((_, x) => x !== i) })} className="p-1 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => { const next = [...(edit.values || []), { value: '', sort_order: edit.values.length * 10 }]; setEdit({ ...edit, values: next }); }} className="flex items-center gap-1 text-[11px] font-bold text-indigo-600"><Plus className="w-3.5 h-3.5" /> Add value</button>
+              </div>
+              {edit.values.some((v) => !v.value.trim()) && (
+                <p className="text-[10px] text-red-500 mt-1">Empty values will be skipped on save.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </FormDrawer>
+
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-auto">
+        {error ? (
+          <div className="p-10 text-center text-xs text-red-500 flex flex-col items-center gap-2">
+            <AlertCircle className="w-6 h-6" /><span className="font-bold">{error}</span>
+            <button onClick={load} className="mt-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg font-bold hover:bg-red-100 transition-colors">Try again</button>
+          </div>
+        ) : loading && !attrs.length ? (
+          <div className="p-10 text-center text-slate-400 text-xs"><RefreshCw className="w-5 h-5 mx-auto animate-spin mb-2" />Loading attributes…</div>
+        ) : !loading && attrs.length === 0 ? (
+          <div className="p-10 text-center flex flex-col items-center gap-2">
+            <Layers className="w-8 h-8 text-slate-200" />
+            <p className="text-slate-400 text-xs font-bold">{searchQuery ? 'No attributes match your search.' : 'No attributes yet.'}</p>
+            <p className="text-slate-300 text-[11px]">Add an attribute to use it with variable products and CSV import.</p>
+          </div>
+        ) : (
+          <>
+            <table className={`w-full text-xs transition-opacity ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                <tr><th className="text-left p-3 font-bold">Attribute</th><th className="text-left p-3 font-bold">Slug</th><th className="text-right p-3 font-bold">Values</th><th className="text-left p-3 font-bold">Presets</th><th className="text-left p-3 font-bold">Status</th><th className="text-right p-3 font-bold">Actions</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {attrs.map(a => (
+                  <tr key={a.id} className="hover:bg-slate-50/60">
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded-lg bg-indigo-500/10 text-indigo-600"><Layers className="w-4 h-4" /></div>
+                        <span className="font-bold text-slate-900">{a.name}</span>
+                      </div>
+                    </td>
+                    <td className="p-3 text-slate-500 font-mono">{a.slug || '—'}</td>
+                    <td className="p-3 text-slate-600">
+                      <AttributeValuesBadge attributeId={a.id} />
+                    </td>
+                    <td className="p-3">{a.has_presets ? <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold">Yes</span> : <span className="text-slate-400 text-[10px]">—</span>}</td>
+                    <td className="p-3"><span className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${a.is_active !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{a.is_active !== false ? 'Active' : 'Inactive'}</span></td>
+                    <td className="p-3"><div className="flex justify-end gap-1.5"><button onClick={() => openEdit(a)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg"><Edit2 className="w-4 h-4" /></button><button onClick={() => remove(a)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button></div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination total={total} page={page} perPage={perPage} onPageChange={setPage} onPerPageChange={setPerPage} disabled={loading} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* Lightweight value-count fetcher for the table (keeps the row render simple). */
+const AttributeValuesBadge: React.FC<{ attributeId: string }> = ({ attributeId }) => {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    ecommerce.listAttributeValues(attributeId).then((v) => setCount(v.length)).catch(() => setCount(0));
+  }, [attributeId]);
+  return <span className="text-[10px] text-slate-500">{count} value{count !== 1 ? 's' : ''}</span>;
+};
 export const EcAdmin: React.FC<Props> = ({ addToast }) => {
   const [tab, setTab] = useState<EcTab>('products');
   const [error, setError] = useState<string | null>(null);
 
   const tabs: { id: EcTab; label: string; icon: React.ReactNode }[] = [
     { id: 'products', label: 'Products', icon: <Package className="w-4 h-4" /> },
+    { id: 'attributes', label: 'Attributes', icon: <Layers className="w-4 h-4" /> },
     { id: 'categories', label: 'Categories', icon: <Tags className="w-4 h-4" /> },
     { id: 'brands', label: 'Brands', icon: <Award className="w-4 h-4" /> },
     { id: 'orders', label: 'Orders', icon: <ShoppingCart className="w-4 h-4" /> },
@@ -1644,8 +1841,9 @@ export const EcAdmin: React.FC<Props> = ({ addToast }) => {
 
   const renderTab = () => {
     switch (tab) {
-      case 'products': return <ProductsPanel addToast={addToast} setError={setError} />;
-      case 'categories': return <CategoriesPanel addToast={addToast} setError={setError} />;
+       case 'attributes': return <AttributesPanel addToast={addToast} setError={setError} />;
+       case 'products': return <ProductsPanel addToast={addToast} setError={setError} />;
+       case 'categories': return <CategoriesPanel addToast={addToast} setError={setError} />;
       case 'brands': return <BrandsPanel addToast={addToast} setError={setError} />;
       case 'orders': return <OrdersPanel addToast={addToast} setError={setError} />;
       case 'coupons': return <CouponsPanel addToast={addToast} setError={setError} />;
