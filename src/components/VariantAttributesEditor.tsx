@@ -6,6 +6,9 @@ import { EcAttribute, EcAttributeValue } from '../types/ecommerce';
 interface Props {
   value: Record<string, string>;
   onChange: (attrs: Record<string, string>) => void;
+  /** IDs of attribute groups assigned to this product. When omitted, all
+   * active preset groups are shown (backward-compatible behaviour). */
+  assignedGroups?: string[];
 }
 
 const parsePairs = (raw: string): { key: string; value: string }[] =>
@@ -24,14 +27,15 @@ interface LoadedAttr {
   values: string[];
 }
 
-export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange }) => {
+export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange, assignedGroups }) => {
   const attrs = value || {};
   const [text, setText] = useState('');
   const [loaded, setLoaded] = useState<LoadedAttr[]>([]);
   const [loading, setLoading] = useState(true);
-  const [savingSize, setSavingSize] = useState<string | null>(null);
-  const [newCustom, setNewCustom] = useState('');
+  const [savingValue, setSavingValue] = useState<string | null>(null);
+  const [newCustom, setNewCustom] = useState<{ groupId: string; text: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const assignedSet = assignedGroups ? new Set(assignedGroups) : null;
 
   const loadAll = useCallback(async () => {
     try {
@@ -39,13 +43,15 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange }) =>
       const preset = list.filter((a) => a.is_active !== false && a.has_presets);
       const loadedAttrs: LoadedAttr[] = [];
       for (const a of preset) {
-        const vals = await ecommerce.listAttributeValues(a.id).then((v) => v.map((x) => x.value));
+        // Only include groups that are assigned to this product (when assignedGroups is provided).
+        if (assignedSet && !assignedSet.has(a.id)) continue;
+        const vals = await ecommerce.listAttributeValues(a.id).then((v) => v.filter(x => x.is_active !== false).map((x) => x.value));
         if (vals.length) loadedAttrs.push({ attr: a, values: vals });
       }
       setLoaded(loadedAttrs);
     } catch { /* non-fatal — falls back to freeform only */ }
     setLoading(false);
-  }, []);
+  }, [assignedSet]);
 
   useEffect(() => { let cancelled = false; (async () => { await loadAll(); if (cancelled) return; })(); return () => { cancelled = true; }; }, [loadAll]);
 
@@ -69,22 +75,27 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange }) =>
     onChange(next);
   };
 
-  const addCustomSize = async () => {
-    const v = newCustom.trim();
-    if (!v || savingSize) return;
-    setSavingSize(v);
+  /** Register a new value for an assigned attribute group inline. */
+  const addCustomValue = async (groupId: string) => {
+    if (!newCustom) return;
+    const v = newCustom.text.trim();
+    if (!v || savingValue) return;
+    setSavingValue(v);
     try {
-      const attr = await ecommerce.getOrCreateAttribute('Size');
+      const attr = await ecommerce.getAttributeById(groupId);
+      if (!attr) throw new Error('Attribute group not found');
       await ecommerce.getOrCreateAttributeValue(attr.id, v);
       await loadAll();
-      setNewCustom('');
+      setNewCustom(null);
     } catch {
       // keep typing the value into the variant attributes as a fallback
+      const key = loaded.find(l => l.attr.id === groupId)?.attr.name.toLowerCase() || 'value';
       const next = { ...attrs };
-      if (!next.size) next.size = v;
+      if (!next[key]) next[key] = v;
       onChange(next);
+      setNewCustom(null);
     } finally {
-      setSavingSize(null);
+      setSavingValue(null);
     }
   };
 
@@ -117,7 +128,7 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange }) =>
       {loading ? (
         <div className="flex items-center gap-1 text-[10px] text-slate-400"><RefreshCw className="w-3 h-3 animate-spin" /> Loading attributes…</div>
       ) : loaded.length === 0 ? (
-        <div className="text-[10px] text-slate-400">No registered attributes yet. Manage them in the Attributes tab.</div>
+        <div className="text-[10px] text-slate-400">No registered attribute groups assigned to this product. Assign groups in the product form above.</div>
       ) : (
         loaded.map(({ attr, values }) => (
           <div key={attr.id} className="flex flex-wrap items-center gap-1.5">
@@ -135,23 +146,51 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange }) =>
                 </button>
               );
             })}
+            {/* Inline "add new value" for this group */}
+            {newCustom?.groupId === attr.id ? (
+              <div className="flex items-center gap-1">
+                <input
+                  value={newCustom.text || ''}
+                  onChange={(e) => setNewCustom({ groupId: attr.id, text: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addCustomValue(attr.id); }}
+                  placeholder="Value…"
+                  className="w-24 px-1.5 py-0.5 border border-slate-200 rounded text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
+                />
+                <button type="button" onClick={() => addCustomValue(attr.id)} disabled={savingValue || !newCustom?.text?.trim()} className="p-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40" title="Register a new value">
+                  <Plus className="w-3 h-3" />
+                </button>
+                <button type="button" onClick={() => setNewCustom(null)} className="p-0.5 rounded text-slate-400 hover:bg-slate-100">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setNewCustom({ groupId: attr.id, text: '' })}
+                className="p-0.5 rounded bg-slate-100 text-slate-500 hover:bg-slate-200"
+                title={`Add new ${attr.name} value`}
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            )}
           </div>
         ))
       )}
 
-      {/* Inline "add new value" for Size (keeps CSV import / admin in sync) */}
-      <div className="flex items-center gap-1.5 pt-1">
-        <input
-          value={newCustom}
-          onChange={(e) => setNewCustom(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') addCustomSize(); }}
-          placeholder="+ new size value…"
-          className="w-32 px-1.5 py-0.5 border border-slate-200 rounded text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
-        />
-        <button type="button" onClick={addCustomSize} disabled={savingSize || !newCustom.trim()} className="p-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40" title="Register a new Size value">
-          <Plus className="w-3 h-3" />
-        </button>
-      </div>
+      {/* Freeform key:value editor — useful for ad-hoc attributes not managed as groups */}
+      {!assignedGroups && (
+        <div className="pt-1">
+          <input
+            ref={inputRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { commitText(); e.preventDefault(); } }}
+            onBlur={commitText}
+            placeholder="Add attribute: color:Black, size:M, ram:8GB (Enter to add)"
+            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-[10px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
+          />
+        </div>
+      )}
     </div>
   );
 };

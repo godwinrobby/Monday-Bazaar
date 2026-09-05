@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Package, ShoppingCart, Star, Check, Minus, Plus, Loader2, Truck, ShieldCheck } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
 import { useCart } from '../context/CartContext';
-import { EcProduct, EcVariant, EcCategory } from '../types/ecommerce';
+import { EcProduct, EcVariant, EcCategory, EcAttributeGroupWithValues } from '../types/ecommerce';
 
 export const EcProductPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +12,8 @@ export const EcProductPage: React.FC = () => {
   const [product, setProduct] = useState<EcProduct | null>(null);
   const [variants, setVariants] = useState<EcVariant[]>([]);
   const [category, setCategory] = useState<EcCategory | null>(null);
+  const [attrGroups, setAttrGroups] = useState<EcAttributeGroupWithValues[]>([]);
+  const [assignedAttrMap, setAssignedAttrMap] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<EcVariant | null>(null);
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -27,6 +29,23 @@ export const EcProductPage: React.FC = () => {
       setProduct(p);
       const v = await ecommerce.listVariants(p.id);
       setVariants(v.filter(x => x.is_active !== false));
+      // Load assigned attribute groups + their values for display
+      const pag = await ecommerce.listProductAttributeGroups(p.id);
+      const groups: EcAttributeGroupWithValues[] = [];
+      const map: Record<string, string> = {};
+      for (const g of pag) {
+        const attr = await ecommerce.getAttributeById(g.attribute_id);
+        if (attr) {
+          const values = await ecommerce.listAttributeValues(attr.id);
+          groups.push({ ...attr, values });
+        }
+      }
+      // Map lowercase key → group display name
+      for (const g of groups) {
+        map[g.slug.toLowerCase()] = g.name;
+      }
+      setAttrGroups(groups);
+      setAssignedAttrMap(map);
       if (p.category_id) {
         const cats = await ecommerce.listCategories();
         setCategory(cats.find(c => c.id === p.category_id) || null);
@@ -58,10 +77,14 @@ export const EcProductPage: React.FC = () => {
     setTimeout(() => setAdded(false), 2000);
   };
 
-  const attrGroups: Record<string, string[]> = {};
-  variants.forEach(v => Object.entries(v.attributes || {}).forEach(([k, val]) => { (attrGroups[k] = attrGroups[k] || []).push(String(val)); }));
-  Object.keys(attrGroups).forEach(k => { attrGroups[k] = [...new Set(attrGroups[k])]; });
+  const variantAttrGroups: Record<string, string[]> = {};
+  variants.forEach(v => Object.entries(v.attributes || {}).forEach(([k, val]) => {
+    (variantAttrGroups[k] = variantAttrGroups[k] || []).push(String(val));
+  }));
+  Object.keys(variantAttrGroups).forEach(k => { variantAttrGroups[k] = [...new Set(variantAttrGroups[k])]; });
   const selectableByAttr = (attrKey: string, attrVal: string) => variants.filter(v => String(v.attributes?.[attrKey]) === attrVal);
+
+  const groupLabel = (key: string): string => assignedAttrMap[key.toLowerCase()] || key.charAt(0).toUpperCase() + key.slice(1);
 
   if (loading) return <div className="py-20 text-center text-slate-400"><Loader2 className="w-6 h-6 mx-auto animate-spin mb-2" />Loading product...</div>;
   if (error || !product) return (
@@ -117,9 +140,9 @@ export const EcProductPage: React.FC = () => {
 
           {variants.length > 0 && (
             <div className="space-y-3">
-              {Object.entries(attrGroups).map(([attrKey, values]) => (
+              {Object.entries(variantAttrGroups).map(([attrKey, values]) => (
                 <div key={attrKey}>
-                  <p className="text-xs font-extrabold text-slate-700 uppercase mb-1.5">{attrKey}</p>
+                  <p className="text-xs font-extrabold text-slate-700 uppercase mb-1.5">{groupLabel(attrKey)}</p>
                   <div className="flex flex-wrap gap-2">
                     {values.map(val => {
                       const active = selected && String(selected.attributes?.[attrKey]) === val;

@@ -2,7 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   EcCategory, EcBrand, EcProduct, EcVariant, EcCoupon, EcCustomer, EcAddress,
   EcPaymentMethod, EcShippingMethod, EcOrder, EcOrderItem, EcProductType,
-  EcAttribute, EcAttributeValue,
+  EcAttribute, EcAttributeValue, EcAttributeGroupWithValues, EcProductAttributeGroup,
 } from '../types/ecommerce';
 import { generateSalt, hashPassword, verifyPassword } from '../utils/auth';
 
@@ -259,6 +259,7 @@ class SupabaseEcommerce {
 
   async deleteProduct(id: string): Promise<void> {
     await this.client.from('ec_variants').delete().eq('product_id', id);
+    await this.client.from('ec_product_attribute_groups').delete().eq('product_id', id);
     const { error } = await this.client.from('ec_products').delete().eq('id', id);
     if (error) this.error(error);
   }
@@ -335,7 +336,14 @@ class SupabaseEcommerce {
     return Array.isArray(data) && data[0] ? this.mapAttribute(data[0]) : null;
   }
 
-  /** Create an attribute if it does not exist, otherwise reuse the existing one. */
+  /** Get an attribute group by primary key id, or null. */
+  async getAttributeById(id: string): Promise<EcAttribute | null> {
+    const { data, error } = await this.client.from('ec_attributes').select('*').eq('id', id).limit(1);
+    if (error) this.error(error);
+    return Array.isArray(data) && data[0] ? this.mapAttribute(data[0]) : null;
+  }
+
+  /** Create an attribute group if it does not exist, otherwise reuse the existing one. */
   async getOrCreateAttribute(name: string): Promise<EcAttribute> {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     const existing = await this.getAttributeBySlug(slug);
@@ -347,7 +355,7 @@ class SupabaseEcommerce {
     return this.mapAttribute(data);
   }
 
-  /** Create an attribute value if it does not exist for the attribute, otherwise reuse. */
+  /** Create an attribute value if it does not exist for the attribute group, otherwise reuse. */
   async getOrCreateAttributeValue(attributeId: string, value: string): Promise<EcAttributeValue> {
     const v = String(value).trim();
     if (!v) throw new Error('Attribute value cannot be empty');
@@ -389,9 +397,16 @@ class SupabaseEcommerce {
     }, this.mapAttributeValue);
   }
 
-  /** Upsert an attribute. Returns the saved attribute (with id). */
+  /** Upsert an attribute group. Returns the saved group (with id).
+   * Throws if a different group already uses the same slug (case-insensitive). */
   async saveAttribute(a: EcAttribute): Promise<EcAttribute> {
     const slug = a.slug || a.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    // Check for duplicate slug (case-insensitive) — the DB enforces this via a
+    // unique index, but we provide a friendly error before the upsert.
+    const existing = await this.getAttributeBySlug(slug);
+    if (existing && existing.id !== a.id) {
+      throw new Error(`Attribute group "${existing.name}" already uses slug "${slug}". Choose a different name.`);
+    }
     const { data, error } = await this.client.from('ec_attributes').upsert({
       id: a.id || `ec-attr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: a.name, slug, has_presets: a.has_presets ?? true, is_active: a.is_active !== false,
@@ -400,13 +415,24 @@ class SupabaseEcommerce {
     return this.mapAttribute(data);
   }
 
-  /** Sync an attribute's value set: create new, update existing (by id), delete removed. */
+  /** Sync an attribute group's value set: create new, update existing (by id), delete removed.
+   * Duplicate values (case-insensitive) within the same group are de-duplicated
+   * before persistence so the UI stays clean. */
   async saveAttributeValues(attributeId: string, values: { id?: string; value: string; sort_order?: number }[]): Promise<EcAttributeValue[]> {
+    // Deduplicate: keep the first occurrence of each value (case-insensitive).
+    const seen = new Set<string>();
+    const unique = values.filter((v) => {
+      const key = String(v.value).trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     const existing = await this.listAttributeValues(attributeId);
     const keepIds = new Set<string>();
     const result: EcAttributeValue[] = [];
 
-    for (const v of values) {
+    for (const v of unique) {
       const trimmed = String(v.value).trim();
       if (!trimmed) continue;
       if (v.id) {
@@ -439,6 +465,84 @@ class SupabaseEcommerce {
     const { error } = await this.client.from('ec_attributes').delete().eq('id', id);
     if (error) this.error(error);
   }
+
+  /** Delete all values for an attribute group. */
+  async deleteAttributeValues(attributeId: string): Promise<void> {
+    const { error } = await this.client.from('ec_attribute_values').delete().eq('attribute_id', attributeId);
+    if (error) this.error(error);
+  }
+
+  /** Fetch all attribute groups with their resolved values in one pass. */
+  async listAttributeGroupsWithValues(): Promise<EcAttributeGroupWithValues[]> {
+    const groups = await this.listAttributes();
+    const result: EcAttributeGroupWithValues[] = [];
+    for (const g of groups) {
+      const values = await this.listAttributeValues(g.id);
+      result.push({ ...g, values });
+    }
+    return result;
+  }
+
+  /** Attribute groups assigned to a product (ordered). */
+  async listProductAttributeGroups(productId: string): Promise<EcProductAttributeGroup[]> {
+    const { data, error } = await this.client
+      .from('ec_product_attribute_groups')
+      .select('*')
+      .eq('product_id', productId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (error) this.error(error);
+    return (data || []).map((r: any) => ({
+      id: r.id, product_id: r.product_id, attribute_id: r.attribute_id,
+      sort_order: Number(r.sort_order || 0), is_active: r.is_active !== false,
+      created_at: r.created_at,
+    }));
+  }
+
+  /** Assign attribute groups to a product. Replaces the previous assignment set. */
+  async saveProductAttributeGroups(productId: string, attributeIds: string[]): Promise<void> {
+    const existing = await this.listProductAttributeGroups(productId);
+    const keep = new Set(existing.map(e => e.id));
+    const incoming = new Set(attributeIds);
+
+    // Deactivate groups no longer assigned.
+    for (const e of existing) {
+      if (!incoming.has(e.attribute_id)) {
+        await this.client.from('ec_product_attribute_groups')
+          .update({ is_active: false }).eq('id', e.id);
+      }
+    }
+    // Reactivate previously-assigned groups that are still selected.
+    for (const e of existing) {
+      if (incoming.has(e.attribute_id)) {
+        await this.client.from('ec_product_attribute_groups')
+          .update({ is_active: true }).eq('id', e.id).eq('is_active', false);
+      }
+    }
+
+    // Insert new assignments.
+    let sortOrder = Math.max(...existing.filter(e => incoming.has(e.attribute_id)).map(e => e.sort_order || 0), -1);
+    for (const attrId of attributeIds) {
+      const alreadyExists = existing.some(e => e.attribute_id === attrId);
+      if (alreadyExists) continue;
+      sortOrder += 10;
+      const { error } = await this.client.from('ec_product_attribute_groups').insert({
+        id: `ec-pag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        product_id: productId,
+        attribute_id: attrId,
+        sort_order: sortOrder,
+        is_active: true,
+      });
+      if (error) this.error(error);
+    }
+  }
+
+  /** Remove all attribute-group assignments for a product. */
+  async deleteProductAttributeGroups(productId: string): Promise<void> {
+    const { error } = await this.client.from('ec_product_attribute_groups').delete().eq('product_id', productId);
+    if (error) this.error(error);
+  }
+
 
   async listCategories(): Promise<EcCategory[]> {
     const { data, error } = await this.client.from('ec_categories').select('*').order('sort_order');

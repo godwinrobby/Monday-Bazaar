@@ -10,7 +10,7 @@ import { ecommerce } from '../db/ecommerce';
 import {
   EcProduct, EcCategory, EcBrand, EcVariant, EcOrder, EcCoupon, EcCustomer,
   EcPaymentMethod, EcShippingMethod, EcProductType, EcOrderStatus,
-  EcAttribute, EcAttributeValue,
+  EcAttribute, EcAttributeValue, EcAttributeGroupWithValues, EcProductAttributeGroup,
 } from '../types/ecommerce';
 import { ProductCsvImport } from './ProductCsvImport';
 import { ProductDeleteModal } from './ProductDeleteModal';
@@ -49,6 +49,8 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
   const [showVariants, setShowVariants] = useState(false);
   const [form, setForm] = useState<EcProduct>({ id: '', name: '', product_type: 'simple', price: 0, stock: 0, is_active: true, images: [] });
   const [variants, setVariants] = useState<EcVariant[]>([]);
+  const [attributeGroups, setAttributeGroups] = useState<EcAttributeGroupWithValues[]>([]);
+  const [assignedGroups, setAssignedGroups] = useState<EcProductAttributeGroup[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,8 +70,8 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
 
   // Reference lists (categories/brands) are small — load once.
   useEffect(() => {
-    Promise.all([ecommerce.listCategories(), ecommerce.listBrands()])
-      .then(([c, b]) => { setCategories(c); setBrands(b); })
+    Promise.all([ecommerce.listCategories(), ecommerce.listBrands(), ecommerce.listAttributeGroupsWithValues()])
+      .then(([c, b, ag]) => { setCategories(c); setBrands(b); setAttributeGroups(ag); })
       .catch(() => { /* non-fatal */ });
   }, []);
 
@@ -92,12 +94,13 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
     const newId = `ec-prod-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setEditId(null); setShowVariants(false);
     setForm({ id: newId, name: '', product_type: 'simple', price: 0, stock: 0, is_active: true, images: [] });
-    setVariants([]); setShowForm(true);
+    setVariants([]); setAssignedGroups([]); setShowForm(true);
   };
 
   const openEdit = async (p: EcProduct) => {
     setEditId(p.id); setForm(p); setShowVariants(p.product_type === 'variable'); setShowForm(true);
     try { setVariants(await ecommerce.listVariants(p.id)); } catch { setVariants([]); }
+    try { setAssignedGroups(await ecommerce.listProductAttributeGroups(p.id)); } catch { setAssignedGroups([]); }
   };
 
   const save = async () => {
@@ -110,6 +113,16 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
         for (const v of variants) {
           await ecommerce.saveVariant({ ...v, product_id: pid, price: Number(v.price || 0), stock: Number(v.stock || 0) });
         }
+        // Sync assigned attribute groups for this variable product.
+        const groupIds = assignedGroups.map(g => g.attribute_id);
+        if (groupIds.length) {
+          await ecommerce.saveProductAttributeGroups(pid, groupIds);
+        } else {
+          await ecommerce.deleteProductAttributeGroups(pid);
+        }
+      } else if (form.product_type === 'simple' && pid) {
+        // Simple products don't use per-variant attributes – clean up any stale assignments.
+        await ecommerce.deleteProductAttributeGroups(pid);
       }
       addToast(editId ? 'Product updated' : 'Product created', 'success');
       setShowForm(false); await load();
@@ -224,6 +237,32 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
         />
         {showVariants && (
           <div className="border border-slate-100 rounded-xl bg-slate-50 p-3 space-y-3">
+            {/* Attribute group assignment */}
+            <div className="space-y-2 pb-2 border-b border-slate-200">
+              <p className="text-xs font-extrabold text-slate-700 uppercase">Attribute Groups</p>
+              <p className="text-[10px] text-slate-500">Select which attribute groups this product uses. Values below will be drawn from these groups.</p>
+              {attributeGroups.filter(a => a.is_active !== false).length === 0 ? (
+                <p className="text-[10px] text-slate-400">No attribute groups found. Create some in the Attributes tab first.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {attributeGroups.filter(a => a.is_active !== false).map(a => {
+                    const checked = assignedGroups.some(g => g.attribute_id === a.id);
+                    return (
+                      <label key={a.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold cursor-pointer transition-all ${checked ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>
+                        <input type="checkbox" checked={checked} onChange={e => {
+                          if (e.target.checked) {
+                            setAssignedGroups([...assignedGroups, { id: '', product_id: editId || form.id || '', attribute_id: a.id, is_active: true, sort_order: assignedGroups.length * 10 }]);
+                          } else {
+                            setAssignedGroups(assignedGroups.filter(g => g.attribute_id !== a.id));
+                          }
+                        }} className="w-3.5 h-3.5 accent-indigo-500" />
+                        {a.name}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <div className="flex items-center justify-between">
               <h5 className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-indigo-500" /> Variants (SKU, price, stock, attributes, images)</h5>
               <button type="button" onClick={() => setVariants([...variants, { id: '', product_id: editId || form.id || '', sku: '', price: 0, sale_price: null, stock: 0, attributes: {}, image: '', images: [], is_active: true }])} className="flex items-center gap-1 text-[11px] font-bold text-indigo-600"><Plus className="w-3.5 h-3.5" /> Add Variant</button>
@@ -240,6 +279,7 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
                 </div>
                 <VariantAttributesEditor
                   value={v.attributes || {}}
+                  assignedGroups={assignedGroups.map(g => g.attribute_id)}
                   onChange={(attrs) => { const vv = [...variants]; vv[i] = { ...vv[i], attributes: attrs }; setVariants(vv); }}
                 />
                 <ImageUploader
@@ -1052,9 +1092,9 @@ const SettingsPanel: React.FC<{ addToast: Props['addToast'] }> = ({ addToast }) 
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800 space-y-1">
         <p className="font-bold flex items-center gap-1.5"><AlertCircle className="w-4 h-4" /> How this module maps together</p>
         <ul className="list-disc list-inside text-amber-700 space-y-0.5">
-          <li><b>Admin → API → Database → User App:</b> Admin CRUD writes to Supabase tables (<code>ec_products</code>, <code>ec_variants</code>, <code>ec_categories</code>, <code>ec_brands</code>, <code>ec_attributes</code>, <code>ec_attribute_values</code>, <code>ec_coupons</code>, <code>ec_payment_methods</code>, <code>ec_shipping_methods</code>, <code>ec_orders</code>, <code>ec_order_items</code>) via the shared <code>src/db/ecommerce.ts</code> service.</li>
+          <li><b>Admin → API → Database → User App:</b> Admin CRUD writes to Supabase tables (<code>ec_products</code>, <code>ec_variants</code>, <code>ec_categories</code>, <code>ec_brands</code>, <code>ec_attributes</code>, <code>ec_attribute_values</code>, <code>ec_product_attribute_groups</code>, <code>ec_coupons</code>, <code>ec_payment_methods</code>, <code>ec_shipping_methods</code>, <code>ec_orders</code>, <code>ec_order_items</code>) via the shared <code>src/db/ecommerce.ts</code> service.</li>
           <li>Simple products carry price/stock directly; Variable products manage price/stock/SKU per variant. Both can carry images (gallery per product, plus per-variant image galleries).</li>
-          <li>Attributes (e.g. Size, Color) are managed in the Attributes tab, registered once and reused across products and CSV import without duplicates.</li>
+          <li>Attribute Groups (e.g. Size, Color, Storage, RAM) are managed in the Attributes tab as groups with preset values – registered once and reused across products, variants and CSV import without duplicates. Each variable product is assigned the attribute groups it uses via the <code>ec_product_attribute_groups</code> junction table.</li>
           <li>Orders placed in the User App flow straight into the Admin Orders tab, where you can manage status, payment status, shipment and tracking numbers.</li>
           <li>Payment &amp; shipping methods configured here are offered during checkout in the User App.</li>
           <li>Coupons created here are validated (min order, expiry, usage) at checkout.</li>
@@ -1674,21 +1714,21 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
   const slugFromName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'attr';
 
   const save = async () => {
-    if (!edit?.attr.name?.trim()) return addToast('Attribute name required', 'error');
+    if (!edit?.attr.name?.trim()) return addToast('Attribute group name required', 'error');
     const name = edit.attr.name.trim();
     const patch: EcAttribute = { ...edit.attr, name, slug: edit.attr.slug || slugFromName(name), has_presets: edit.attr.has_presets !== false, is_active: edit.attr.is_active !== false };
     setLoading(true);
     try {
       const saved = await ecommerce.saveAttribute(patch);
       await ecommerce.saveAttributeValues(saved.id, edit.values.filter((v) => v.value.trim()));
-      addToast(edit.attr.id ? 'Attribute updated' : 'Attribute created', 'success');
+      addToast(edit.attr.id ? 'Attribute group updated' : 'Attribute group created', 'success');
       setEdit(null);
       await load();
     } catch (e: any) { addToast(e.message, 'error'); } finally { setLoading(false); }
   };
 
   const remove = async (a: EcAttribute) => {
-    if (!window.confirm(`Delete attribute "${a.name}" and all its values? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete attribute group "${a.name}" and all its values? This cannot be undone.`)) return;
     setLoading(true);
     try { await ecommerce.deleteAttribute(a.id); addToast('Deleted', 'success'); await load(); } catch (e: any) { addToast(e.message, 'error'); } finally { setLoading(false); }
   };
@@ -1707,17 +1747,17 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="relative flex-1 min-w-0 sm:max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search attributes..." className="pl-9 pr-3 py-2 w-full border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search attribute groups..." className="pl-9 pr-3 py-2 w-full border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
         </div>
         <button onClick={load} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl disabled:opacity-40 transition-colors shrink-0" disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
-        <button onClick={openNew} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl hover:bg-indigo-600 shadow-sm shrink-0"><Plus className="w-4 h-4" /> Add Attribute</button>
+          <button onClick={openNew} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl hover:bg-indigo-600 shadow-sm shrink-0"><Layers className="w-4 h-4" /> Add Attribute Group</button>
       </div>
 
       <FormDrawer
         open={!!edit}
         onClose={() => setEdit(null)}
-        title={edit?.attr.id ? 'Edit Attribute' : 'New Attribute'}
-        subtitle={edit?.attr.id ? 'Update name, slug and permitted values' : 'Create a new product attribute (e.g. Size, Color)'}
+        title={edit?.attr.id ? 'Edit Attribute Group' : 'New Attribute Group'}
+        subtitle={edit?.attr.id ? 'Update name, slug and permitted values' : 'Create a new attribute group (e.g. Size, Color, Storage)'}
         saving={loading}
         error={error}
         width="lg"
@@ -1725,7 +1765,7 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
           <div className="flex items-center gap-2 justify-end">
             <button type="button" onClick={() => setEdit(null)} disabled={loading} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50">Cancel</button>
             <button type="button" onClick={save} disabled={loading} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl hover:bg-indigo-600 disabled:opacity-50">
-              {loading ? <><RefreshCw className="w-4 h-4 animate-spin" /> Saving…</> : <><Save className="w-4 h-4" /> Save Attribute</>}
+              {loading ? <><RefreshCw className="w-4 h-4 animate-spin" /> Saving…</> : <><Save className="w-4 h-4" /> Save Group</>}
             </button>
           </div>
         }
@@ -1772,18 +1812,18 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
             <button onClick={load} className="mt-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg font-bold hover:bg-red-100 transition-colors">Try again</button>
           </div>
         ) : loading && !attrs.length ? (
-          <div className="p-10 text-center text-slate-400 text-xs"><RefreshCw className="w-5 h-5 mx-auto animate-spin mb-2" />Loading attributes…</div>
+          <div className="p-10 text-center text-slate-400 text-xs"><RefreshCw className="w-5 h-5 mx-auto animate-spin mb-2" />Loading attribute groups…</div>
         ) : !loading && attrs.length === 0 ? (
           <div className="p-10 text-center flex flex-col items-center gap-2">
             <Layers className="w-8 h-8 text-slate-200" />
-            <p className="text-slate-400 text-xs font-bold">{searchQuery ? 'No attributes match your search.' : 'No attributes yet.'}</p>
-            <p className="text-slate-300 text-[11px]">Add an attribute to use it with variable products and CSV import.</p>
+            <p className="text-slate-400 text-xs font-bold">{searchQuery ? 'No attribute groups match your search.' : 'No attribute groups yet.'}</p>
+            <p className="text-slate-300 text-[11px]">Add an attribute group to use it with variable products and CSV import.</p>
           </div>
         ) : (
           <>
             <table className={`w-full text-xs transition-opacity ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
-                <tr><th className="text-left p-3 font-bold">Attribute</th><th className="text-left p-3 font-bold">Slug</th><th className="text-right p-3 font-bold">Values</th><th className="text-left p-3 font-bold">Presets</th><th className="text-left p-3 font-bold">Status</th><th className="text-right p-3 font-bold">Actions</th></tr>
+                <tr><th className="text-left p-3 font-bold">Attribute Group</th><th className="text-left p-3 font-bold">Slug</th><th className="text-left p-3 font-bold">Values</th><th className="text-left p-3 font-bold">Presets</th><th className="text-left p-3 font-bold">Status</th><th className="text-right p-3 font-bold">Actions</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {attrs.map(a => (
@@ -1796,7 +1836,7 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
                     </td>
                     <td className="p-3 text-slate-500 font-mono">{a.slug || '—'}</td>
                     <td className="p-3 text-slate-600">
-                      <AttributeValuesBadge attributeId={a.id} />
+                      <AttributeGroupValues attributeId={a.id} />
                     </td>
                     <td className="p-3">{a.has_presets ? <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold">Yes</span> : <span className="text-slate-400 text-[10px]">—</span>}</td>
                     <td className="p-3"><span className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${a.is_active !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{a.is_active !== false ? 'Active' : 'Inactive'}</span></td>
@@ -1813,13 +1853,20 @@ const AttributesPanel: React.FC<{ addToast: Props['addToast']; setError: (s: str
   );
 };
 
-/* Lightweight value-count fetcher for the table (keeps the row render simple). */
-const AttributeValuesBadge: React.FC<{ attributeId: string }> = ({ attributeId }) => {
-  const [count, setCount] = useState(0);
+/* Lightweight value-list fetcher for the group table row (shows values as chips). */
+const AttributeGroupValues: React.FC<{ attributeId: string }> = ({ attributeId }) => {
+  const [values, setValues] = useState<string[]>([]);
   useEffect(() => {
-    ecommerce.listAttributeValues(attributeId).then((v) => setCount(v.length)).catch(() => setCount(0));
+    ecommerce.listAttributeValues(attributeId).then((v) => setValues(v.filter(x => x.is_active !== false).map(x => x.value))).catch(() => setValues([]));
   }, [attributeId]);
-  return <span className="text-[10px] text-slate-500">{count} value{count !== 1 ? 's' : ''}</span>;
+  if (!values.length) return <span className="text-[10px] text-slate-400">0 values</span>;
+  return (
+    <div className="flex flex-wrap gap-0.5">
+      {values.map(v => (
+        <span key={v} className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-mono">{v}</span>
+      ))}
+    </div>
+  );
 };
 export const EcAdmin: React.FC<Props> = ({ addToast }) => {
   const [tab, setTab] = useState<EcTab>('products');

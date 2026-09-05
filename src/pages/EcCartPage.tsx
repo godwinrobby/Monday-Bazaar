@@ -1,22 +1,25 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft, Tag, Truck, CreditCard } from 'lucide-react';
+import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft, Tag, Truck, CreditCard, Loader2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { ecommerce } from '../db/ecommerce';
 import { EcCoupon } from '../types/ecommerce';
 
 const CartItemRow: React.FC<{
   item: any;
+  attrSlugToName: Record<string, string>;
   removeItem: (productId: string, variantId?: string) => void;
   updateQuantity: (productId: string, variantId?: string, quantity?: number) => void;
-}> = ({ item, removeItem, updateQuantity }) => (
+}> = ({ item, attrSlugToName, removeItem, updateQuantity }) => {
+  const label = (key: string) => attrSlugToName[key.toLowerCase()] || key.charAt(0).toUpperCase() + key.slice(1);
+  return (
   <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
     <img src={item.image || 'https://placehold.co/80x80'} alt={item.productName}
       className="w-20 h-20 rounded-xl object-cover bg-slate-50"
       onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/80x80?text=No+Img'; }} />
     <div className="flex-1 space-y-1">
       <h3 className="font-bold text-slate-900 text-sm line-clamp-1">{item.productName}</h3>
-      {item.variantId && <div className="text-xs text-slate-500">Variant: {item.attributes && Object.entries(item.attributes).map(([k, v]) => `${k}: ${v}`).join(', ')}</div>}
+      {item.variantId && <div className="text-xs text-slate-500">Variant: {item.attributes && Object.entries(item.attributes).map(([k, v]) => `${label(k)}: ${v}`).join(', ')}</div>}
       {item.sku && <div className="text-xs text-slate-400 font-mono">SKU: {item.sku}</div>}
       <div className="flex items-center gap-2"><span className="text-sm font-bold text-indigo-600">₹{Number(item.price).toLocaleString('en-IN')}</span></div>
     </div>
@@ -31,10 +34,12 @@ const CartItemRow: React.FC<{
     </div>
   </div>
 );
+};
 
 export const EcCartPage: React.FC = () => {
   const navigate = useNavigate();
   const { items, removeItem, updateQuantity, itemCount, subtotal } = useCart();
+  const [attrSlugToName, setAttrSlugToName] = useState<Record<string, string>>({});
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<EcCoupon | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
@@ -71,6 +76,14 @@ export const EcCartPage: React.FC = () => {
   const total = subtotal - discount;
   const proceedToCheckout = () => { if (items.length === 0) return; navigate('/checkout'); };
 
+  useEffect(() => {
+    ecommerce.listAttributeGroupsWithValues().then(groups => {
+      const m: Record<string, string> = {};
+      for (const g of groups) m[g.slug.toLowerCase()] = g.name;
+      setAttrSlugToName(m);
+    });
+  }, []);
+
   if (items.length === 0) {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
@@ -98,7 +111,7 @@ export const EcCartPage: React.FC = () => {
 
       <div className="space-y-3">
         {items.map((item) => (
-          <CartItemRow key={`${item.productId}-${item.variantId || 'main'}`} item={item} removeItem={removeItem} updateQuantity={updateQuantity} />
+          <CartItemRow key={`${item.productId}-${item.variantId || 'main'}`} item={item} attrSlugToName={attrSlugToName} removeItem={removeItem} updateQuantity={updateQuantity} />
         ))}
       </div>
 

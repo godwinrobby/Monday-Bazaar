@@ -63,12 +63,31 @@ export interface EcAttribute {
   is_active?: boolean;
 }
 
+/** Attribute Group — an alias for EcAttribute that represents a group
+ * (e.g. "Size", "Color", "Storage"). Each group has many values below. */
+export type EcAttributeGroup = EcAttribute;
+
 export interface EcAttributeValue {
   id: string;
   attribute_id: string;
   value: string;
   sort_order?: number;
   is_active?: boolean;
+}
+
+/** Combined attribute group with its resolved values (for admin list/detail views). */
+export interface EcAttributeGroupWithValues extends EcAttribute {
+  values: EcAttributeValue[];
+}
+
+/** Links a product to an attribute group it uses (variable & simple products). */
+export interface EcProductAttributeGroup {
+  id: string;
+  product_id: string;
+  attribute_id: string;
+  sort_order?: number;
+  is_active?: boolean;
+  created_at?: string;
 }
 
 export interface EcCoupon {

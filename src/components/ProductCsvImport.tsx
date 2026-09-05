@@ -155,17 +155,52 @@ export const ProductCsvImport: React.FC<Props> = ({
          await ecommerce.saveProduct(payload);
 
          if (row.productType === 'variable') {
-           if (existing) await ecommerce.deleteVariantsByProduct(pid);
+            if (existing) await ecommerce.deleteVariantsByProduct(pid);
 
-           // Register the "Size" attribute + values once (reused, never duplicated).
-           const sizeAttr = row.sizes.length ? await ecommerce.getOrCreateAttribute('Size') : null;
-           if (sizeAttr) {
-             for (const sz of row.sizes) {
-               try { await ecommerce.getOrCreateAttributeValue(sizeAttr.id, sz); } catch { /* non-fatal */ }
-             }
-           }
+            // Collect all attribute group keys from the row's Attributes column,
+            // the Size Available column, and every variant's attributes.
+            // Keys are lowercase (e.g. "size", "color", "ram"); group names are
+            // capitalised so they match the registry (Size, Color, RAM, …).
+            const allAttrKeys = new Set<string>();
+            Object.keys(row.attributes || {}).forEach(k => allAttrKeys.add(k.toLowerCase()));
+            if (row.sizes.length) allAttrKeys.add('size');
+            for (const v of row.variants) {
+              Object.keys(v.attributes || {}).forEach(k => allAttrKeys.add(k.toLowerCase()));
+            }
 
-           for (const v of row.variants) {
+            // Register each attribute group + its values, collect group IDs for assignment.
+            const groupIds: string[] = [];
+            for (const key of Array.from(allAttrKeys).sort()) {
+              const groupName = key.length === 1
+                ? key.toUpperCase()
+                : key.charAt(0).toUpperCase() + key.slice(1);
+              try {
+                const attr = await ecommerce.getOrCreateAttribute(groupName);
+
+                // Gather all distinct values for this group across the row + variants.
+                const values = new Set<string>();
+                if (key === 'size') {
+                  for (const sz of row.sizes) values.add(sz);
+                }
+                const rowVal = row.attributes[key];
+                if (rowVal) values.add(rowVal);
+                for (const v of row.variants) {
+                  const vVal = v.attributes?.[key];
+                  if (vVal) values.add(vVal);
+                }
+                for (const val of values) {
+                  try { await ecommerce.getOrCreateAttributeValue(attr.id, val); } catch { /* non-fatal */ }
+                }
+                groupIds.push(attr.id);
+              } catch { /* non-fatal — attribute group registration failed */ }
+            }
+
+            // Assign attribute groups to this variable product.
+            if (groupIds.length) {
+              try { await ecommerce.saveProductAttributeGroups(pid, groupIds); } catch { /* non-fatal */ }
+            }
+
+            for (const v of row.variants) {
              const vid = `ec-var-${pid}-${slugify(v.sku)}-${nowBase}`;
              const vPayload: EcVariant = {
                id: vid,
@@ -256,7 +291,7 @@ export const ProductCsvImport: React.FC<Props> = ({
           <ul className="mt-3 space-y-1 text-[11px] text-slate-500">
             <li>• <b>Product Type:</b> <code>simple</code> or <code>variable</code></li>
             <li>• <b>Images:</b> pipe (<code>|</code>)-separated image URLs</li>
-            <li>• <b>Attributes:</b> pipe-separated <code>key:value</code> pairs, e.g. <code>color:Black|material:Cotton</code></li>
+            <li>• <b>Attributes:</b> pipe-separated <code>key:value</code> pairs, e.g. <code>color:Black|ram:8GB</code>. Each key becomes a reusable Attribute Group (e.g. Color, RAM) whose values are registered and assigned to the product.</li>
             <li>• <b>Size Available:</b> comma-separated sizes, e.g. <code>M, L, XL</code>. For variable products, one variant is auto-created per size (unless a <b>Variants</b> column is also supplied). The Size attribute &amp; values are reused, never duplicated.</li>
             <li>• <b>Variants (variable only):</b> semicolon-separated, each with pipe-separated <code>sku:|price:|stock:</code> + attribute pairs, e.g. <code>sku:NAZ-9|price:4395|stock:20|color:Black|size:UK9;sku:NAZ-10|price:4595|stock:15|color:Black|size:UK10</code></li>
             <li>• <b>Status:</b> <code>active</code> / <code>inactive</code> (defaults to <code>active</code>)</li>

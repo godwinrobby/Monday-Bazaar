@@ -5,7 +5,7 @@ import {
   Boxes, Truck, ShieldCheck, RefreshCw, Layers, AlertCircle,
 } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
-import { EcProduct, EcCategory, EcBrand, EcVariant } from '../types/ecommerce';
+import { EcProduct, EcCategory, EcBrand, EcVariant, EcAttributeGroupWithValues } from '../types/ecommerce';
 
 interface FilterState {
   catId: string;
@@ -24,6 +24,7 @@ export const EcShopPage: React.FC = () => {
   const [variants, setVariants] = useState<EcVariant[]>([]);
   const [categories, setCategories] = useState<EcCategory[]>([]);
   const [brands, setBrands] = useState<EcBrand[]>([]);
+  const [allAttrGroups, setAllAttrGroups] = useState<EcAttributeGroupWithValues[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -46,6 +47,9 @@ export const EcShopPage: React.FC = () => {
       setVariants(v.filter(x => x.is_active !== false));
       setCategories(c.filter(x => x.is_active !== false));
       setBrands(b.filter(x => x.is_active !== false));
+      // Load attribute groups for shop display
+      const groups = await ecommerce.listAttributeGroupsWithValues();
+      setAllAttrGroups(groups);
       const prices = activeP.map(pr => pr.sale_price ?? pr.price).filter(Number.isFinite);
       const max = prices.length ? Math.max(1, ...prices) : 1000000;
       setFilters(f => ({ ...f, maxPriceCap: max, priceRange: [0, max] }));
@@ -55,6 +59,11 @@ export const EcShopPage: React.FC = () => {
 
   const catMap = useMemo(() => new Map(categories.map(c => [c.id, c.name])), [categories]);
   const brandMap = useMemo(() => new Map(brands.map(b => [b.id, b.name])), [brands]);
+  const attrSlugToName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const g of allAttrGroups) { m.set(g.slug.toLowerCase(), g.name); }
+    return m;
+  }, [allAttrGroups]);
 
   const productVariants = useMemo(() => {
     const map = new Map<string, EcVariant[]>();
@@ -211,17 +220,23 @@ export const EcShopPage: React.FC = () => {
               <div className="text-xs text-slate-500 mb-3">Showing <b className="text-slate-800">{filtered.length}</b> of {products.length} products</div>
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filtered.map(p => {
-                  const vs = productVariants.get(p.id) || [];
-                  const hasStock = p.product_type === 'variable' ? vs.some(v => v.stock > 0) : p.stock > 0;
-                  return (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      categoryName={catMap.get(p.category_id || '') || ''}
-                      brandName={brandMap.get(p.brand_id || '') || ''}
-                      variantCount={vs.length}
-                      hasStock={hasStock}
-                      onOpen={() => navigate(`/shop/${p.id}`)}
+                   const vs = productVariants.get(p.id) || [];
+                   const hasStock = p.product_type === 'variable' ? vs.some(v => v.stock > 0) : p.stock > 0;
+                    const groupNames: string[] = p.product_type === 'variable'
+                      ? Array.from(new Set<string>(vs.flatMap(v => Object.keys(v.attributes || {}) as string[])))
+                          .map(k => attrSlugToName.get(k.toLowerCase()) || k)
+                          .map(n => n.charAt(0).toUpperCase() + n.slice(1))
+                      : [];
+                   return (
+                     <ProductCard
+                       key={p.id}
+                       product={p}
+                       categoryName={catMap.get(p.category_id || '') || ''}
+                       brandName={brandMap.get(p.brand_id || '') || ''}
+                       variantCount={vs.length}
+                       hasStock={hasStock}
+                       productGroupNames={groupNames}
+                       onOpen={() => navigate(`/shop/${p.id}`)}
                     />
                   );
                 })}
@@ -318,8 +333,9 @@ const ProductCard: React.FC<{
   brandName: string;
   variantCount: number;
   hasStock: boolean;
+  productGroupNames: string[];
   onOpen: () => void;
-}> = ({ product, categoryName, brandName, variantCount, hasStock, onOpen }) => {
+}> = ({ product, categoryName, brandName, variantCount, hasStock, productGroupNames, onOpen }) => {
   const price = product.sale_price ?? product.price;
   const off = product.sale_price != null && product.price > 0 ? Math.round(((product.price - product.sale_price) / product.price) * 100) : 0;
   const isVariable = product.product_type === 'variable';
@@ -350,7 +366,15 @@ const ProductCard: React.FC<{
         </div>
         <div className="mt-auto pt-2">
           {isVariable ? (
-            <div className="text-[10px] text-slate-500 mb-1.5">{variantCount > 0 ? `${variantCount} variant${variantCount > 1 ? 's' : ''} available` : 'Select options'}</div>
+            <>
+              <div className="text-[10px] text-slate-500 mb-1.5">{variantCount > 0 ? `${variantCount} variant${variantCount > 1 ? 's' : ''} available` : 'Select options'}</div>
+              {productGroupNames.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {productGroupNames.slice(0, 3).map(g => (<span key={g} className="text-[9px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-600">{g}</span>))}
+                  {productGroupNames.length > 3 && <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-600">+{productGroupNames.length - 3}</span>}
+                </div>
+              )}
+            </>
           ) : (
             <div className={`text-[10px] mb-1.5 font-medium ${hasStock ? 'text-emerald-600' : 'text-red-500'}`}>
               {hasStock ? `${product.stock} in stock` : 'Out of stock'}
