@@ -22,12 +22,13 @@ export const PRODUCT_CSV_COLUMNS = [
   'Stock',
   'Images',
   'Attributes',
+  'Size Available',
   'Variants',
   'Status',
 ] as const;
 
 export interface ParsedProductRow {
-  line: number; // 1-based line in the file (includes header)
+   line: number; // 1-based line in the file (includes header)
   raw: Record<string, string>;
   name: string;
   sku: string;
@@ -40,6 +41,7 @@ export interface ParsedProductRow {
   stock: string;
   images: string;
   attributes: string;
+  sizeAvailable: string;
   variants: string;
   status: string;
 }
@@ -64,8 +66,9 @@ export interface ValidatedProductRow {
   price: number;
   salePrice: number | null;
   stock: number;
-  images: string[];
+   images: string[];
   attributes: Record<string, string>;
+  sizes: string[];
   variants: ProductImportVariant[];
   status: 'active' | 'inactive';
   action: 'create' | 'update';
@@ -160,7 +163,8 @@ export function parseProductCSV(csvText: string): ParsedProductRow[] {
     salePrice: getCol('Sale Price', 'Saleprice'),
     stock: getCol('Stock'),
     images: getCol('Images', 'Image'),
-    attributes: getCol('Attributes'),
+    attributes: getCol('Attributes', 'Attribute'),
+    sizeAvailable: getCol('Size Available', 'Sizes', 'size_available'),
     variants: getCol('Variants'),
     status: getCol('Status'),
   };
@@ -185,11 +189,12 @@ export function parseProductCSV(csvText: string): ParsedProductRow[] {
       price: get(idx.price),
       salePrice: get(idx.salePrice),
       stock: get(idx.stock),
-      images: get(idx.images),
-      attributes: get(idx.attributes),
-      variants: get(idx.variants),
-      status: get(idx.status),
-    });
+       images: get(idx.images),
+       attributes: get(idx.attributes),
+       sizeAvailable: get(idx.sizeAvailable),
+       variants: get(idx.variants),
+       status: get(idx.status),
+     });
   }
   return result;
 }
@@ -203,6 +208,38 @@ function parseKeyValues(value: string): Record<string, string> {
     if (key) out[key] = rest.join(':').trim();
   });
   return out;
+}
+
+/** Parse a `Size Available` column (e.g. "M, L, XL") into a de-duplicated list of
+ *  size values, preserving the first-seen order. These are reused to create the
+ *  "Size" attribute values and to auto-generate variable-product variants. */
+export function parseSizes(value: string): string[] {
+  if (!value) return [];
+  return Array.from(new Set(
+    value.split(/,|;|\|/).map((s) => s.trim()).filter(Boolean),
+  ));
+}
+
+/** Auto-generate one variant per size for a variable product. Each variant
+ *  inherits the product's base price, sale price and stock and carries a
+ *  `size` attribute plus an auto-derived SKU. */
+export function buildSizeVariants(opts: {
+  sku: string;
+  price: number;
+  salePrice: number | null;
+  stock: number;
+  image?: string;
+  sizes: string[];
+} & Record<string, any>): ProductImportVariant[] {
+  const { sku, price, salePrice, stock, image, sizes, ...attrs } = opts;
+  return sizes.map((size) => ({
+    sku: `${sku}-${String(size).replace(/\s+/g, '-')}`,
+    price,
+    salePrice,
+    stock,
+    attributes: { ...(attrs as Record<string, string>), size },
+    image,
+  }));
 }
 
 /** Parse the Variants column into structured variant records + errors. */
@@ -331,13 +368,38 @@ export function validateProductRows(
       p.images.split('|').concat(p.images.includes('|') ? [] : p.images.split(',')).map(s => s.trim()).filter(Boolean),
     ));
     const attributes = parseKeyValues(p.attributes);
+    const sizes = parseSizes(p.sizeAvailable);
 
     let variants: ProductImportVariant[] = [];
     if (productType === 'variable') {
-      const v = parseVariantsText(p.variants);
-      variants = v.variants;
-      v.errors.forEach(e => errors.push(e));
-      if (variants.length === 0) errors.push('Variable product requires at least one valid variant.');
+      if (p.variants.trim()) {
+        const v = parseVariantsText(p.variants);
+        variants = v.variants;
+        v.errors.forEach((e) => errors.push(e));
+      } else if (sizes.length) {
+        // No explicit Variants column — auto-generate one variant per size,
+        // inheriting the product's price / sale price / stock / first image.
+        variants = buildSizeVariants({
+          sku,
+          price: isNaN(price) ? 0 : price,
+          salePrice,
+          stock,
+          image: images[0],
+          sizes,
+        });
+      }
+      if (variants.length === 0) {
+        errors.push('Variable product must provide variants via the Variants column, the Size Available column, or both.');
+      }
+
+      // Unique SKU check across auto-generated / explicit variants in this file.
+      const seenVariantSkus = new Set<string>();
+      variants.forEach((v) => {
+        const ls = (v.sku || '').toLowerCase();
+        if (!ls) return;
+        if (seenVariantSkus.has(ls)) errors.push(`Duplicate variant SKU "${v.sku}" for product SKU "${sku}".`);
+        seenVariantSkus.add(ls);
+      });
     }
 
     const statusRes = parseStatus(p.status);
@@ -354,9 +416,10 @@ export function validateProductRows(
       price: isNaN(price) ? 0 : price,
       salePrice,
       stock,
-      images,
-      attributes,
-      variants,
+       images,
+       attributes,
+       sizes,
+       variants,
       status: statusRes.status,
       action: sku && existingSkus.has(sku.toLowerCase()) ? 'update' : 'create',
       errors,
@@ -374,7 +437,7 @@ export function generateProductCSVTemplate(): string {
   const exampleSimple =
     'Samsung Galaxy S25,GS25-256-BLK,simple,Mobiles & Tablets,Samsung,"Flagship smartphone with 50MP camera.",79999,74999,30,https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600|https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=600,color:Black,,active';
   const exampleVariable =
-    'Apple MacBook Air M4,MBA-M4-BASE,variable,Laptops & Computers,Apple,"Ultra-thin laptop with Apple M4 chip.",114900,99900,0,https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600,ram:base,"sku:MBA-M4-8-256|price:99900|stock:8|ram:8GB|storage:256GB;sku:MBA-M4-16-512|price:114900|stock:12|ram:16GB|storage:512GB",active';
+    'Apple MacBook Air M4,MBA-M4-BASE,variable,Laptops & Computers,Apple,"Ultra-thin laptop with Apple M4 chip.",114900,99900,0,https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600,ram:base,"M, L, XL",,active';
   return [header, exampleSimple, exampleVariable].join('\n');
 }
 

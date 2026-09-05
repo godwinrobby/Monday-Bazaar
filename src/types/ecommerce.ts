@@ -55,6 +55,22 @@ export interface EcVariant {
   is_active?: boolean;
 }
 
+export interface EcAttribute {
+  id: string;
+  name: string;
+  slug: string;
+  has_presets?: boolean;
+  is_active?: boolean;
+}
+
+export interface EcAttributeValue {
+  id: string;
+  attribute_id: string;
+  value: string;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
 export interface EcCoupon {
   id: string;
   code: string;

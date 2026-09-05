@@ -152,26 +152,36 @@ export const ProductCsvImport: React.FC<Props> = ({
           featured: existing?.featured,
         };
 
-        await ecommerce.saveProduct(payload);
+         await ecommerce.saveProduct(payload);
 
-        if (row.productType === 'variable') {
-          if (existing) await ecommerce.deleteVariantsByProduct(pid);
-          for (const v of row.variants) {
-            const vid = `ec-var-${pid}-${slugify(v.sku)}-${nowBase}`;
-            const vPayload: EcVariant = {
-              id: vid,
-              product_id: pid,
-              sku: v.sku,
-              price: v.price,
-              sale_price: v.salePrice,
-              stock: v.stock,
-              attributes: v.attributes || {},
-              image: v.image || '',
-              is_active: true,
-            };
-            await ecommerce.saveVariant(vPayload);
-          }
-        }
+         if (row.productType === 'variable') {
+           if (existing) await ecommerce.deleteVariantsByProduct(pid);
+
+           // Register the "Size" attribute + values once (reused, never duplicated).
+           const sizeAttr = row.sizes.length ? await ecommerce.getOrCreateAttribute('Size') : null;
+           if (sizeAttr) {
+             for (const sz of row.sizes) {
+               try { await ecommerce.getOrCreateAttributeValue(sizeAttr.id, sz); } catch { /* non-fatal */ }
+             }
+           }
+
+           for (const v of row.variants) {
+             const vid = `ec-var-${pid}-${slugify(v.sku)}-${nowBase}`;
+             const vPayload: EcVariant = {
+               id: vid,
+               product_id: pid,
+               sku: v.sku,
+               price: v.price,
+               sale_price: v.salePrice,
+               stock: v.stock,
+               attributes: v.attributes || {},
+               image: v.image || '',
+               images: v.image ? [v.image] : [],
+               is_active: true,
+             };
+             await ecommerce.saveVariant(vPayload);
+           }
+         }
 
         if (existing) s.updated++; else s.imported++;
         setSummary({ ...s });
@@ -239,16 +249,18 @@ export const ProductCsvImport: React.FC<Props> = ({
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
           <p className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5"><Tag className="w-4 h-4 text-indigo-500" /> Expected columns</p>
           <div className="flex flex-wrap gap-1.5">
-            {['Product Name', 'SKU', 'Product Type', 'Category', 'Brand', 'Description', 'Price', 'Sale Price', 'Stock', 'Images', 'Attributes', 'Variants', 'Status'].map(c => (
+            {['Product Name', 'SKU', 'Product Type', 'Category', 'Brand', 'Description', 'Price', 'Sale Price', 'Stock', 'Images', 'Attributes', 'Size Available', 'Variants', 'Status'].map(c => (
               <span key={c} className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-mono text-slate-600">{c}</span>
             ))}
           </div>
           <ul className="mt-3 space-y-1 text-[11px] text-slate-500">
             <li>• <b>Product Type:</b> <code>simple</code> or <code>variable</code></li>
             <li>• <b>Images:</b> pipe (<code>|</code>)-separated image URLs</li>
+            <li>• <b>Attributes:</b> pipe-separated <code>key:value</code> pairs, e.g. <code>color:Black|material:Cotton</code></li>
+            <li>• <b>Size Available:</b> comma-separated sizes, e.g. <code>M, L, XL</code>. For variable products, one variant is auto-created per size (unless a <b>Variants</b> column is also supplied). The Size attribute &amp; values are reused, never duplicated.</li>
             <li>• <b>Variants (variable only):</b> semicolon-separated, each with pipe-separated <code>sku:|price:|stock:</code> + attribute pairs, e.g. <code>sku:NAZ-9|price:4395|stock:20|color:Black|size:UK9;sku:NAZ-10|price:4595|stock:15|color:Black|size:UK10</code></li>
             <li>• <b>Status:</b> <code>active</code> / <code>inactive</code> (defaults to <code>active</code>)</li>
-            <li>• Existing catalog SKUs are <b>updated</b>; new SKUs are <b>created</b>.</li>
+            <li>• <b>Action:</b> existing catalog SKUs are <b>updated</b>; new SKUs are <b>created</b>.</li>
           </ul>
         </div>
 
@@ -290,21 +302,22 @@ function renderReview() {
         <div className="border border-slate-200 rounded-2xl overflow-auto max-h-[50vh]">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500 border-b border-slate-100 sticky top-0">
-              <tr>
-                <th className="text-left p-3 font-bold">Row</th>
-                <th className="text-left p-3 font-bold">Product</th>
-                <th className="text-left p-3 font-bold">SKU</th>
-                <th className="text-left p-3 font-bold">Type</th>
-                <th className="text-left p-3 font-bold">Action</th>
-                <th className="text-left p-3 font-bold">Validation</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {validation.rows.map((row) => (
-                <RowView key={row.line} row={row} categories={categories} brands={brands} />
-              ))}
-            </tbody>
-          </table>
+               <tr>
+                 <th className="text-left p-3 font-bold">Row</th>
+                 <th className="text-left p-3 font-bold">Product</th>
+                 <th className="text-left p-3 font-bold">SKU</th>
+                 <th className="text-left p-3 font-bold">Type</th>
+                 <th className="text-left p-3 font-bold">Sizes</th>
+                 <th className="text-left p-3 font-bold">Action</th>
+                 <th className="text-left p-3 font-bold">Validation</th>
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-slate-100">
+               {validation.rows.map((row) => (
+                 <RowView key={row.line} row={row} categories={categories} brands={brands} />
+               ))}
+             </tbody>
+           </table>
         </div>
       </div>
     );
@@ -408,9 +421,10 @@ const RowView: React.FC<RowViewProps> = ({ row, categories, brands }) => {
         )}
       </td>
       <td className="p-3 text-slate-600 font-mono">{row.sku || '—'}</td>
-      <td className="p-3"><span className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${row.productType === 'variable' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>{row.productType}</span></td>
-      <td className="p-3">
-        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${row.action === 'update' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
+       <td className="p-3"><span className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${row.productType === 'variable' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>{row.productType}</span></td>
+       <td className="p-3 text-slate-600">{row.sizes.length ? row.sizes.map((s) => <span key={s} className="inline-block px-1.5 py-0.5 mr-1 bg-slate-100 text-slate-700 rounded text-[10px] font-mono">{s}</span>) : <span className="text-slate-300">—</span>}</td>
+       <td className="p-3">
+         <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${row.action === 'update' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
           {row.action === 'update' ? 'Update' : 'Create'}
         </span>
       </td>

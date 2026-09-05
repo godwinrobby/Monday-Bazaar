@@ -77,16 +77,26 @@ export const EcProductPage: React.FC = () => {
       <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 mb-4"><ArrowLeft className="w-4 h-4" /> Back</button>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-3">
-          <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-200 aspect-square">
-            <img src={(selected?.image) || product.images?.[0] || 'https://placehold.co/600x600?text=No+Img'} alt={product.name} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=No+Img'; }} />
-          </div>
-          {(product.images && product.images.length > 1) && (
-            <div className="flex gap-2 overflow-x-auto no-scrollbar">
-              {product.images.map((img, i) => (
-                <img key={i} src={img} data-thumb alt="" className="w-16 h-16 rounded-xl object-cover border border-slate-200 cursor-pointer hover:border-indigo-400" onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x64'; }} />
-              ))}
-            </div>
-          )}
+          {(() => {
+            const variantImages = (selected?.images && selected.images.length
+              ? selected.images
+              : (selected?.image ? [selected.image] : [])) || [];
+            const gallery = variantImages.length ? variantImages : (product.images || []);
+            return (
+              <>
+                <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-200 aspect-square">
+                  <img src={gallery[0] || 'https://placehold.co/600x600?text=No+Img'} alt={product.name} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=No+Img'; }} />
+                </div>
+                {gallery.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                    {gallery.map((img, i) => (
+                      <img key={i} src={img} data-thumb alt="" className="w-16 h-16 rounded-xl object-cover border border-slate-200 cursor-pointer hover:border-indigo-400" onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x64'; }} />
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
         <div className="space-y-4">
           {category && <div className="flex items-center gap-1 text-[11px] text-slate-400"><Link to="/shop" className="hover:text-indigo-600">Shop</Link> <span>/</span> <span className="text-slate-600">{category.name}</span></div>}

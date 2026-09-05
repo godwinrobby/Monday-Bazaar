@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   EcCategory, EcBrand, EcProduct, EcVariant, EcCoupon, EcCustomer, EcAddress,
   EcPaymentMethod, EcShippingMethod, EcOrder, EcOrderItem, EcProductType,
+  EcAttribute, EcAttributeValue,
 } from '../types/ecommerce';
 import { generateSalt, hashPassword, verifyPassword } from '../utils/auth';
 
@@ -281,6 +282,84 @@ class SupabaseEcommerce {
     const { error } = await this.client.from('ec_variants').delete().eq('product_id', productId);
     if (error) this.error(error);
   }
+
+  /* ==================== ATTRIBUTE REGISTRY ==================== */
+
+  private mapAttribute(r: any): EcAttribute {
+    return {
+      id: r.id, name: r.name, slug: r.slug,
+      has_presets: Boolean(r.has_presets), is_active: r.is_active !== false,
+    };
+  }
+
+  private mapAttributeValue(r: any): EcAttributeValue {
+    return {
+      id: r.id, attribute_id: r.attribute_id, value: r.value,
+      sort_order: Number(r.sort_order || 0), is_active: r.is_active !== false,
+    };
+  }
+
+  async listAttributes(): Promise<EcAttribute[]> {
+    const { data, error } = await this.client.from('ec_attributes').select('*').order('name');
+    if (error) this.error(error);
+    return (data || []).map((r: any) => this.mapAttribute(r));
+  }
+
+  async listAttributeValues(attributeId: string): Promise<EcAttributeValue[]> {
+    const { data, error } = await this.client.from('ec_attribute_values').select('*').eq('attribute_id', attributeId).order('sort_order');
+    if (error) this.error(error);
+    return (data || []).map((r: any) => this.mapAttributeValue(r));
+  }
+
+  /** Get an attribute by slug (case-insensitive) or null. */
+  async getAttributeBySlug(slug: string): Promise<EcAttribute | null> {
+    const s = slug.toLowerCase();
+    const { data, error } = await this.client.from('ec_attributes')
+      .select('*').or(`slug.eq.${s},lower(name).eq.${s}`).limit(1);
+    if (error) this.error(error);
+    return Array.isArray(data) && data[0] ? this.mapAttribute(data[0]) : null;
+  }
+
+  /** Create an attribute if it does not exist, otherwise reuse the existing one. */
+  async getOrCreateAttribute(name: string): Promise<EcAttribute> {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const existing = await this.getAttributeBySlug(slug);
+    if (existing) return existing;
+    const id = `ec-attr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data, error } = await this.client.from('ec_attributes')
+      .insert({ id, name, slug, has_presets: true, is_active: true }).select().single();
+    if (error) this.error(error);
+    return this.mapAttribute(data);
+  }
+
+  /** Create an attribute value if it does not exist for the attribute, otherwise reuse. */
+  async getOrCreateAttributeValue(attributeId: string, value: string): Promise<EcAttributeValue> {
+    const v = String(value).trim();
+    if (!v) throw new Error('Attribute value cannot be empty');
+    const { data, error: qErr } = await this.client.from('ec_attribute_values')
+      .select('*').eq('attribute_id', attributeId).ilike('value', v).limit(1);
+    if (qErr) this.error(qErr);
+    if (Array.isArray(data) && data[0]) return this.mapAttributeValue(data[0]);
+
+    const maxRow = await this.client.from('ec_attribute_values').select('sort_order', { count: 'exact' })
+      .eq('attribute_id', attributeId).order('sort_order', { ascending: false }).limit(1);
+    const nextSort = (Array.isArray((maxRow as any)?.data) && (maxRow as any).data[0]?.sort_order != null
+      ? Number((maxRow as any).data[0].sort_order) + 10 : 0);
+    const id = `ec-attrval-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data: ins, error } = await this.client.from('ec_attribute_values')
+      .insert({ id, attribute_id: attributeId, value: v, sort_order: nextSort, is_active: true }).select().single();
+    if (error) this.error(error);
+    return this.mapAttributeValue(ins);
+  }
+
+  /** Convenience: ordered list of known Size values (reuses the registry). */
+  async listSizes(): Promise<string[]> {
+    const attr = await this.getAttributeBySlug('size');
+    if (!attr) return [];
+    const vals = await this.listAttributeValues(attr.id);
+    return vals.map((v) => v.value);
+  }
+
 
   async listCategories(): Promise<EcCategory[]> {
     const { data, error } = await this.client.from('ec_categories').select('*').order('sort_order');

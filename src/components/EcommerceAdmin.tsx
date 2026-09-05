@@ -16,6 +16,7 @@ import { ProductDeleteModal } from './ProductDeleteModal';
 import { Pagination } from './Pagination';
 import { FormDrawer } from './FormDrawer';
 import { ImageUploader } from './ImageUploader';
+import { VariantAttributesEditor } from './VariantAttributesEditor';
 
 type EcTab = 'products' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
 
@@ -229,14 +230,17 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
             {variants.length === 0 && <p className="text-[11px] text-slate-400">No variants yet — add at least one for a variable product.</p>}
             {variants.map((v, i) => (
               <div key={i} className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2 items-end">
-                  <input value={v.sku || ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sku: e.target.value }; setVariants(vv); }} placeholder="SKU" className={`${inputCls} col-span-1 sm:col-span-2`} />
-                  <input type="number" value={v.price || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], price: Number(e.target.value) }; setVariants(vv); }} placeholder="Price" className={`${inputCls} col-span-2`} />
-                  <input type="number" value={v.sale_price ?? ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sale_price: e.target.value ? Number(e.target.value) : null }; setVariants(vv); }} placeholder="Sale" className={`${inputCls} col-span-2`} />
-                  <input type="number" value={v.stock || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], stock: Number(e.target.value) }; setVariants(vv); }} placeholder="Stock" className={`${inputCls} col-span-2`} />
-                  <input value={Object.entries(v.attributes || {}).map(([k, val]) => `${k}:${val}`).join(', ')} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], attributes: Object.fromEntries(e.target.value.split(',').map(s => s.trim()).filter(Boolean).map(part => { const [k, ...rest] = part.split(':'); return [k, rest.join(':')]; })) }; setVariants(vv); }} placeholder="color:Black, size:UK 9" className={`${inputCls} col-span-2`} />
-                  <button type="button" onClick={() => setVariants(variants.filter((_, x) => x !== i))} className="col-span-1 md:col-span-6 text-red-500 hover:text-red-700 font-bold text-[11px] justify-start"><Trash2 className="w-4 h-4 inline-block mr-1" /> Remove variant</button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 items-end">
+                  <input value={v.sku || ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sku: e.target.value }; setVariants(vv); }} placeholder="SKU" className={`${inputCls} col-span-2`} />
+                  <input type="number" value={v.price || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], price: Number(e.target.value) }; setVariants(vv); }} placeholder="Price" className={`${inputCls} col-span-2 md:col-span-1`} />
+                  <input type="number" value={v.sale_price ?? ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sale_price: e.target.value ? Number(e.target.value) : null }; setVariants(vv); }} placeholder="Sale" className={`${inputCls} col-span-2 md:col-span-1`} />
+                  <input type="number" value={v.stock || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], stock: Number(e.target.value) }; setVariants(vv); }} placeholder="Stock" className={`${inputCls} col-span-2 md:col-span-1`} />
+                  <button type="button" onClick={() => setVariants(variants.filter((_, x) => x !== i))} className="col-span-2 md:col-span-1 text-red-500 hover:text-red-700 font-bold text-[11px] flex items-center justify-center gap-1"><Trash2 className="w-4 h-4" /> Remove</button>
                 </div>
+                <VariantAttributesEditor
+                  value={v.attributes || {}}
+                  onChange={(attrs) => { const vv = [...variants]; vv[i] = { ...vv[i], attributes: attrs }; setVariants(vv); }}
+                />
                 <ImageUploader
                   value={(v.images && v.images.length ? v.images : (v.image ? [v.image] : []))}
                   onChange={(imgs) => {
