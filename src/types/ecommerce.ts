@@ -33,6 +33,8 @@ export interface EcProduct {
   sale_price?: number | null;
   sku?: string;
   stock: number;
+  low_stock_threshold?: number;
+  stock_status?: string;
   images?: string[];
   is_active?: boolean;
   featured?: boolean;
@@ -49,6 +51,8 @@ export interface EcVariant {
   price: number;
   sale_price?: number | null;
   stock: number;
+  low_stock_threshold?: number;
+  stock_status?: string;
   attributes?: Record<string, string>;
   image?: string;
   images?: string[];

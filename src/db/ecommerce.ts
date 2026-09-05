@@ -49,7 +49,10 @@ class SupabaseEcommerce {
       id: r.id, name: r.name, slug: r.slug, product_type: r.product_type,
       description: r.description, brand_id: r.brand_id, category_id: r.category_id,
       price: Number(r.price || 0), sale_price: r.sale_price != null ? Number(r.sale_price) : null,
-      sku: r.sku, stock: Number(r.stock || 0), images: Array.isArray(r.images) ? r.images : [],
+      sku: r.sku, stock: Number(r.stock || 0),
+      low_stock_threshold: Number(r.low_stock_threshold || 0),
+      stock_status: r.stock_status || 'instock',
+      images: Array.isArray(r.images) ? r.images : [],
       is_active: r.is_active !== false, featured: Boolean(r.featured), created_at: r.created_at,
     };
   }
@@ -61,6 +64,8 @@ class SupabaseEcommerce {
     return {
       id: r.id, product_id: r.product_id, sku: r.sku, price: Number(r.price || 0),
       sale_price: r.sale_price != null ? Number(r.sale_price) : null, stock: Number(r.stock || 0),
+      low_stock_threshold: Number(r.low_stock_threshold || 2),
+      stock_status: r.stock_status || 'instock',
       attributes: r.attributes || {}, image: r.image || (images[0] || ''),
       images, is_active: r.is_active !== false,
     };
@@ -238,7 +243,7 @@ class SupabaseEcommerce {
   }
 
   async saveProduct(p: EcProduct): Promise<void> {
-    const { error } = await this.client.from('ec_products').upsert({
+    const base: Record<string, any> = {
       id: p.id || `ec-prod-${Date.now()}`,
       name: p.name,
       slug: p.slug || p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
@@ -253,8 +258,18 @@ class SupabaseEcommerce {
       images: Array.isArray(p.images) ? p.images : [],
       is_active: p.is_active !== false,
       featured: Boolean(p.featured),
-    }, { onConflict: 'id' });
-    if (error) this.error(error);
+    };
+    try {
+      const { error } = await this.client.from('ec_products').upsert({
+        ...base,
+        low_stock_threshold: p.low_stock_threshold ?? null,
+        stock_status: p.stock_status || 'instock',
+      }, { onConflict: 'id' });
+      if (error) this.error(error);
+    } catch {
+      const { error } = await this.client.from('ec_products').upsert(base, { onConflict: 'id' });
+      if (error) this.error(error);
+    }
   }
 
   async deleteProduct(id: string): Promise<void> {
@@ -274,7 +289,7 @@ class SupabaseEcommerce {
 
   async saveVariant(v: EcVariant): Promise<void> {
     const images = Array.isArray(v.images) ? v.images : (v.image ? [v.image] : []);
-    const { error } = await this.client.from('ec_variants').upsert({
+    const base: Record<string, any> = {
       id: v.id || `ec-var-${Date.now()}`,
       product_id: v.product_id,
       sku: v.sku || '',
@@ -285,8 +300,18 @@ class SupabaseEcommerce {
       image: v.image || (images[0] || ''),
       images,
       is_active: v.is_active !== false,
-    }, { onConflict: 'id' });
-    if (error) this.error(error);
+    };
+    try {
+      const { error } = await this.client.from('ec_variants').upsert({
+        ...base,
+        low_stock_threshold: v.low_stock_threshold ?? null,
+        stock_status: v.stock_status || 'instock',
+      }, { onConflict: 'id' });
+      if (error) this.error(error);
+    } catch {
+      const { error } = await this.client.from('ec_variants').upsert(base, { onConflict: 'id' });
+      if (error) this.error(error);
+    }
   }
 
   async deleteVariant(id: string): Promise<void> {

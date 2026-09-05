@@ -93,7 +93,7 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
   const openNew = () => {
     const newId = `ec-prod-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setEditId(null); setShowVariants(false);
-    setForm({ id: newId, name: '', product_type: 'simple', price: 0, stock: 0, is_active: true, images: [] });
+    setForm({ id: newId, name: '', product_type: 'simple', price: 0, stock: 0, low_stock_threshold: 2, stock_status: 'instock', is_active: true, images: [] });
     setVariants([]); setAssignedGroups([]); setShowForm(true);
   };
 
@@ -107,11 +107,30 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
     if (!form.name.trim()) return addToast('Product name is required', 'error');
     setLoading(true);
     try {
-      await ecommerce.saveProduct({ ...form, price: Number(form.price || 0), stock: Number(form.stock || 0) });
+       const prodStock = Number(form.stock || 0);
+      const prodLowThreshold = Number(form.low_stock_threshold || 0) || 2;
+      const prodStatus = prodStock === 0 ? 'outofstock' : 'instock';
+      const savedForm = {
+        ...form,
+        price: Number(form.price || 0),
+        stock: prodStock,
+        low_stock_threshold: prodLowThreshold,
+        stock_status: form.stock_status || prodStatus,
+      };
+      await ecommerce.saveProduct(savedForm);
       const pid = editId || form.id;
       if (form.product_type === 'variable' && pid) {
         for (const v of variants) {
-          await ecommerce.saveVariant({ ...v, product_id: pid, price: Number(v.price || 0), stock: Number(v.stock || 0) });
+          const vStock = Number(v.stock || 0);
+          const vLowThreshold = Number(v.low_stock_threshold || 0) || 2;
+          const vStatus = vStock === 0 ? 'outofstock' : 'instock';
+          await ecommerce.saveVariant({
+            ...v, product_id: pid,
+            price: Number(v.price || 0),
+            stock: vStock,
+            low_stock_threshold: vLowThreshold,
+            stock_status: v.stock_status || vStatus,
+          });
         }
         // Sync assigned attribute groups for this variable product.
         const groupIds = assignedGroups.map(g => g.attribute_id);
@@ -222,9 +241,19 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
             <input type="number" value={form.sale_price ?? ''} onChange={e => setForm({ ...form, sale_price: e.target.value ? Number(e.target.value) : null })} placeholder="Sale Price" className={inputCls} />
             <label className="flex items-center gap-1 text-xs text-slate-600 whitespace-nowrap"><input type="checkbox" checked={form.is_active !== false} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="w-3.5 h-3.5 accent-indigo-500" /> Active</label>
           </div>
-          {form.product_type === 'simple' && (
-            <input type="number" value={form.stock || 0} onChange={e => setForm({ ...form, stock: Number(e.target.value) })} placeholder="Stock" className={inputCls} />
-          )}
+         {form.product_type === 'simple' && (
+           <div className="col-span-2 space-y-1.5">
+             <p className="text-xs font-extrabold text-slate-700 uppercase">Stock Details</p>
+             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+               <input type="number" min="0" value={form.stock || 0} onChange={e => setForm({ ...form, stock: Math.max(0, Number(e.target.value) || 0) })} placeholder="Stock Quantity" className={inputCls} />
+               <input type="number" min="0" value={form.low_stock_threshold ?? 2} onChange={e => setForm({ ...form, low_stock_threshold: Math.max(0, Number(e.target.value) || 0) })} placeholder="Low Stock Threshold" className={inputCls} />
+               <select value={form.stock_status || 'instock'} onChange={e => setForm({ ...form, stock_status: e.target.value })} className={inputCls}>
+                 <option value="instock">In Stock</option>
+                 <option value="outofstock">Out of Stock</option>
+               </select>
+             </div>
+           </div>
+         )}
         </div>
         <textarea value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} placeholder="Description" className={`${inputCls} w-full`} />
         <ImageUploader
@@ -265,18 +294,37 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
             </div>
             <div className="flex items-center justify-between">
               <h5 className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-indigo-500" /> Variants (SKU, price, stock, attributes, images)</h5>
-              <button type="button" onClick={() => setVariants([...variants, { id: '', product_id: editId || form.id || '', sku: '', price: 0, sale_price: null, stock: 0, attributes: {}, image: '', images: [], is_active: true }])} className="flex items-center gap-1 text-[11px] font-bold text-indigo-600"><Plus className="w-3.5 h-3.5" /> Add Variant</button>
+              <button type="button" onClick={() => setVariants([...variants, { id: '', product_id: editId || form.id || '', sku: '', price: 0, sale_price: null, stock: 0, low_stock_threshold: 2, stock_status: 'instock', attributes: {}, image: '', images: [], is_active: true }])} className="flex items-center gap-1 text-[11px] font-bold text-indigo-600"><Plus className="w-3.5 h-3.5" /> Add Variant</button>
             </div>
             {variants.length === 0 && <p className="text-[11px] text-slate-400">No variants yet — add at least one for a variable product.</p>}
             {variants.map((v, i) => (
               <div key={i} className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 items-end">
-                  <input value={v.sku || ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sku: e.target.value }; setVariants(vv); }} placeholder="SKU" className={`${inputCls} col-span-2`} />
-                  <input type="number" value={v.price || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], price: Number(e.target.value) }; setVariants(vv); }} placeholder="Price" className={`${inputCls} col-span-2 md:col-span-1`} />
-                  <input type="number" value={v.sale_price ?? ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sale_price: e.target.value ? Number(e.target.value) : null }; setVariants(vv); }} placeholder="Sale" className={`${inputCls} col-span-2 md:col-span-1`} />
-                  <input type="number" value={v.stock || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], stock: Number(e.target.value) }; setVariants(vv); }} placeholder="Stock" className={`${inputCls} col-span-2 md:col-span-1`} />
-                  <button type="button" onClick={() => setVariants(variants.filter((_, x) => x !== i))} className="col-span-2 md:col-span-1 text-red-500 hover:text-red-700 font-bold text-[11px] flex items-center justify-center gap-1"><Trash2 className="w-4 h-4" /> Remove</button>
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 items-end">
+                   <input value={v.sku || ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sku: e.target.value }; setVariants(vv); }} placeholder="SKU" className={`${inputCls} col-span-2`} />
+                   <input type="number" value={v.price || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], price: Number(e.target.value) }; setVariants(vv); }} placeholder="Price" className={`${inputCls} col-span-2 md:col-span-1`} />
+                   <input type="number" value={v.sale_price ?? ''} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], sale_price: e.target.value ? Number(e.target.value) : null }; setVariants(vv); }} placeholder="Sale" className={`${inputCls} col-span-2 md:col-span-1`} />
+                 </div>
+                 {/* Stock Details for this variant */}
+                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+                   <div className="col-span-2">
+                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-0.5">Stock Qty</p>
+                     <input type="number" min="0" value={v.stock || 0} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], stock: Math.max(0, Number(e.target.value) || 0) }; setVariants(vv); }} className={inputCls} />
+                   </div>
+                   <div className="col-span-1">
+                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-0.5">Low Threshold</p>
+                     <input type="number" min="0" value={v.low_stock_threshold ?? 2} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], low_stock_threshold: Math.max(0, Number(e.target.value) || 0) }; setVariants(vv); }} className={inputCls} />
+                   </div>
+                   <div className="col-span-1">
+                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-0.5">Status</p>
+                     <select value={v.stock_status || 'instock'} onChange={e => { const vv = [...variants]; vv[i] = { ...vv[i], stock_status: e.target.value }; setVariants(vv); }} className={inputCls}>
+                       <option value="instock">In Stock</option>
+                       <option value="outofstock">Out of Stock</option>
+                     </select>
+                   </div>
+                 </div>
+                  <div className="flex justify-end">
+                    <button type="button" onClick={() => setVariants(variants.filter((_, x) => x !== i))} className="text-red-500 hover:text-red-700 font-bold text-[11px] flex items-center gap-1"><Trash2 className="w-4 h-4" /> Remove Variant</button>
+                  </div>
                 <VariantAttributesEditor
                   value={v.attributes || {}}
                   assignedGroups={assignedGroups.map(g => g.attribute_id)}
@@ -1298,7 +1346,7 @@ const ShopPanel: React.FC<{ addToast: Props['addToast']; setError: (s: string | 
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
-                <tr><th className="text-left p-3 font-bold">Product</th><th className="text-left p-3 font-bold">Category</th><th className="text-left p-3 font-bold">Type</th><th className="text-right p-3 font-bold">Price</th><th className="text-right p-3 font-bold">Stock</th><th className="text-left p-3 font-bold">Status</th><th className="text-center p-3 font-bold">Featured</th><th className="text-right p-3 font-bold">Store</th></tr>
+                <tr><th className="text-left p-3 font-bold">Product</th><th className="text-left p-3 font-bold">Category</th><th className="text-left p-3 font-bold">Type</th><th className="text-right p-3 font-bold">Price</th><th className="text-right p-3 font-bold">Stock</th><th className="text-left p-3 font-bold">Stock Status</th><th className="text-left p-3 font-bold">Status</th><th className="text-center p-3 font-bold">Featured</th><th className="text-right p-3 font-bold">Store</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map(p => (
@@ -1312,7 +1360,14 @@ const ShopPanel: React.FC<{ addToast: Props['addToast']; setError: (s: string | 
                     <td className="p-3 text-slate-500">{catMap.get(p.category_id || '') || '—'}</td>
                     <td className="p-3"><span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${p.product_type === 'variable' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>{p.product_type}</span></td>
                     <td className="p-3 text-right font-bold text-slate-900">₹{Number(effectivePrice(p)).toLocaleString('en-IN')}</td>
-                    <td className="p-3 text-right"><span className={`font-bold ${effectiveStock(p) <= 0 ? 'text-red-500' : effectiveStock(p) <= 10 ? 'text-amber-500' : 'text-emerald-600'}`}>{effectiveStock(p)}</span></td>
+                    <td className="p-3 text-right"><span className={`font-bold ${effectiveStock(p) <= 0 ? 'text-red-500' : effectiveStock(p) <= (p.low_stock_threshold ?? 10) ? 'text-amber-500' : 'text-emerald-600'}`}>{effectiveStock(p)}</span></td>
+                    <td className="p-3">
+                      {p.product_type === 'variable' ? (
+                        <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-slate-100 text-slate-700">Variable (per variant)</span>
+                      ) : (
+                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${p.stock_status === 'outofstock' ? 'bg-red-100 text-red-700' : p.stock_status === 'instock' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{p.stock_status === 'outofstock' ? 'Out of Stock' : p.stock_status === 'instock' ? 'In Stock' : p.stock_status}</span>
+                      )}
+                    </td>
                     <td className="p-3">
                       <button onClick={() => toggleActive(p)} disabled={savingId === p.id} className={`px-2 py-0.5 rounded-full font-bold text-[10px] transition-colors ${p.is_active !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>{p.is_active !== false ? 'Active' : 'Inactive'}</button>
                     </td>
