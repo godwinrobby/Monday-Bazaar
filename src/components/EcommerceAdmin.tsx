@@ -137,6 +137,10 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
       await ecommerce.saveProduct(savedForm);
       const pid = editId || form.id;
       if (form.product_type === 'variable' && pid) {
+        // Load existing variant IDs from the DB to identify removed variants.
+        let existingIds: string[] = [];
+        try { existingIds = (await ecommerce.listVariants(pid)).map(v => v.id).filter(Boolean); } catch { /* ignore */ }
+
         for (const v of variants) {
           const vStock = Number(v.stock || 0);
           const vLowThreshold = Number(v.low_stock_threshold || 0) || 2;
@@ -149,6 +153,22 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
             stock_status: v.stock_status || vStatus,
           });
         }
+
+        // Delete variants that were removed from the form but still exist in the DB.
+        const formIds = new Set(variants.map(v => v.id).filter(Boolean));
+        for (const existingId of existingIds) {
+          if (!formIds.has(existingId)) {
+            try { await ecommerce.deleteVariant(existingId); } catch (e) { console.error('Failed to delete variant:', e); }
+          }
+        }
+
+        // Prevent duplicate attribute combinations.
+        const comboKeys = variants.map(v => Object.entries(v.attributes || {}).sort(([a],[b]) => a.localeCompare(b)).map(([k,val]) => `${k}:${val}`).join('|'));
+        const dupIdx = comboKeys.findIndex((k, i) => k && comboKeys.indexOf(k) !== i);
+        if (dupIdx >= 0) {
+          throw new Error(`Duplicate variant: variant #${dupIdx + 1} has the same attribute combination as another variant. Each variant must have a unique set of attributes.`);
+        }
+
         // Sync assigned attribute groups for this variable product.
         const groupIds = assignedGroups.map(g => g.attribute_id);
         if (groupIds.length) {
@@ -317,6 +337,11 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
               <div className="text-[11px] text-slate-400 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Loading variants…</div>
             )}
             {!variantsLoading && variants.length === 0 && <p className="text-[11px] text-slate-400">No variants yet — add at least one for a variable product.</p>}
+            {!variantsLoading && variants.length > 0 && (() => {
+              const comboKeys = variants.map(v => Object.entries(v.attributes || {}).sort(([a],[b]) => a.localeCompare(b)).map(([k,val]) => `${k}:${val}`).join('|'));
+              const dupIdx = comboKeys.findIndex((k, i) => k && comboKeys.indexOf(k) !== i);
+              return dupIdx >= 0 ? <p className="text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded">⚠ Variant #{dupIdx + 1} has the same attribute combination as another variant. Each variant must have unique attributes.</p> : null;
+            })()}
             {variants.map((v, i) => (
               <div key={i} className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 items-end">
