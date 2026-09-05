@@ -332,7 +332,7 @@ class SupabaseEcommerce {
   async getAttributeBySlug(slug: string): Promise<EcAttribute | null> {
     const s = slug.toLowerCase();
     const { data, error } = await this.client.from('ec_attributes')
-      .select('*').or(`slug.eq.${s},lower(name).eq.${s}`).limit(1);
+      .select('*').or(`slug.eq.${s},name.ilike.${s}`).limit(1);
     if (error) this.error(error);
     return Array.isArray(data) && data[0] ? this.mapAttribute(data[0]) : null;
   }
