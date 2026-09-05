@@ -1841,9 +1841,9 @@ export const EcAdmin: React.FC<Props> = ({ addToast }) => {
 
   const renderTab = () => {
     switch (tab) {
-       case 'attributes': return <AttributesPanel addToast={addToast} setError={setError} />;
-       case 'products': return <ProductsPanel addToast={addToast} setError={setError} />;
-       case 'categories': return <CategoriesPanel addToast={addToast} setError={setError} />;
+      case 'products': return <ProductsPanel addToast={addToast} setError={setError} />;
+      case 'attributes': return <AttributesPanel addToast={addToast} setError={setError} />;
+      case 'categories': return <CategoriesPanel addToast={addToast} setError={setError} />;
       case 'brands': return <BrandsPanel addToast={addToast} setError={setError} />;
       case 'orders': return <OrdersPanel addToast={addToast} setError={setError} />;
       case 'coupons': return <CouponsPanel addToast={addToast} setError={setError} />;
