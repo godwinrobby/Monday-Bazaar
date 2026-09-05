@@ -259,7 +259,7 @@ class SupabaseEcommerce {
 
   async deleteProduct(id: string): Promise<void> {
     await this.client.from('ec_variants').delete().eq('product_id', id);
-    await this.client.from('ec_product_attribute_groups').delete().eq('product_id', id);
+    try { await this.client.from('ec_product_attribute_groups').delete().eq('product_id', id); } catch { /* table may not exist yet */ }
     const { error } = await this.client.from('ec_products').delete().eq('id', id);
     if (error) this.error(error);
   }
@@ -504,24 +504,28 @@ class SupabaseEcommerce {
 
   /** Attribute groups assigned to a product (ordered). */
   async listProductAttributeGroups(productId: string): Promise<EcProductAttributeGroup[]> {
-    const { data, error } = await this.client
-      .from('ec_product_attribute_groups')
-      .select('*')
-      .eq('product_id', productId)
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true });
-    if (error) this.error(error);
-    return (data || []).map((r: any) => ({
-      id: r.id, product_id: r.product_id, attribute_id: r.attribute_id,
-      sort_order: Number(r.sort_order || 0), is_active: r.is_active !== false,
-      created_at: r.created_at,
-    }));
+    try {
+      const { data, error } = await this.client
+        .from('ec_product_attribute_groups')
+        .select('*')
+        .eq('product_id', productId)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return (data || []).map((r: any) => ({
+        id: r.id, product_id: r.product_id, attribute_id: r.attribute_id,
+        sort_order: Number(r.sort_order || 0), is_active: r.is_active !== false,
+        created_at: r.created_at,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   /** Assign attribute groups to a product. Replaces the previous assignment set. */
   async saveProductAttributeGroups(productId: string, attributeIds: string[]): Promise<void> {
+    try {
     const existing = await this.listProductAttributeGroups(productId);
-    const keep = new Set(existing.map(e => e.id));
     const incoming = new Set(attributeIds);
 
     // Deactivate groups no longer assigned.
@@ -554,12 +558,15 @@ class SupabaseEcommerce {
       });
       if (error) this.error(error);
     }
+    } catch { /* table may not exist yet — assignments silently skipped */ }
   }
 
   /** Remove all attribute-group assignments for a product. */
   async deleteProductAttributeGroups(productId: string): Promise<void> {
-    const { error } = await this.client.from('ec_product_attribute_groups').delete().eq('product_id', productId);
-    if (error) this.error(error);
+    try {
+      const { error } = await this.client.from('ec_product_attribute_groups').delete().eq('product_id', productId);
+      if (error) this.error(error);
+    } catch { /* table may not exist yet — non-fatal */ }
   }
 
 
