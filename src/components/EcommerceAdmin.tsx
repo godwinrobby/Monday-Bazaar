@@ -49,6 +49,7 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
   const [showVariants, setShowVariants] = useState(false);
   const [form, setForm] = useState<EcProduct>({ id: '', name: '', product_type: 'simple', price: 0, stock: 0, is_active: true, images: [] });
   const [variants, setVariants] = useState<EcVariant[]>([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
   const [attributeGroups, setAttributeGroups] = useState<EcAttributeGroupWithValues[]>([]);
   const [assignedGroups, setAssignedGroups] = useState<EcProductAttributeGroup[]>([]);
 
@@ -70,9 +71,11 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
 
   // Reference lists (categories/brands) are small — load once.
   useEffect(() => {
-    Promise.all([ecommerce.listCategories(), ecommerce.listBrands(), ecommerce.listAttributeGroupsWithValues()])
-      .then(([c, b, ag]) => { setCategories(c); setBrands(b); setAttributeGroups(ag); })
-      .catch(() => { /* non-fatal */ });
+    Promise.all([
+      ecommerce.listCategories().catch(() => []),
+      ecommerce.listBrands().catch(() => []),
+      ecommerce.listAttributeGroupsWithValues().catch(() => []),
+    ]).then(([c, b, ag]) => { setCategories(c); setBrands(b); setAttributeGroups(ag); });
   }, []);
 
   // Debounce search input → query; reset to first page on filter changes.
@@ -99,8 +102,22 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
 
   const openEdit = async (p: EcProduct) => {
     setEditId(p.id); setForm(p); setShowVariants(p.product_type === 'variable'); setShowForm(true);
-    try { setVariants(await ecommerce.listVariants(p.id)); } catch { setVariants([]); }
-    try { setAssignedGroups(await ecommerce.listProductAttributeGroups(p.id)); } catch { setAssignedGroups([]); }
+    setVariantsLoading(true);
+    try {
+      const vs = await ecommerce.listVariants(p.id);
+      setVariants(vs);
+    } catch (e: any) {
+      console.error('Failed to load variants:', e?.message);
+      setVariants([]);
+      addToast('Some variant data could not be loaded — continuing without.', 'error');
+    }
+    try {
+      setAssignedGroups(await ecommerce.listProductAttributeGroups(p.id));
+    } catch (e: any) {
+      console.error('Failed to load attribute groups:', e?.message);
+      setAssignedGroups([]);
+    }
+    setVariantsLoading(false);
   };
 
   const save = async () => {
@@ -296,7 +313,10 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
               <h5 className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-indigo-500" /> Variants (SKU, price, stock, attributes, images)</h5>
               <button type="button" onClick={() => setVariants([...variants, { id: '', product_id: editId || form.id || '', sku: '', price: 0, sale_price: null, stock: 0, low_stock_threshold: 2, stock_status: 'instock', attributes: {}, image: '', images: [], is_active: true }])} className="flex items-center gap-1 text-[11px] font-bold text-indigo-600"><Plus className="w-3.5 h-3.5" /> Add Variant</button>
             </div>
-            {variants.length === 0 && <p className="text-[11px] text-slate-400">No variants yet — add at least one for a variable product.</p>}
+            {variantsLoading && (
+              <div className="text-[11px] text-slate-400 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Loading variants…</div>
+            )}
+            {!variantsLoading && variants.length === 0 && <p className="text-[11px] text-slate-400">No variants yet — add at least one for a variable product.</p>}
             {variants.map((v, i) => (
               <div key={i} className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 items-end">

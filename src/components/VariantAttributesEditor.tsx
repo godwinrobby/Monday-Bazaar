@@ -173,24 +173,9 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange, assi
                 <Plus className="w-3 h-3" />
               </button>
             )}
-          </div>
-        ))
-      )}
-
-      {/* Freeform key:value editor — useful for ad-hoc attributes not managed as groups */}
-      {!assignedGroups && (
-        <div className="pt-1">
-          <input
-            ref={inputRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { commitText(); e.preventDefault(); } }}
-            onBlur={commitText}
-            placeholder="Add attribute: color:Black, size:M, ram:8GB (Enter to add)"
-            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-[10px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
-          />
-        </div>
-      )}
-    </div>
+            </div>
+          ))
+        )}
+      </div>
   );
 };
