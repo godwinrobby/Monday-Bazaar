@@ -3,6 +3,7 @@ import {
   EcCategory, EcBrand, EcProduct, EcVariant, EcCoupon, EcCustomer, EcAddress,
   EcPaymentMethod, EcShippingMethod, EcOrder, EcOrderItem, EcProductType,
   EcAttribute, EcAttributeValue, EcAttributeGroupWithValues, EcProductAttributeGroup,
+  EcProductAttributeValue,
 } from '../types/ecommerce';
 import { generateSalt, hashPassword, verifyPassword } from '../utils/auth';
 
@@ -607,6 +608,90 @@ class SupabaseEcommerce {
   async deleteProductAttributeGroups(productId: string): Promise<void> {
     try {
       const { error } = await this.client.from('ec_product_attribute_groups').delete().eq('product_id', productId);
+      if (error) this.error(error);
+    } catch { /* table may not exist yet — non-fatal */ }
+  }
+
+  /** Product-level selected attribute values (rows of product_id/attribute_id/value).
+   * Gracefully returns [] if the table hasn't been migrated yet. */
+  async listProductAttributeValues(productId: string): Promise<EcProductAttributeValue[]> {
+    try {
+      const { data, error } = await this.client
+        .from('ec_product_attribute_values')
+        .select('*')
+        .eq('product_id', productId)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return (data || []).map((r: any) => ({
+        id: r.id, product_id: r.product_id, attribute_id: r.attribute_id,
+        value: r.value, sort_order: Number(r.sort_order || 0),
+        is_active: r.is_active !== false, created_at: r.created_at,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Save the selected attribute values for a product, grouped by attribute_id
+   * as a Record<attributeId, value[]>. Replaces the previous selection set
+   * (removes unselected values). Non-fatal if the table isn't migrated. */
+  async saveProductAttributeValues(productId: string, valuesByGroup: Record<string, string[]>): Promise<void> {
+    try {
+      const existing = await this.listProductAttributeValues(productId);
+      const existingByKey = new Map(existing.map((r) => [`${r.attribute_id}\u0000${r.value.toLowerCase()}`.toLowerCase(), r] as [string, EcProductAttributeValue]));
+
+      // Normalize the input: dedupe values, drop empties, preserve insertion order.
+      const next: { attribute_id: string; value: string }[] = [];
+      const seen = new Set<string>();
+      for (const attributeId of Object.keys(valuesByGroup)) {
+        for (const raw of valuesByGroup[attributeId] || []) {
+          const value = String(raw).trim();
+          if (!value) continue;
+          const key = `${attributeId}\u0000${value.toLowerCase()}`.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          next.push({ attribute_id: attributeId, value });
+        }
+      }
+
+      const nextSet = new Set(next.map((n) => `${n.attribute_id}\u0000${n.value.toLowerCase()}`.toLowerCase()));
+
+      // Deactivate rows no longer selected; reactivate those still selected.
+      for (const e of existing) {
+        const key = `${e.attribute_id}\u0000${e.value.toLowerCase()}`.toLowerCase();
+        if (!nextSet.has(key)) {
+          await this.client.from('ec_product_attribute_values')
+            .update({ is_active: false }).eq('id', e.id);
+        } else {
+          await this.client.from('ec_product_attribute_values')
+            .update({ is_active: true }).eq('id', e.id).eq('is_active', false);
+        }
+      }
+
+      // Insert new selections (that don't already exist, even as inactive).
+      let sort = Math.max(...existing.map((e) => e.sort_order || 0), -1);
+      for (const n of next) {
+        const key = `${n.attribute_id}\u0000${n.value.toLowerCase()}`.toLowerCase();
+        if (existingByKey.has(key)) continue;
+        sort += 10;
+        const { error } = await this.client.from('ec_product_attribute_values').insert({
+          id: `ec-pav-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          product_id: productId,
+          attribute_id: n.attribute_id,
+          value: n.value,
+          sort_order: sort,
+          is_active: true,
+        });
+        if (error) this.error(error);
+      }
+    } catch { /* table may not exist yet — selections silently skipped */ }
+  }
+
+  /** Remove all product-level attribute-value selections for a product. */
+  async deleteProductAttributeValues(productId: string): Promise<void> {
+    try {
+      const { error } = await this.client.from('ec_product_attribute_values').delete().eq('product_id', productId);
       if (error) this.error(error);
     } catch { /* table may not exist yet — non-fatal */ }
   }

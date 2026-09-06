@@ -48,8 +48,11 @@ WHERE NOT EXISTS (SELECT 1 FROM public.ec_attribute_values LIMIT 1);
 -- ec-prod-3 (Nike shoe)      → Size + Color
 -- ec-prod-5 (Men's shirt)    → Size + Color
 -- ec-prod-6 (Women dress)    → Size + Color
+-- Only create assignments for products that exist (demo product ids may not be
+-- present in some environments, e.g. a remote DB with different seed data).
 INSERT INTO public.ec_product_attribute_groups (id, product_id, attribute_id, sort_order, is_active)
-SELECT * FROM (VALUES
+SELECT t.id, t.product_id, t.attribute_id, t.sort_order, t.is_active
+FROM (VALUES
   ('ec-pag-2-storage',  'ec-prod-2', 'ec-attr-storage', 0, true),
   ('ec-pag-2-ram',      'ec-prod-2', 'ec-attr-ram',     1, true),
   ('ec-pag-2-color',    'ec-prod-2', 'ec-attr-color',   2, true),
@@ -63,4 +66,5 @@ SELECT * FROM (VALUES
   ('ec-pag-6-size',     'ec-prod-6', 'ec-attr-size',    0, true),
   ('ec-pag-6-color',    'ec-prod-6', 'ec-attr-color',   1, true)
 ) AS t(id, product_id, attribute_id, sort_order, is_active)
-WHERE NOT EXISTS (SELECT 1 FROM public.ec_product_attribute_groups LIMIT 1);
+WHERE NOT EXISTS (SELECT 1 FROM public.ec_product_attribute_groups LIMIT 1)
+  AND EXISTS (SELECT 1 FROM public.ec_products p WHERE p.id = t.product_id);

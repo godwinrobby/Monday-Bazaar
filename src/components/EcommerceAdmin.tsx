@@ -18,6 +18,7 @@ import { Pagination } from './Pagination';
 import { FormDrawer } from './FormDrawer';
 import { ImageUploader } from './ImageUploader';
 import { VariantAttributesEditor } from './VariantAttributesEditor';
+import { ProductAttributeGroups } from './ProductAttributeGroups';
 
 type EcTab = 'products' | 'attributes' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
 
@@ -52,6 +53,8 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [attributeGroups, setAttributeGroups] = useState<EcAttributeGroupWithValues[]>([]);
   const [assignedGroups, setAssignedGroups] = useState<EcProductAttributeGroup[]>([]);
+  const [selectedValues, setSelectedValues] = useState<Record<string, string[]>>({});
+  const [generatingVariants, setGeneratingVariants] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,14 +100,15 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
     const newId = `ec-prod-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setEditId(null); setShowVariants(false);
     setForm({ id: newId, name: '', product_type: 'simple', price: 0, stock: 0, low_stock_threshold: 2, stock_status: 'instock', is_active: true, images: [] });
-    setVariants([]); setAssignedGroups([]); setShowForm(true);
+    setVariants([]); setAssignedGroups([]); setSelectedValues({}); setShowForm(true);
   };
 
   const openEdit = async (p: EcProduct) => {
     setEditId(p.id); setForm(p); setShowVariants(p.product_type === 'variable'); setShowForm(true);
     setVariantsLoading(true);
+    let vs: EcVariant[] = [];
     try {
-      const vs = await ecommerce.listVariants(p.id);
+      vs = await ecommerce.listVariants(p.id);
       setVariants(vs);
     } catch (e: any) {
       console.error('Failed to load variants:', e?.message);
@@ -117,7 +121,75 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
       console.error('Failed to load attribute groups:', e?.message);
       setAssignedGroups([]);
     }
+
+    // Restore the product-level selected attribute values. If the dedicated
+    // table is empty/missing (table not yet migrated), fall back to deriving
+    // the selected values from the product's variants so the UI still restores.
+    try {
+      const saved = await ecommerce.listProductAttributeValues(p.id);
+      if (saved.length) {
+        const map: Record<string, string[]> = {};
+        for (const s of saved) {
+          (map[s.attribute_id] = map[s.attribute_id] || []).push(s.value);
+        }
+        setSelectedValues(map);
+      } else if (vs.length) {
+        const derived: Record<string, string[]> = {};
+        for (const v of vs) {
+          if (!v.attributes) continue;
+          for (const [key, val] of Object.entries(v.attributes)) {
+            // Find the group whose lowercase name matches this attribute key.
+            const group = attributeGroups.find(g => g.name.toLowerCase() === key.toLowerCase());
+            const gid = group?.id || key;
+            // Hold the raw key as group id when there's no preset match.
+            if (!group) continue;
+            const arr = derived[gid] || (derived[gid] = []);
+            if (val && !arr.includes(val)) arr.push(val);
+          }
+        }
+        setSelectedValues(derived);
+      } else {
+        setSelectedValues({});
+      }
+    } catch (e: any) {
+      console.error('Failed to load attribute values:', e?.message);
+      setSelectedValues({});
+    }
     setVariantsLoading(false);
+  };
+
+  // Generate the cartesian product of the selected group→values as variants,
+  // without deleting any existing variants (only merges new combinations).
+  const comboKey = (attrs: Record<string, string>) =>
+    Object.entries(attrs || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, val]) => `${k}:${val}`).join('|');
+  const handleGenerateVariants = (groups: { id: string; name: string; values: string[] }[]) => {
+    if (groups.length === 0) return;
+    let combos: Record<string, string>[] = [{}];
+    for (const g of groups) {
+      const next: Record<string, string>[] = [];
+      for (const c of combos) for (const v of g.values) next.push({ ...c, [g.name.toLowerCase()]: v });
+      combos = next;
+    }
+    // Deduplicate combinations (e.g. overlapping values across groups).
+    const unique = new Map<string, Record<string, string>>();
+    for (const c of combos) unique.set(comboKey(c) || `combo-${Math.random().toString(36).slice(2, 6)}`, c);
+    const existing = new Map<string, EcVariant>(variants.map(v => [comboKey(v.attributes || {}), v] as [string, EcVariant]));
+    const basePrice = Number(form.price || 0);
+    const added: EcVariant[] = [];
+    for (const attrs of unique.values()) {
+      const key = comboKey(attrs);
+      if (existing.has(key)) { existing.get(key)!.attributes = attrs; continue; }
+      added.push({
+        id: '', product_id: editId || form.id || '', sku: '',
+        price: basePrice, sale_price: form.sale_price ?? null, stock: 0,
+        low_stock_threshold: form.low_stock_threshold ?? 2, stock_status: 'instock',
+        attributes: attrs, image: '', images: [], is_active: true,
+      });
+    }
+    setVariants([...Array.from(existing.values()), ...added]);
+    addToast(added.length ? `${added.length} new variant${added.length === 1 ? '' : 's'} generated` : 'All combinations already exist', 'success');
+    setGeneratingVariants(true);
+    setTimeout(() => setGeneratingVariants(false), 600);
   };
 
   const save = async () => {
@@ -172,16 +244,18 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
           }
         }
 
-        // Sync assigned attribute groups for this variable product.
+        // Sync assigned attribute groups + selected values for this variable product.
         const groupIds = assignedGroups.map(g => g.attribute_id);
         if (groupIds.length) {
           await ecommerce.saveProductAttributeGroups(pid, groupIds);
         } else {
           await ecommerce.deleteProductAttributeGroups(pid);
         }
+        await ecommerce.saveProductAttributeValues(pid, selectedValues);
       } else if (form.product_type === 'simple' && pid) {
         // Simple products don't use per-variant attributes – clean up any stale assignments.
         await ecommerce.deleteProductAttributeGroups(pid);
+        await ecommerce.deleteProductAttributeValues(pid);
       }
       addToast(editId ? 'Product updated' : 'Product created', 'success');
       setShowForm(false); await load();
@@ -306,32 +380,16 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
         />
         {showVariants && (
           <div className="border border-slate-100 rounded-xl bg-slate-50 p-3 space-y-3">
-            {/* Attribute group assignment */}
-            <div className="space-y-2 pb-2 border-b border-slate-200">
-              <p className="text-xs font-extrabold text-slate-700 uppercase">Attribute Groups</p>
-              <p className="text-[10px] text-slate-500">Select which attribute groups this product uses. Values below will be drawn from these groups.</p>
-              {attributeGroups.filter(a => a.is_active !== false).length === 0 ? (
-                <p className="text-[10px] text-slate-400">No attribute groups found. Create some in the Attributes tab first.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {attributeGroups.filter(a => a.is_active !== false).map(a => {
-                    const checked = assignedGroups.some(g => g.attribute_id === a.id);
-                    return (
-                      <label key={a.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold cursor-pointer transition-all ${checked ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>
-                        <input type="checkbox" checked={checked} onChange={e => {
-                          if (e.target.checked) {
-                            setAssignedGroups([...assignedGroups, { id: '', product_id: editId || form.id || '', attribute_id: a.id, is_active: true, sort_order: assignedGroups.length * 10 }]);
-                          } else {
-                            setAssignedGroups(assignedGroups.filter(g => g.attribute_id !== a.id));
-                          }
-                        }} className="w-3.5 h-3.5 accent-indigo-500" />
-                        {a.name}
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {/* Attribute group assignment + per-group value selection */}
+            <ProductAttributeGroups
+              attributeGroups={attributeGroups}
+              assignedGroupIds={assignedGroups.map(g => g.attribute_id)}
+              onAssignedGroupsChange={(ids) => setAssignedGroups(ids.map((id, i) => ({ id: '', product_id: editId || form.id || '', attribute_id: id, is_active: true, sort_order: i * 10 })))}
+              selectedValues={selectedValues}
+              onSelectedValuesChange={setSelectedValues}
+              onGenerateVariants={handleGenerateVariants}
+              generating={generatingVariants}
+            />
             <div className="flex items-center justify-between">
               <h5 className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5"><ClipboardList className="w-4 h-4 text-indigo-500" /> Variants (SKU, price, stock, attributes, images)</h5>
               <button type="button" onClick={() => setVariants([...variants, { id: '', product_id: editId || form.id || '', sku: '', price: 0, sale_price: null, stock: 0, low_stock_threshold: 2, stock_status: 'instock', attributes: {}, image: '', images: [], is_active: true }])} className="flex items-center gap-1 text-[11px] font-bold text-indigo-600"><Plus className="w-3.5 h-3.5" /> Add Variant</button>

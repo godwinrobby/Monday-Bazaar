@@ -95,6 +95,18 @@ export interface EcProductAttributeGroup {
   created_at?: string;
 }
 
+/** A selected value (from an assigned attribute group) for a product.
+ * Used to persist the admin's checked values per group and drive variant generation. */
+export interface EcProductAttributeValue {
+  id: string;
+  product_id: string;
+  attribute_id: string;
+  value: string;
+  sort_order?: number;
+  is_active?: boolean;
+  created_at?: string;
+}
+
 export interface EcCoupon {
   id: string;
   code: string;
