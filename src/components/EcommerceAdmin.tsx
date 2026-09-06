@@ -19,6 +19,7 @@ import { FormDrawer } from './FormDrawer';
 import { ImageUploader } from './ImageUploader';
 import { VariantAttributesEditor } from './VariantAttributesEditor';
 import { ProductAttributeGroups } from './ProductAttributeGroups';
+import { variantComboKey, variantComboLabel, findDuplicateVariantIndices } from '../utils/variantAttributes';
 
 type EcTab = 'products' | 'attributes' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
 
@@ -160,8 +161,6 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
 
   // Generate the cartesian product of the selected group→values as variants,
   // without deleting any existing variants (only merges new combinations).
-  const comboKey = (attrs: Record<string, string>) =>
-    Object.entries(attrs || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, val]) => `${k}:${val}`).join('|');
   const handleGenerateVariants = (groups: { id: string; name: string; values: string[] }[]) => {
     if (groups.length === 0) return;
     let combos: Record<string, string>[] = [{}];
@@ -172,12 +171,12 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
     }
     // Deduplicate combinations (e.g. overlapping values across groups).
     const unique = new Map<string, Record<string, string>>();
-    for (const c of combos) unique.set(comboKey(c) || `combo-${Math.random().toString(36).slice(2, 6)}`, c);
-    const existing = new Map<string, EcVariant>(variants.map(v => [comboKey(v.attributes || {}), v] as [string, EcVariant]));
+    for (const c of combos) unique.set(variantComboKey(c) || `combo-${Math.random().toString(36).slice(2, 6)}`, c);
+    const existing = new Map<string, EcVariant>(variants.map(v => [variantComboKey(v.attributes || {}), v] as [string, EcVariant]));
     const basePrice = Number(form.price || 0);
     const added: EcVariant[] = [];
     for (const attrs of unique.values()) {
-      const key = comboKey(attrs);
+      const key = variantComboKey(attrs);
       if (existing.has(key)) { existing.get(key)!.attributes = attrs; continue; }
       added.push({
         id: '', product_id: editId || form.id || '', sku: '',
@@ -212,11 +211,17 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
       await ecommerce.saveProduct(savedForm);
       const pid = editId || form.id;
       if (form.product_type === 'variable' && pid) {
-        // Validate unique attribute combinations BEFORE writing to DB.
-        const comboKeys = variants.map(v => Object.entries(v.attributes || {}).sort(([a],[b]) => a.localeCompare(b)).map(([k,val]) => `${k}:${val}`).join('|'));
-        const dupIdx = comboKeys.findIndex((k, i) => k && comboKeys.indexOf(k) !== i);
-        if (dupIdx >= 0) {
-          throw new Error(`Duplicate variant: variant #${dupIdx + 1} has the same attribute combination as another variant. Each variant must have a unique set of attributes.`);
+        // Validate unique, normalized attribute combinations BEFORE writing to DB.
+        // Normalizes case/whitespace (M == m == " m ") so "Size=M+Color=Black" can't
+        // be entered twice. Excludes the variant's own id from the comparison.
+        const conflicts = findDuplicateVariantIndices(variants);
+        if (conflicts.size > 0) {
+          const i = conflicts.keys().next().value as number;
+          const combo = variantComboLabel(variants[i].attributes);
+          throw new Error(
+            `Duplicate variant detected: "${combo || 'same attributes'}" already exists for this product. ` +
+            `Each variant must have a unique attribute combination.`,
+          );
         }
 
         // Load existing variant IDs from the DB to identify removed variants.
@@ -399,9 +404,17 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
             )}
             {!variantsLoading && variants.length === 0 && <p className="text-[11px] text-slate-400">No variants yet — add at least one for a variable product.</p>}
             {!variantsLoading && variants.length > 0 && (() => {
-              const comboKeys = variants.map(v => Object.entries(v.attributes || {}).sort(([a],[b]) => a.localeCompare(b)).map(([k,val]) => `${k}:${val}`).join('|'));
-              const dupIdx = comboKeys.findIndex((k, i) => k && comboKeys.indexOf(k) !== i);
-              return dupIdx >= 0 ? <p className="text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded">⚠ Variant #{dupIdx + 1} has the same attribute combination as another variant. Each variant must have unique attributes.</p> : null;
+              // Normalized duplicate detection (case/whitespace-insensitive),
+              // mirroring the DB unique index on (product_id, attrs_key).
+              const conflicts = findDuplicateVariantIndices(variants);
+              if (conflicts.size === 0) return null;
+              const labels = Array.from(new Set(Array.from(conflicts.keys()).map(i => variantComboLabel(variants[i]?.attributes) || `Variant #${i + 1}`)));
+              return (
+                <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1.5 rounded space-y-0.5">
+                  <p className="font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Duplicate attribute combination{labels.length > 1 ? 's' : ''} detected:</p>
+                  {labels.map(l => <p key={l} className="pl-4">• {l} — the same combination cannot be added twice. Edit or remove one of them.</p>)}
+                </div>
+              );
             })()}
             {variants.map((v, i) => (
               <div key={i} className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">

@@ -6,6 +6,7 @@ import {
   EcProductAttributeValue,
 } from '../types/ecommerce';
 import { generateSalt, hashPassword, verifyPassword } from '../utils/auth';
+import { variantComboKey } from '../utils/variantAttributes';
 
 // E-commerce data service — client-side Supabase integration shared by the
 // Admin and User apps (products, variants, categories, brands, orders,
@@ -322,11 +323,16 @@ class SupabaseEcommerce {
     try {
       const { error } = await this.client.from('ec_variants').upsert({
         ...base,
+        attrs_key: variantComboKey(v.attributes || {}),
         low_stock_threshold: v.low_stock_threshold ?? null,
         stock_status: v.stock_status || 'instock',
       }, { onConflict: 'id' });
       if (error) this.error(error);
-    } catch {
+    } catch (e: any) {
+      // DB unique index on (product_id, attrs_key) is the final safeguard.
+      if (/duplicate|unique/i.test(e?.message || '')) {
+        throw new Error('A variant with the same attribute combination already exists for this product.');
+      }
       const { error } = await this.client.from('ec_variants').upsert(base, { onConflict: 'id' });
       if (error) this.error(error);
     }

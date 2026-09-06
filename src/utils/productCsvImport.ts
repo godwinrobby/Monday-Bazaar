@@ -1,4 +1,5 @@
 import { EcProductType } from '../types/ecommerce';
+import { variantComboKey, variantComboLabel } from './variantAttributes';
 
 /**
  * CSV Product Import utilities for the Admin App (Product / Catalog module).
@@ -399,6 +400,24 @@ export function validateProductRows(
         if (!ls) return;
         if (seenVariantSkus.has(ls)) errors.push(`Duplicate variant SKU "${v.sku}" for product SKU "${sku}".`);
         seenVariantSkus.add(ls);
+      });
+
+      // Unique attribute-combination check (normalized: case/whitespace-insensitive).
+      // Mirrors the DB unique index on (product_id, attrs_key) — see variantAttributes.ts.
+      const seenCombos = new Set<string>();
+      variants.forEach((v) => {
+        const key = variantComboKey(v.attributes);
+        if (!key) return;
+        if (seenCombos.has(key)) errors.push(`Duplicate variant combination "${variantComboLabel(v.attributes)}" for product SKU "${sku}" — each variant must have a unique attribute combination.`);
+        seenCombos.add(key);
+      });
+      // De-duplicate the combinations themselves so the import never writes dupes.
+      const seenComboKeys = new Set<string>();
+      variants = variants.filter((v) => {
+        const key = variantComboKey(v.attributes);
+        if (key && seenComboKeys.has(key)) return false;
+        if (key) seenComboKeys.add(key);
+        return true;
       });
     }
 
