@@ -122,6 +122,9 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
 
   const save = async () => {
     if (!form.name.trim()) return addToast('Product name is required', 'error');
+    if (!form.sku.trim()) return addToast('SKU is required', 'error');
+    if (form.product_type === 'variable' && variants.length === 0) return addToast('Variable products need at least one variant', 'error');
+
     setLoading(true);
     try {
        const prodStock = Number(form.stock || 0);
@@ -137,6 +140,13 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
       await ecommerce.saveProduct(savedForm);
       const pid = editId || form.id;
       if (form.product_type === 'variable' && pid) {
+        // Validate unique attribute combinations BEFORE writing to DB.
+        const comboKeys = variants.map(v => Object.entries(v.attributes || {}).sort(([a],[b]) => a.localeCompare(b)).map(([k,val]) => `${k}:${val}`).join('|'));
+        const dupIdx = comboKeys.findIndex((k, i) => k && comboKeys.indexOf(k) !== i);
+        if (dupIdx >= 0) {
+          throw new Error(`Duplicate variant: variant #${dupIdx + 1} has the same attribute combination as another variant. Each variant must have a unique set of attributes.`);
+        }
+
         // Load existing variant IDs from the DB to identify removed variants.
         let existingIds: string[] = [];
         try { existingIds = (await ecommerce.listVariants(pid)).map(v => v.id).filter(Boolean); } catch { /* ignore */ }
@@ -160,13 +170,6 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
           if (!formIds.has(existingId)) {
             try { await ecommerce.deleteVariant(existingId); } catch (e) { console.error('Failed to delete variant:', e); }
           }
-        }
-
-        // Prevent duplicate attribute combinations.
-        const comboKeys = variants.map(v => Object.entries(v.attributes || {}).sort(([a],[b]) => a.localeCompare(b)).map(([k,val]) => `${k}:${val}`).join('|'));
-        const dupIdx = comboKeys.findIndex((k, i) => k && comboKeys.indexOf(k) !== i);
-        if (dupIdx >= 0) {
-          throw new Error(`Duplicate variant: variant #${dupIdx + 1} has the same attribute combination as another variant. Each variant must have a unique set of attributes.`);
         }
 
         // Sync assigned attribute groups for this variable product.
@@ -373,6 +376,7 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
                 <VariantAttributesEditor
                   value={v.attributes || {}}
                   assignedGroups={assignedGroups.map(g => g.attribute_id)}
+                  attrGroups={attributeGroups}
                   onChange={(attrs) => { const vv = [...variants]; vv[i] = { ...vv[i], attributes: attrs }; setVariants(vv); }}
                 />
                 <ImageUploader

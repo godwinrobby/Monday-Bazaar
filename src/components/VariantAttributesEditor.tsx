@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Plus, Tag, RefreshCw } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
-import { EcAttribute, EcAttributeValue } from '../types/ecommerce';
+import { EcAttribute, EcAttributeValue, EcAttributeGroupWithValues } from '../types/ecommerce';
 
 interface Props {
   value: Record<string, string>;
@@ -9,6 +9,10 @@ interface Props {
   /** IDs of attribute groups assigned to this product. When omitted, all
    * active preset groups are shown (backward-compatible behaviour). */
   assignedGroups?: string[];
+  /** Pre-loaded attribute groups with values (from parent cache) to avoid
+   * repeated per-variant-per-render API calls. When provided, the editor
+   * uses this data instead of fetching independently. */
+  attrGroups?: EcAttributeGroupWithValues[];
 }
 
 const parsePairs = (raw: string): { key: string; value: string }[] =>
@@ -27,7 +31,7 @@ interface LoadedAttr {
   values: string[];
 }
 
-export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange, assignedGroups }) => {
+export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange, assignedGroups, attrGroups }) => {
   const attrs = value || {};
   const [text, setText] = useState('');
   const [loaded, setLoaded] = useState<LoadedAttr[]>([]);
@@ -35,9 +39,20 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange, assi
   const [savingValue, setSavingValue] = useState<string | null>(null);
   const [newCustom, setNewCustom] = useState<{ groupId: string; text: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const assignedSet = assignedGroups ? new Set(assignedGroups) : null;
+  const assignedSet = useMemo(() => assignedGroups ? new Set(assignedGroups) : null, [assignedGroups]);
+  const hasAttrGroupsProp = Boolean(attrGroups);
 
   const loadAll = useCallback(async () => {
+    if (hasAttrGroupsProp && attrGroups) {
+      // Use pre-loaded data from parent cache — no API calls needed.
+      const loadedAttrs: LoadedAttr[] = attrGroups
+        .filter((a) => a.is_active !== false && a.has_presets && (!assignedSet || assignedSet.has(a.id)))
+        .filter((a) => a.values && a.values.length > 0)
+        .map((a) => ({ attr: a, values: a.values.map((v) => v.value) }));
+      setLoaded(loadedAttrs);
+      setLoading(false);
+      return;
+    }
     try {
       const list = await ecommerce.listAttributes();
       const preset = list.filter((a) => a.is_active !== false && a.has_presets);
@@ -51,9 +66,17 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange, assi
       setLoaded(loadedAttrs);
     } catch { /* non-fatal — falls back to freeform only */ }
     setLoading(false);
-  }, [assignedSet]);
+  }, [assignedSet, hasAttrGroupsProp, attrGroups]);
 
-  useEffect(() => { let cancelled = false; (async () => { await loadAll(); if (cancelled) return; })(); return () => { cancelled = true; }; }, [loadAll]);
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    (async () => {
+      await loadAll();
+      if (cancelled) return;
+    })();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [loadAll]);
 
   const commitText = () => {
     const pairs = parsePairs(text);
@@ -85,9 +108,14 @@ export const VariantAttributesEditor: React.FC<Props> = ({ value, onChange, assi
       const attr = await ecommerce.getAttributeById(groupId);
       if (!attr) throw new Error('Attribute group not found');
       await ecommerce.getOrCreateAttributeValue(attr.id, v);
-      await loadAll();
+      if (hasAttrGroupsProp) {
+        // Cached mode: update local loaded state directly since the prop won't reflect the new value.
+        setLoaded((prev) => prev.map((l) => l.attr.id === groupId ? { ...l, values: [...l.values, v] } : l));
+      } else {
+        await loadAll();
+      }
       setNewCustom(null);
-    } catch {
+    } catch (e) {
       // keep typing the value into the variant attributes as a fallback
       const key = loaded.find(l => l.attr.id === groupId)?.attr.name.toLowerCase() || 'value';
       const next = { ...attrs };

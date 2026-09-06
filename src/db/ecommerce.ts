@@ -157,6 +157,16 @@ class SupabaseEcommerce {
         return;
       }
 
+      // Deduplicate: if the same file (same name + size + lastModified) was already
+      // uploaded, reuse the cached URL to avoid duplicate uploads.
+      const cacheKey = `${file.name}|${file.size}|${file.lastModified}`;
+      const cachedUrl = this.uploadCache.get(cacheKey);
+      if (cachedUrl) {
+        if (onProgress) onProgress(100);
+        resolve(cachedUrl);
+        return;
+      }
+
       const token = this.getAdminToken();
       const form = new FormData();
       form.append('file', file, file.name);
@@ -187,7 +197,9 @@ class SupabaseEcommerce {
         try { resp = JSON.parse(xhr.responseText); } catch { /* ignore parse */ }
         if (xhr.status >= 200 && xhr.status < 300) {
           if (onProgress) onProgress(100);
-          resolve(resp.url || '');
+          const url = resp.url || '';
+          if (url) this.uploadCache.set(cacheKey, url);
+          resolve(url);
         } else {
           reject(new Error((resp && (resp.error || resp.message)) || `Upload failed (HTTP ${xhr.status}).`));
         }
@@ -214,6 +226,11 @@ class SupabaseEcommerce {
     let resp: any = {};
     try { resp = await res.json(); } catch { /* ignore */ }
     if (!res.ok) throw new Error((resp && (resp.error || resp.message)) || `Delete failed (HTTP ${res.status}).`);
+    // Clear any cached upload entries that map to this URL so a re-upload of
+    // the same file produces a fresh upload rather than returning a stale URL.
+    for (const [k, v] of this.uploadCache) {
+      if (v === clean || v === imageUrl) this.uploadCache.delete(k);
+    }
   }
 
 
