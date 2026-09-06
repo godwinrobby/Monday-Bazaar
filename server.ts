@@ -607,17 +607,42 @@ app.post("/api/admin/ecommerce/images/upload", async (req, res) => {
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeBase}`;
     const key = `${folder}/${unique}`;
 
-    if (R2_BUCKET && process.env.R2_ACCOUNT_ID) {
+    // Writes the file to local server storage. Used when R2 is not configured,
+    // and as an automatic fallback when R2 rejects the credentials — so image
+    // uploads keep working (Admin + Shop) until valid R2 keys are provided.
+    const saveLocally = () => {
+      const dir = path.join(ECOMMERCE_STORAGE_ROOT, key.replace(/\/[^/]+$/, ""));
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(ECOMMERCE_STORAGE_ROOT, key), file.content);
+      return `/storage/ecommerce/${key}`;
+    };
+
+    const r2Configured = !!(R2_BUCKET && process.env.R2_ACCOUNT_ID);
+    // Heuristic sanity check: real R2 access keys are 32 chars (secret 40).
+    const r2CredsLookBad = r2Configured && ((process.env.R2_ACCESS_KEY_ID || "").length !== 32 || (process.env.R2_SECRET_ACCESS_KEY || "").length < 40);
+
+    if (r2Configured && !r2CredsLookBad) {
       // Upload to Cloudflare R2 via the S3-compatible API. The "ecommerce/" root
       // keeps e-commerce media isolated from other buckets' content.
       const objectKey = `ecommerce/${key}`;
-      await r2Client.send(new PutObjectCommand({
-        Bucket: R2_BUCKET,
-        Key: objectKey,
-        Body: file.content,
-        ContentType: file.contentType,
-        Metadata: { uploadedBy: "monday-bazaar-admin" },
-      }));
+      try {
+        await r2Client.send(new PutObjectCommand({
+          Bucket: R2_BUCKET,
+          Key: objectKey,
+          Body: file.content,
+          ContentType: file.contentType,
+          Metadata: { uploadedBy: "monday-bazaar-admin" },
+        }));
+      } catch (r2Err: any) {
+        const sig = `${r2Err?.name || ""} ${r2Err?.Code || ""} ${r2Err?.message || ""}`;
+        if (/InvalidAccessKeyId|SignatureDoesNotMatch|InvalidSecurity|Credentials|should be 32/i.test(sig)) {
+          // R2 credentials rejected — degrade gracefully instead of failing the upload.
+          console.error("[images] R2 rejected the credentials, saving locally instead:", r2Err?.message);
+          const url = saveLocally();
+          return res.json({ success: true, url, path: key, warning: "Cloudflare R2 credentials are invalid — image saved to local storage. Fix R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY in .env to store images in R2." });
+        }
+        throw r2Err;
+      }
 
       // Only the R2 object path/URL is returned and stored in the DB — never base64.
       // Prefer the configured public URL; fall back to a /storage/r2 proxy so
@@ -625,12 +650,12 @@ app.post("/api/admin/ecommerce/images/upload", async (req, res) => {
       const url = R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${objectKey}` : `/storage/r2/${objectKey}`;
       res.json({ success: true, url, path: objectKey });
     } else {
+      if (r2CredsLookBad) console.error("[images] R2 credentials look invalid (access key must be 32 chars, secret 40) — saving image locally. Fix .env to enable R2.");
       // Fallback: write to local server storage (legacy behaviour).
-      const dir = path.join(ECOMMERCE_STORAGE_ROOT, folder);
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(ECOMMERCE_STORAGE_ROOT, key), file.content);
-      const url = `/storage/ecommerce/${key}`;
-      res.json({ success: true, url, path: key });
+      const url = saveLocally();
+      res.json(r2CredsLookBad
+        ? { success: true, url, path: key, warning: "Cloudflare R2 credentials are invalid — image saved to local storage. Fix R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY in .env to store images in R2." }
+        : { success: true, url, path: key });
     }
   } catch (err: any) {
     // Give admins an actionable message when the R2 credentials themselves are bad.
