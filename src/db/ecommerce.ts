@@ -14,9 +14,8 @@ import { variantComboKey } from '../utils/variantAttributes';
 
 class SupabaseEcommerce {
   client: SupabaseClient;
-  private storageUrl: string;
-  private storageKey: string;
   private uploadCache = new Map<string, string>();
+  private readonly IMAGE_BUCKET = 'ecommerce-images';
 
   constructor() {
     const url = (typeof process !== 'undefined' && process.env?.SUPABASE_URL) || 'https://pmvnyxpyypifneqojlqq.supabase.co';
@@ -140,13 +139,41 @@ class SupabaseEcommerce {
 
   /* ==================== IMAGE UPLOAD / LOCAL STORAGE ==================== */
 
+  private storagePathFor(file: File, folder: string): string {
+    const rawFolder = (folder || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    const segs = rawFolder.split('/').map((p) => p.replace(/[^a-z0-9._-]/gi, '_')).filter(Boolean);
+    let folderPath = segs.join('/');
+    if (!folderPath.startsWith('products/')) folderPath = 'products/' + folderPath;
+
+    const safeBase = (file.name || 'image').replace(/[^a-z0-9._-]/gi, '_').toLowerCase();
+    return `${folderPath}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeBase}`;
+  }
+
+  private async uploadImageToSupabaseStorage(file: File, folder: string, onProgress?: (pct: number) => void): Promise<string> {
+    const path = this.storagePathFor(file, folder);
+    if (onProgress) onProgress(10);
+
+    const { error } = await this.client.storage
+      .from(this.IMAGE_BUCKET)
+      .upload(path, file, {
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '31536000',
+        upsert: false,
+      });
+
+    if (error) {
+      throw new Error(`Supabase Storage upload failed: ${error.message}. Make sure the "${this.IMAGE_BUCKET}" bucket migration has been run.`);
+    }
+
+    const { data } = this.client.storage.from(this.IMAGE_BUCKET).getPublicUrl(path);
+    if (onProgress) onProgress(100);
+    return data.publicUrl;
+  }
+
   /**
-   * Upload a single image to Cloudflare R2 via the Express upload endpoint
-   * (POST multipart/form-data). Reports byte-level upload progress via
-   * `onProgress` (0-100) and validates type/size before the request is sent.
-   * Returns the public R2 URL (e.g.
-   * `https://<account>.r2.cloudflarestorage.com/<bucket>/ecommerce/products/<id>/<file>`)
-   * stored in the DB. No base64 is ever stored in the DB.
+   * Upload a single image. The Node/R2 endpoint is attempted first for local
+   * or full-stack deployments; if production serves the SPA for /api instead,
+   * the browser falls back to Supabase Storage.
    */
   uploadImage(file: File, folder: string, onProgress?: (pct: number) => void): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -196,12 +223,20 @@ class SupabaseEcommerce {
       xhr.onload = () => {
         done();
         let resp: any = {};
+        const contentType = xhr.getResponseHeader('content-type') || '';
         try { resp = JSON.parse(xhr.responseText); } catch { /* ignore parse */ }
-        if (xhr.status >= 200 && xhr.status < 300) {
+        if (xhr.status >= 200 && xhr.status < 300 && resp && resp.success && resp.url) {
           if (onProgress) onProgress(100);
           const url = resp.url || '';
           if (url) this.uploadCache.set(cacheKey, url);
           resolve(url);
+        } else if (xhr.status >= 200 && xhr.status < 300 && contentType.includes('text/html')) {
+          this.uploadImageToSupabaseStorage(file, folder, onProgress)
+            .then((url) => {
+              this.uploadCache.set(cacheKey, url);
+              resolve(url);
+            })
+            .catch(reject);
         } else {
           reject(new Error((resp && (resp.error || resp.message)) || `Upload failed (HTTP ${xhr.status}).`));
         }
@@ -211,11 +246,23 @@ class SupabaseEcommerce {
     });
   }
 
-  /** Remove a previously uploaded image from server storage (R2 or legacy local). */
+  /** Remove a previously uploaded image from server storage or Supabase Storage. */
   async deleteImage(imageUrl: string): Promise<void> {
     if (typeof window === 'undefined') return;
-    const clean = (imageUrl || '').replace(/.*\?.*$/, '').replace(/\/$/, '');
+    const clean = (imageUrl || '').replace(/\?.*$/, '').replace(/\/$/, '');
     if (!clean) return;
+    const supabaseMarker = `/storage/v1/object/public/${this.IMAGE_BUCKET}/`;
+    const supabaseIdx = clean.indexOf(supabaseMarker);
+    if (supabaseIdx !== -1) {
+      const path = decodeURIComponent(clean.slice(supabaseIdx + supabaseMarker.length));
+      const { error } = await this.client.storage.from(this.IMAGE_BUCKET).remove([path]);
+      if (error) throw new Error(`Supabase Storage delete failed: ${error.message}`);
+      for (const [k, v] of this.uploadCache) {
+        if (v === clean || v === imageUrl) this.uploadCache.delete(k);
+      }
+      return;
+    }
+
     // External URLs (e.g. Unsplash) have no server-side storage to delete.
     if (!clean.startsWith('/storage/') && !clean.startsWith('http')) return;
 
