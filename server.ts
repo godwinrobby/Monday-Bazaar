@@ -12,7 +12,8 @@ dotenv.config();
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { Readable } from "stream";
 import { dbManager } from "./src/db/dbManager";
 import { supabaseDb } from "./src/db/supabaseDb";
 import { fetchAmazonProductDetails } from "./src/utils/amazonFetcher";
@@ -54,6 +55,27 @@ const ECOMMERCE_STORAGE_ROOT = path.join(STORAGE_ROOT, "ecommerce");
 fs.mkdirSync(ECOMMERCE_STORAGE_ROOT, { recursive: true });
 app.use("/storage/ecommerce", express.static(ECOMMERCE_STORAGE_ROOT));
 app.use("/storage", express.static(STORAGE_ROOT));
+// Stream objects from Cloudflare R2 when R2_PUBLIC_URL is not configured, so
+// images stored as "/storage/r2/ecommerce/products/..." still render everywhere.
+// Must be registered BEFORE the /storage 404 catch-all below.
+app.get(/^\/storage\/r2\/(.+)$/, async (req, res) => {
+  const key = decodeURIComponent(req.params[0] || "");
+  if (!key.startsWith("products/") && !key.startsWith("ecommerce/products/")) {
+    return res.sendStatus(400);
+  }
+  if (!R2_BUCKET || !process.env.R2_ACCOUNT_ID) return res.sendStatus(404);
+  try {
+    const obj = await r2Client.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    if (obj.ContentType) res.setHeader("Content-Type", obj.ContentType);
+    if (obj.ContentLength) res.setHeader("Content-Length", String(obj.ContentLength));
+    if (obj.ETag) res.setHeader("ETag", obj.ETag);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    if (!obj.Body) return res.sendStatus(404);
+    Readable.from(obj.Body as unknown as Readable).pipe(res);
+  } catch {
+    res.sendStatus(404);
+  }
+});
 // Do not let the SPA fallback swallow missing asset requests — return 404 instead
 // so client-side <img> onError handlers can fall back to a placeholder cleanly.
 app.use("/storage", (_req, res) => res.sendStatus(404));
@@ -580,24 +602,28 @@ app.post("/api/admin/ecommerce/images/upload", async (req, res) => {
     }
 
     // Generate a unique, safe filename and build the R2 object key.
+    // Final structure: ecommerce/products/{product-id}/[variants/{variant-id}/]<unique-file>
     const safeBase = (file.filename || "image").replace(/[^a-z0-9._-]/gi, "_").toLowerCase();
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeBase}`;
     const key = `${folder}/${unique}`;
 
     if (R2_BUCKET && process.env.R2_ACCOUNT_ID) {
-      // Upload to Cloudflare R2 via the S3-compatible API.
+      // Upload to Cloudflare R2 via the S3-compatible API. The "ecommerce/" root
+      // keeps e-commerce media isolated from other buckets' content.
+      const objectKey = `ecommerce/${key}`;
       await r2Client.send(new PutObjectCommand({
         Bucket: R2_BUCKET,
-        Key: key,
+        Key: objectKey,
         Body: file.content,
         ContentType: file.contentType,
         Metadata: { uploadedBy: "monday-bazaar-admin" },
       }));
 
-      // Prefer the configured public URL; fall back to a /storage/R2 proxy so
+      // Only the R2 object path/URL is returned and stored in the DB — never base64.
+      // Prefer the configured public URL; fall back to a /storage/r2 proxy so
       // images work even when public access is not directly configured.
-      const url = R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${key}` : `/storage/r2/${key}`;
-      res.json({ success: true, url, path: key });
+      const url = R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${objectKey}` : `/storage/r2/${objectKey}`;
+      res.json({ success: true, url, path: objectKey });
     } else {
       // Fallback: write to local server storage (legacy behaviour).
       const dir = path.join(ECOMMERCE_STORAGE_ROOT, folder);
@@ -607,6 +633,11 @@ app.post("/api/admin/ecommerce/images/upload", async (req, res) => {
       res.json({ success: true, url, path: key });
     }
   } catch (err: any) {
+    // Give admins an actionable message when the R2 credentials themselves are bad.
+    const code = err?.name || err?.Code || '';
+    if (/InvalidAccessKeyId|SignatureDoesNotMatch|InvalidSecurity|Credentials/i.test(`${code} ${err?.message || ''}`)) {
+      return res.status(502).json({ success: false, error: 'Cloudflare R2 rejected the upload credentials. Verify R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY in the server .env, then retry.' });
+    }
     res.status(500).json({ success: false, error: `Upload failed: ${err && err.message ? err.message : "Unknown error"}` });
   }
 });
@@ -654,7 +685,8 @@ app.delete("/api/admin/ecommerce/images", async (req, res) => {
     }
 
     // Confinement: only allow product image keys (no traversal).
-    if (!key.startsWith("products/")) {
+    // "products/..." = legacy keys; "ecommerce/products/..." = current structure.
+    if (!key.startsWith("products/") && !key.startsWith("ecommerce/products/")) {
       return res.status(400).json({ success: false, error: "Invalid image path." });
     }
 
