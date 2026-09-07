@@ -11,3 +11,60 @@
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+.rich-text-editor:empty::before {
+  color: #94a3b8;
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.rich-text-content p,
+.rich-text-content h3,
+.rich-text-content h4,
+.rich-text-content blockquote,
+.rich-text-content ul,
+.rich-text-content ol {
+  margin: 0 0 0.65rem;
+}
+
+.rich-text-content > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-text-content h3 {
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.rich-text-content h4 {
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.rich-text-content ul,
+.rich-text-content ol {
+  padding-left: 1.25rem;
+}
+
+.rich-text-content ul {
+  list-style: disc;
+}
+
+.rich-text-content ol {
+  list-style: decimal;
+}
+
+.rich-text-content blockquote {
+  border-left: 3px solid #818cf8;
+  color: #475569;
+  padding-left: 0.75rem;
+  font-style: italic;
+}
+
+.rich-text-content a {
+  color: #4f46e5;
+  font-weight: 700;
+  text-decoration: underline;
+}

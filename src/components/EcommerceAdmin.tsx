@@ -19,6 +19,7 @@ import { FormDrawer } from './FormDrawer';
 import { ImageUploader } from './ImageUploader';
 import { VariantAttributesEditor } from './VariantAttributesEditor';
 import { ProductAttributeGroups } from './ProductAttributeGroups';
+import { RichTextEditor } from './RichTextEditor';
 import { variantComboKey, variantComboLabel, findDuplicateVariantIndices } from '../utils/variantAttributes';
 
 type EcTab = 'products' | 'attributes' | 'categories' | 'brands' | 'orders' | 'coupons' | 'payments' | 'shipping' | 'shop' | 'customers' | 'settings';
@@ -374,7 +375,10 @@ const ProductsPanel: React.FC<{ addToast: Props['addToast']; setError: (s: strin
            </div>
          )}
         </div>
-        <textarea value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} placeholder="Description" className={`${inputCls} w-full`} />
+        <div className="space-y-1.5">
+          <p className="text-xs font-extrabold uppercase text-slate-700">Product Description</p>
+          <RichTextEditor value={form.description || ''} onChange={description => setForm({ ...form, description })} />
+        </div>
         <ImageUploader
           value={form.images || []}
           onChange={(imgs) => setForm({ ...form, images: imgs })}

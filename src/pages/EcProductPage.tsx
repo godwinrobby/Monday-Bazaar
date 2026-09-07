@@ -4,6 +4,7 @@ import { ArrowLeft, Package, ShoppingCart, Star, Check, Minus, Plus, Loader2, Tr
 import { ecommerce } from '../db/ecommerce';
 import { useCart } from '../context/CartContext';
 import { EcProduct, EcVariant, EcCategory, EcAttributeGroupWithValues } from '../types/ecommerce';
+import { sanitizeRichText } from '../components/RichTextEditor';
 
 export const EcProductPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -295,7 +296,9 @@ export const EcProductPage: React.FC = () => {
           {product.description && (
             <div className="bg-slate-50 rounded-2xl p-4">
               <p className="text-xs font-extrabold text-slate-700 uppercase mb-1">Description</p>
-              <p className="text-sm text-slate-600 leading-relaxed">{product.description}</p>
+              <div className="rich-text-content text-sm text-slate-600">
+                <div dangerouslySetInnerHTML={{ __html: sanitizeRichText(product.description) }} />
+              </div>
             </div>
           )}
         </div>
