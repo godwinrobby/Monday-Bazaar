@@ -174,26 +174,51 @@ export const EcProductPage: React.FC = () => {
       <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 mb-4"><ArrowLeft className="w-4 h-4" /> Back</button>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-3">
-          <button
-            type="button"
-            onClick={openImageViewer}
-            className="group relative block w-full bg-slate-50 rounded-3xl overflow-hidden border border-slate-200 aspect-square cursor-zoom-in"
-            title="Open image viewer"
-          >
-            <img
-              src={mainImage}
-              alt={product.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-              onError={e => {
-                const fallback = 'https://placehold.co/600x600?text=No+Img';
-                const target = e.target as HTMLImageElement;
-                if (target.src !== fallback) target.src = fallback;
-              }}
-            />
-            <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-white opacity-0 transition-opacity group-hover:opacity-100">
-              <ZoomIn className="h-3.5 w-3.5" /> View larger
-            </span>
-          </button>
+          <div className="group relative aspect-square overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+            <button
+              type="button"
+              onClick={openImageViewer}
+              className="block h-full w-full cursor-zoom-in"
+              title="Open image viewer"
+            >
+              <img
+                src={mainImage}
+                alt={product.name}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                onError={e => {
+                  const fallback = 'https://placehold.co/600x600?text=No+Img';
+                  const target = e.target as HTMLImageElement;
+                  if (target.src !== fallback) target.src = fallback;
+                }}
+              />
+              <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <ZoomIn className="h-3.5 w-3.5" /> View larger
+              </span>
+            </button>
+            {gallery.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={event => { event.stopPropagation(); moveViewer(-1); }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-slate-800 shadow-lg transition hover:bg-white"
+                  aria-label="Previous product image"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={event => { event.stopPropagation(); moveViewer(1); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2.5 text-slate-800 shadow-lg transition hover:bg-white"
+                  aria-label="Next product image"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+                <span className="absolute bottom-3 left-3 rounded-full bg-slate-950/70 px-2.5 py-1 text-[11px] font-bold text-white">
+                  {Math.min(viewerIndex + 1, gallery.length)} / {gallery.length}
+                </span>
+              </>
+            )}
+          </div>
           {gallery.length > 1 && (
             <div className="flex gap-2 overflow-x-auto no-scrollbar">
               {gallery.map((img, i) => (
