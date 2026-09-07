@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Package, ShoppingCart, Star, Check, Minus, Plus, Loader2, Truck, ShieldCheck, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Package, ShoppingCart, Star, Check, Minus, Plus, Loader2, Truck, ShieldCheck, X, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
 import { useCart } from '../context/CartContext';
 import { EcProduct, EcVariant, EcCategory, EcAttributeGroupWithValues } from '../types/ecommerce';
@@ -22,6 +22,7 @@ export const EcProductPage: React.FC = () => {
   const [activeImage, setActiveImage] = useState<string>('');
   const [isImageOpen, setIsImageOpen] = useState(false);
   const [imageZoom, setImageZoom] = useState(1);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   const normalizeImageList = (value: unknown): string[] => {
     if (!value) return [];
@@ -79,20 +80,6 @@ export const EcProductPage: React.FC = () => {
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    if (!isImageOpen) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsImageOpen(false);
-    };
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isImageOpen]);
-
   const price = selected ? (selected.sale_price ?? selected.price) : (product?.sale_price ?? product?.price ?? 0);
   const stock = selected ? selected.stock : (product?.stock ?? 0);
   const off = (product?.price || 0) > price && (product?.price || 0) > 0 ? Math.round(((product!.price! - price) / product!.price!) * 100) : 0;
@@ -131,11 +118,44 @@ export const EcProductPage: React.FC = () => {
     const productImages = normalizeImageList(product?.images);
     return [...new Set([...variantImages, ...productImages])];
   })();
+
+  useEffect(() => {
+    if (!isImageOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsImageOpen(false);
+      if (event.key === 'ArrowLeft' && gallery.length > 1) moveViewer(-1);
+      if (event.key === 'ArrowRight' && gallery.length > 1) moveViewer(1);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [gallery.length, isImageOpen]);
+
   const mainImage = activeImage || gallery[0] || 'https://placehold.co/600x600?text=No+Img';
   const openImageViewer = () => {
+    const selectedIndex = gallery.indexOf(mainImage);
+    setViewerIndex(selectedIndex >= 0 ? selectedIndex : 0);
     setImageZoom(1);
     setIsImageOpen(true);
   };
+  const selectGalleryImage = (image: string, index: number) => {
+    setActiveImage(image);
+    setViewerIndex(index);
+  };
+  const moveViewer = (direction: number) => {
+    if (gallery.length < 2) return;
+    setViewerIndex(current => {
+      const nextIndex = (current + direction + gallery.length) % gallery.length;
+      setActiveImage(gallery[nextIndex]);
+      return nextIndex;
+    });
+    setImageZoom(1);
+  };
+  const viewerImage = gallery[viewerIndex] || mainImage;
   const changeImageZoom = (amount: number) => {
     setImageZoom(current => Math.min(3, Math.max(1, Number((current + amount).toFixed(2)))));
   };
@@ -180,7 +200,7 @@ export const EcProductPage: React.FC = () => {
                 <button
                   key={`${img}-${i}`}
                   type="button"
-                  onClick={() => setActiveImage(img)}
+                  onClick={() => selectGalleryImage(img, i)}
                   className={`shrink-0 rounded-xl border-2 transition-all ${activeImage === img ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 hover:border-indigo-400'}`}
                   title={`View image ${i + 1}`}
                 >
@@ -277,14 +297,14 @@ export const EcProductPage: React.FC = () => {
 
           <div className="flex max-h-full max-w-full flex-col items-center gap-4">
             <div
-              className="max-h-[75vh] max-w-[92vw] overflow-auto rounded-2xl bg-white/5 p-2 sm:max-w-[85vw]"
+              className="relative max-h-[75vh] max-w-[92vw] overflow-auto rounded-2xl bg-white/5 p-2 sm:max-w-[85vw]"
               onWheel={event => {
                 event.preventDefault();
                 changeImageZoom(event.deltaY < 0 ? 0.25 : -0.25);
               }}
             >
               <img
-                src={mainImage}
+                src={viewerImage}
                 alt={product.name}
                 className="max-h-[72vh] max-w-[88vw] object-contain transition-transform duration-200 sm:max-w-[80vw]"
                 style={{ transform: `scale(${imageZoom})`, transformOrigin: 'center center' }}
@@ -294,7 +314,45 @@ export const EcProductPage: React.FC = () => {
                   if (target.src !== fallback) target.src = fallback;
                 }}
               />
+              {gallery.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => moveViewer(-1)}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-slate-950/70 p-2.5 text-white hover:bg-slate-950"
+                    aria-label="Previous product image"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveViewer(1)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-slate-950/70 p-2.5 text-white hover:bg-slate-950"
+                    aria-label="Next product image"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              )}
             </div>
+            {gallery.length > 1 && (
+              <div className="flex max-w-[92vw] gap-2 overflow-x-auto rounded-xl bg-white/10 p-2 sm:max-w-[80vw]">
+                {gallery.map((image, index) => (
+                  <button
+                    key={`${image}-viewer-${index}`}
+                    type="button"
+                    onClick={() => {
+                      selectGalleryImage(image, index);
+                      setImageZoom(1);
+                    }}
+                    className={`shrink-0 rounded-lg border-2 p-0.5 ${viewerIndex === index ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                    aria-label={`View product image ${index + 1}`}
+                  >
+                    <img src={image} alt="" className="h-14 w-14 rounded-md object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-2 rounded-full bg-white/10 p-1.5 text-white">
               <button type="button" onClick={() => changeImageZoom(-0.25)} disabled={imageZoom <= 1} className="rounded-full p-2 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Zoom out">
                 <ZoomOut className="h-4 w-4" />
