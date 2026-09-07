@@ -61,13 +61,19 @@ export default function App() {
   useEffect(() => {
     applyServerStoreLogos(getStoreLogos());
     fetch('/api/store-images')
-      .then(r => (r.ok ? r.json() : null))
-      .then((data: any) => {
-        if (data && data.success && data.images) {
-          applyServerStoreLogos(data.images);
-        }
+      .then(async r => {
+        const contentType = r.headers.get('content-type') || '';
+        if (!r.ok || !contentType.includes('application/json')) return null;
+        return r.json();
       })
-      .catch(err => console.error('Store images fetch error:', err))
+      .then((data: any) => {
+        if (data?.success && data.images) {
+          applyServerStoreLogos(data.images);
+          return;
+        }
+        return supabaseDb.getStoreImages().then(images => applyServerStoreLogos(images));
+      })
+      .catch(() => supabaseDb.getStoreImages().then(images => applyServerStoreLogos(images)))
       .finally(() => setStoreImagesTick(t => t + 1));
   }, []);
 

@@ -69,7 +69,7 @@ export const EcProductPage: React.FC = () => {
       if (v.length) setSelected(v[0]);
       const initialGallery = [
         ...normalizeImageList(v[0]?.images),
-        ...(v[0]?.image ? [v[0].image] : []),
+        ...normalizeImageList(v[0]?.image),
         ...normalizeImageList(p.images),
       ];
       setActiveImage(initialGallery[0] || '');
@@ -110,9 +110,9 @@ export const EcProductPage: React.FC = () => {
   const gallery = (() => {
     const variantImages = [
       ...normalizeImageList(selected?.images),
-      ...(selected?.image ? [selected.image] : []),
+      ...normalizeImageList(selected?.image),
     ];
-    const productImages = normalizeImageList(product.images);
+    const productImages = normalizeImageList(product?.images);
     return [...new Set([...variantImages, ...productImages])];
   })();
   const mainImage = activeImage || gallery[0] || 'https://placehold.co/600x600?text=No+Img';
