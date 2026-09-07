@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Package, ShoppingCart, Star, Check, Minus, Plus, Loader2, Truck, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Package, ShoppingCart, Star, Check, Minus, Plus, Loader2, Truck, ShieldCheck, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { ecommerce } from '../db/ecommerce';
 import { useCart } from '../context/CartContext';
 import { EcProduct, EcVariant, EcCategory, EcAttributeGroupWithValues } from '../types/ecommerce';
@@ -20,6 +20,8 @@ export const EcProductPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
   const [activeImage, setActiveImage] = useState<string>('');
+  const [isImageOpen, setIsImageOpen] = useState(false);
+  const [imageZoom, setImageZoom] = useState(1);
 
   const normalizeImageList = (value: unknown): string[] => {
     if (!value) return [];
@@ -77,6 +79,20 @@ export const EcProductPage: React.FC = () => {
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!isImageOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsImageOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isImageOpen]);
+
   const price = selected ? (selected.sale_price ?? selected.price) : (product?.sale_price ?? product?.price ?? 0);
   const stock = selected ? selected.stock : (product?.stock ?? 0);
   const off = (product?.price || 0) > price && (product?.price || 0) > 0 ? Math.round(((product!.price! - price) / product!.price!) * 100) : 0;
@@ -116,6 +132,13 @@ export const EcProductPage: React.FC = () => {
     return [...new Set([...variantImages, ...productImages])];
   })();
   const mainImage = activeImage || gallery[0] || 'https://placehold.co/600x600?text=No+Img';
+  const openImageViewer = () => {
+    setImageZoom(1);
+    setIsImageOpen(true);
+  };
+  const changeImageZoom = (amount: number) => {
+    setImageZoom(current => Math.min(3, Math.max(1, Number((current + amount).toFixed(2)))));
+  };
 
   if (loading) return <div className="py-20 text-center text-slate-400"><Loader2 className="w-6 h-6 mx-auto animate-spin mb-2" />Loading product...</div>;
   if (error || !product) return (
@@ -131,18 +154,26 @@ export const EcProductPage: React.FC = () => {
       <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 mb-4"><ArrowLeft className="w-4 h-4" /> Back</button>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-3">
-          <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-200 aspect-square">
+          <button
+            type="button"
+            onClick={openImageViewer}
+            className="group relative block w-full bg-slate-50 rounded-3xl overflow-hidden border border-slate-200 aspect-square cursor-zoom-in"
+            title="Open image viewer"
+          >
             <img
               src={mainImage}
               alt={product.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               onError={e => {
                 const fallback = 'https://placehold.co/600x600?text=No+Img';
                 const target = e.target as HTMLImageElement;
                 if (target.src !== fallback) target.src = fallback;
               }}
             />
-          </div>
+            <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <ZoomIn className="h-3.5 w-3.5" /> View larger
+            </span>
+          </button>
           {gallery.length > 1 && (
             <div className="flex gap-2 overflow-x-auto no-scrollbar">
               {gallery.map((img, i) => (
@@ -224,6 +255,61 @@ export const EcProductPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {isImageOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4 sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${product.name} image viewer`}
+          onClick={event => {
+            if (event.target === event.currentTarget) setIsImageOpen(false);
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setIsImageOpen(false)}
+            className="absolute right-4 top-4 z-10 rounded-full bg-white/10 p-2.5 text-white transition-colors hover:bg-white/20"
+            aria-label="Close image viewer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+
+          <div className="flex max-h-full max-w-full flex-col items-center gap-4">
+            <div
+              className="max-h-[75vh] max-w-[92vw] overflow-auto rounded-2xl bg-white/5 p-2 sm:max-w-[85vw]"
+              onWheel={event => {
+                event.preventDefault();
+                changeImageZoom(event.deltaY < 0 ? 0.25 : -0.25);
+              }}
+            >
+              <img
+                src={mainImage}
+                alt={product.name}
+                className="max-h-[72vh] max-w-[88vw] object-contain transition-transform duration-200 sm:max-w-[80vw]"
+                style={{ transform: `scale(${imageZoom})`, transformOrigin: 'center center' }}
+                onError={event => {
+                  const fallback = 'https://placehold.co/600x600?text=No+Img';
+                  const target = event.target as HTMLImageElement;
+                  if (target.src !== fallback) target.src = fallback;
+                }}
+              />
+            </div>
+            <div className="flex items-center gap-2 rounded-full bg-white/10 p-1.5 text-white">
+              <button type="button" onClick={() => changeImageZoom(-0.25)} disabled={imageZoom <= 1} className="rounded-full p-2 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Zoom out">
+                <ZoomOut className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => setImageZoom(1)} className="rounded-full p-2 hover:bg-white/15" aria-label="Reset zoom">
+                <RotateCcw className="h-4 w-4" />
+              </button>
+              <span className="min-w-12 text-center text-xs font-bold">{Math.round(imageZoom * 100)}%</span>
+              <button type="button" onClick={() => changeImageZoom(0.25)} disabled={imageZoom >= 3} className="rounded-full p-2 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Zoom in">
+                <ZoomIn className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
