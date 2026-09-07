@@ -19,6 +19,22 @@ export const EcProductPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
+  const [activeImage, setActiveImage] = useState<string>('');
+
+  const normalizeImageList = (value: unknown): string[] => {
+    if (!value) return [];
+    const raw = Array.isArray(value) ? value : [value];
+    return raw
+      .map((item) => {
+        if (typeof item === 'string') return item.trim();
+        if (item && typeof item === 'object') {
+          const candidate = (item as any).url || (item as any).image || (item as any).src;
+          return typeof candidate === 'string' ? candidate.trim() : '';
+        }
+        return '';
+      })
+      .filter((url): url is string => Boolean(url));
+  };
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -51,6 +67,12 @@ export const EcProductPage: React.FC = () => {
         setCategory(cats.find(c => c.id === p.category_id) || null);
       }
       if (v.length) setSelected(v[0]);
+      const initialGallery = [
+        ...normalizeImageList(v[0]?.images),
+        ...(v[0]?.image ? [v[0].image] : []),
+        ...normalizeImageList(p.images),
+      ];
+      setActiveImage(initialGallery[0] || '');
     } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -85,6 +107,15 @@ export const EcProductPage: React.FC = () => {
   const selectableByAttr = (attrKey: string, attrVal: string) => variants.filter(v => String(v.attributes?.[attrKey]) === attrVal);
 
   const groupLabel = (key: string): string => assignedAttrMap[key.toLowerCase()] || key.charAt(0).toUpperCase() + key.slice(1);
+  const gallery = (() => {
+    const variantImages = [
+      ...normalizeImageList(selected?.images),
+      ...(selected?.image ? [selected.image] : []),
+    ];
+    const productImages = normalizeImageList(product.images);
+    return [...new Set([...variantImages, ...productImages])];
+  })();
+  const mainImage = activeImage || gallery[0] || 'https://placehold.co/600x600?text=No+Img';
 
   if (loading) return <div className="py-20 text-center text-slate-400"><Loader2 className="w-6 h-6 mx-auto animate-spin mb-2" />Loading product...</div>;
   if (error || !product) return (
@@ -100,26 +131,38 @@ export const EcProductPage: React.FC = () => {
       <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 mb-4"><ArrowLeft className="w-4 h-4" /> Back</button>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-3">
-          {(() => {
-            const variantImages = (selected?.images && selected.images.length
-              ? selected.images
-              : (selected?.image ? [selected.image] : [])) || [];
-            const gallery = variantImages.length ? variantImages : (product.images || []);
-            return (
-              <>
-                <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-200 aspect-square">
-                  <img src={gallery[0] || 'https://placehold.co/600x600?text=No+Img'} alt={product.name} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/600x600?text=No+Img'; }} />
-                </div>
-                {gallery.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                    {gallery.map((img, i) => (
-                      <img key={i} src={img} data-thumb alt="" className="w-16 h-16 rounded-xl object-cover border border-slate-200 cursor-pointer hover:border-indigo-400" onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x64'; }} />
-                    ))}
-                  </div>
-                )}
-              </>
-            );
-          })()}
+          <div className="bg-slate-50 rounded-3xl overflow-hidden border border-slate-200 aspect-square">
+            <img
+              src={mainImage}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              onError={e => {
+                const fallback = 'https://placehold.co/600x600?text=No+Img';
+                const target = e.target as HTMLImageElement;
+                if (target.src !== fallback) target.src = fallback;
+              }}
+            />
+          </div>
+          {gallery.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto no-scrollbar">
+              {gallery.map((img, i) => (
+                <button
+                  key={`${img}-${i}`}
+                  type="button"
+                  onClick={() => setActiveImage(img)}
+                  className={`shrink-0 rounded-xl border-2 transition-all ${activeImage === img ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 hover:border-indigo-400'}`}
+                  title={`View image ${i + 1}`}
+                >
+                  <img
+                    src={img}
+                    alt=""
+                    className="w-16 h-16 rounded-[10px] object-cover"
+                    onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x64?text=Img'; }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="space-y-4">
           {category && <div className="flex items-center gap-1 text-[11px] text-slate-400"><Link to="/shop" className="hover:text-indigo-600">Shop</Link> <span>/</span> <span className="text-slate-600">{category.name}</span></div>}
